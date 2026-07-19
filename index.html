@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Neo Message</title>
+<meta name="theme-color" content="#0B0E14">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/neo.css">
+</head>
+<body>
+
+<main class="auth-wrap">
+  <div class="device">
+    <div id="carrier"></div>
+
+    <div class="device-body">
+      <!-- Swap this img for your own logo, or delete it and keep the text -->
+      <img src="assets/logo.svg" alt="" class="hidden" id="brandLogo" style="height:44px;margin-bottom:10px">
+      <h1 class="wordmark">Neo<span>Message</span></h1>
+      <p class="tagline">Sign in to reach your contacts.</p>
+
+      <div class="tabs" role="tablist">
+        <button id="tabIn" class="active" role="tab" aria-selected="true">Sign in</button>
+        <button id="tabUp" role="tab" aria-selected="false">Create account</button>
+      </div>
+
+      <div id="alert"></div>
+
+      <!-- ---------- sign in ---------- -->
+      <form id="formIn">
+        <div class="field">
+          <label for="inUser">Username</label>
+          <input id="inUser" type="text" autocomplete="username" required
+                 placeholder="jax_rivera" maxlength="24">
+        </div>
+        <div class="field">
+          <label for="inPass">Password</label>
+          <input id="inPass" type="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn btn-block" type="submit" id="btnIn">Sign in</button>
+      </form>
+
+      <!-- ---------- sign up ---------- -->
+      <form id="formUp" class="hidden">
+        <div class="field">
+          <label for="upUser">Username</label>
+          <input id="upUser" type="text" autocomplete="username" required
+                 placeholder="jax_rivera" maxlength="24">
+          <div class="hint">Letters, numbers, dots, dashes and underscores.</div>
+        </div>
+        <div class="field">
+          <label for="upNum">Your number</label>
+          <input id="upNum" type="text" class="mono" required
+                 placeholder="(555) 014-2288" maxlength="18" inputmode="numeric">
+          <div class="hint">
+            Made up, and how friends will add you.
+            <button type="button" id="rollNum" class="btn btn-ghost btn-sm" style="margin-left:6px">Roll one</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="upPass">Password</label>
+          <input id="upPass" type="password" autocomplete="new-password" required minlength="6">
+          <div class="hint">At least 6 characters. Pick something you don't use anywhere else.</div>
+        </div>
+        <button class="btn btn-block" type="submit" id="btnUp">Create account</button>
+      </form>
+
+      <div class="disclosure">
+        <strong style="color:var(--signal)">Table rules.</strong>
+        This is a prop for a tabletop game. Your GM can read every message
+        sent here and export the full transcript. Nothing you type is private
+        — treat it as in-character.
+      </div>
+    </div>
+  </div>
+</main>
+
+<script type="module" src="js/auth.js"></script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neo Message — Admin</title>
+<meta name="theme-color" content="#0B0E14">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/neo.css">
+</head>
+<body>
+
+<div id="carrier"></div>
+
+<main class="admin-wrap">
+
+  <div class="admin-head">
+    <h1>Neo<span>Admin</span></h1>
+    <span class="grow"></span>
+    <button class="btn btn-ghost btn-sm" id="backApp">Back to messages</button>
+    <button class="btn btn-ghost btn-sm" id="refresh">Refresh</button>
+  </div>
+
+  <div class="stat-strip" id="stats"></div>
+
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="Search message text" style="min-width:230px">
+    <select id="fConvo"><option value="">All threads</option></select>
+    <select id="fUser"><option value="">Everyone</option></select>
+    <input type="date" id="fFrom" title="From date">
+    <input type="date" id="fTo" title="To date">
+    <span class="grow"></span>
+    <button class="btn btn-ghost btn-sm" id="clearF">Clear filters</button>
+    <button class="btn btn-sm" id="dlCsv">Download CSV</button>
+    <button class="btn btn-sm" id="dlJson">Download JSON</button>
+    <button class="btn btn-signal btn-sm" id="dlTxt">Download transcript</button>
+  </div>
+
+  <div id="adminAlert"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:150px">Sent</th>
+          <th style="width:150px">Thread</th>
+          <th style="width:140px">From</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <tr><td colspan="4" style="padding:30px;text-align:center;color:var(--dim)">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="color:var(--dim);font-size:12px;margin-top:12px" id="countNote"></p>
+
+  <h2 style="margin:34px 0 12px;font-size:18px">Accounts</h2>
+  <div class="table-wrap" style="max-height:none">
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Number</th>
+          <th>Joined</th>
+          <th>Messages</th>
+          <th style="width:120px">Role</th>
+        </tr>
+      </thead>
+      <tbody id="userRows"></tbody>
+    </table>
+  </div>
+
+</main>
+
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>
