@@ -16,8 +16,8 @@
 //  security rules and must stay off the internet.
 // =====================================================================
 
-export const SUPABASE_URL = 'PASTE_YOUR_PROJECT_URL_HERE';
-export const SUPABASE_ANON_KEY = 'PASTE_YOUR_ANON_KEY_HERE';
+export const SUPABASE_URL = 'https://lcccnnzwnfmlqrjluudw.supabase.co/rest/v1/';
+export const SUPABASE_ANON_KEY = 'sb_publishable_qCWgFQhcAMDX0MugyMRTiA_PJZQ6EOH';
 
 // Cosmetic settings — change these freely.
 export const APP_NAME = 'Neo Message';
