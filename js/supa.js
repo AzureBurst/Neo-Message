@@ -32,10 +32,23 @@ export const usernameToEmail = (u) =>
   `${u.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '')}@${AUTH_DOMAIN}`;
 
 /** Returns the signed-in user's profile row, or sends them to sign-in. */
+/** Drops the curtain that app.html and admin.html start behind. */
+export function ungate() {
+  document.body.classList.remove('gated');
+  document.getElementById('gateNote')?.remove();
+}
+
+/** Leaves the curtain down, explains itself, and sends them to sign in. */
+function bounce(why) {
+  const note = document.getElementById('gateNote');
+  if (note) note.textContent = why;
+  location.replace('index.html');
+}
+
 export async function requireProfile() {
   const { data: { session } } = await supa.auth.getSession();
   if (!session) {
-    location.replace('index.html');
+    bounce('You are not signed in. Taking you to the sign-in page…');
     return null;
   }
   const { data, error } = await supa
@@ -43,7 +56,7 @@ export async function requireProfile() {
 
   if (error || !data) {
     await supa.auth.signOut();
-    location.replace('index.html');
+    bounce('That session is no longer valid. Taking you to the sign-in page…');
     return null;
   }
   return data;

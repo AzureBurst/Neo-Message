@@ -25,11 +25,16 @@
      sent   = you. Your own message bubbles, primary buttons.        */
   --signal:   #B9B9C0;
   --signal-d: #75757D;
-  --sent:     #E4E4E8;
-  --sent-d:   #A8A8B0;
+  --sent:     #2F6BFF;
+  --sent-d:   #1E4FCC;
   /* Text that sits on top of --sent. Flip to #fff if you re-skin to a
      dark accent colour. */
-  --on-sent:  #0B0B0D;
+  --on-sent:  #FFFFFF;
+
+  /* Incoming messages: a white card with grey type, so the colour in a
+     thread only ever means "who is speaking". */
+  --recv:      #F4F4F6;
+  --recv-text: #55555E;
   --danger:   #FF4D5E;
   --ok:       #3DDC91;
 
@@ -576,8 +581,8 @@ input.mono, .field input.mono { font-family: var(--font-mono); letter-spacing: .
   border-bottom-right-radius: 6px;
 }
 .row.in .bubble {
-  background: var(--panel-2);
-  color: var(--text);
+  background: var(--recv);
+  color: var(--recv-text);
   border-bottom-left-radius: 6px;
 }
 
@@ -1155,3 +1160,120 @@ body > *:not(.puppet-bar) { position: relative; z-index: 1; }
 input[type="datetime-local"] {
   color-scheme: dark;
 }
+
+/* =====================================================================
+   WHO IS TALKING
+   Icon and name head each block of messages rather than repeating on
+   every line — a run of six texts from one person is one heading, not
+   six. The name carries that person's colour, which is what keeps a
+   busy group thread readable when the bubbles themselves are white.
+   ===================================================================== */
+
+.speaker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 5px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+.speaker.out { flex-direction: row-reverse; }
+
+.speaker-name { color: var(--tint, var(--sent)); }
+
+.avatar-xs {
+  width: 22px; height: 22px;
+  font-size: 9px;
+  flex: 0 0 22px;
+  box-shadow: 0 0 0 1.5px var(--tint, var(--sent));
+}
+
+/* Own messages take the sender's colour. Incoming stay white so that
+   colour never has to fight the text for attention. */
+.row.out .bubble {
+  background: linear-gradient(165deg, var(--tint, var(--sent)),
+                                      var(--tint-d, var(--sent-d)));
+  color: var(--on-sent);
+}
+
+
+/* =====================================================================
+   BUBBLE COLOURS
+   Each preset sets --tint and a slightly darker --tint-d for the
+   gradient. Add one here, in TINTS in js/app.js, and in the check
+   constraint in sql/bubble-colors.sql.
+   ===================================================================== */
+
+[data-tint="blue"]   { --tint: #2F6BFF; --tint-d: #1E4FCC; }
+[data-tint="green"]  { --tint: #2FBF6B; --tint-d: #1C8F4E; }
+[data-tint="purple"] { --tint: #8B5CF6; --tint-d: #6636D4; }
+[data-tint="red"]    { --tint: #F0484F; --tint-d: #C22B32; }
+[data-tint="amber"]  { --tint: #FF9F2E; --tint-d: #D2761A; }
+[data-tint="teal"]   { --tint: #16B8C4; --tint-d: #0C8B95; }
+[data-tint="pink"]   { --tint: #F062A8; --tint-d: #C43D80; }
+[data-tint="slate"]  { --tint: #7C8794; --tint-d: #566070; }
+
+.tints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.tint {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 0;
+  cursor: pointer;
+  background: linear-gradient(165deg, var(--tint), var(--tint-d));
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+.tint:hover { transform: translateY(-1px); }
+.tint[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--tint);
+}
+
+/* The old group label is replaced by .speaker. */
+.sender-tag { display: none; }
+
+/* =====================================================================
+   SESSION GATE
+   app.html and admin.html start behind this and only reveal themselves
+   once requireProfile() has confirmed who you are. Without it the whole
+   admin layout paints for a second before the redirect fires, which
+   looks exactly like an unprotected page even though the data behind it
+   is still locked by row level security.
+   ===================================================================== */
+
+body.gated > *:not(.gate-note) { display: none !important; }
+
+.gate-note {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--ink);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+body.gated .gate-note { display: flex; }
+
+.gate-escape {
+  opacity: 0;
+  padding: 9px 16px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  text-decoration: none;
+  animation: gate-rescue 0s linear 5s forwards;
+}
+@keyframes gate-rescue { to { opacity: 1; } }

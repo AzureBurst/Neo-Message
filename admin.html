@@ -8,7 +8,13 @@
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/neo.css">
 </head>
-<body>
+<body class="gated">
+  <div id="gateNote" class="gate-note">
+    <span>Checking your session…</span>
+    <!-- Surfaces itself if the check never finishes, so a script error
+         can never strand anyone on a blank page. -->
+    <a href="index.html" class="gate-escape">Go to sign in</a>
+  </div>
 
 <div id="carrier"></div>
 

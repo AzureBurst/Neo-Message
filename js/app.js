@@ -3,7 +3,7 @@
 // =====================================================================
 
 import {
-  supa, requireProfile, signOut, mountCarrier, paintAvatar, setClockSource,
+  supa, requireProfile, ungate, signOut, mountCarrier, paintAvatar, setClockSource,
   formatNumber, shortTime, dayLabel, isJumboEmoji, esc, toast,
   lightbox, uploadFile, shrinkImage, $, $$
 } from './supa.js';
@@ -12,6 +12,7 @@ import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
+ungate();
 
 await loadClock();
 setClockSource(storyNow);
@@ -235,9 +236,19 @@ function renderStream() {
     const gap = prev && (new Date(m.created_at) - new Date(prev.created_at)) > 5 * 60 * 1000;
     const newSpeaker = m.sender_id !== lastSender;
 
-    // In groups, label who is talking when the speaker changes.
-    if (t?.is_group && !out && newSpeaker) {
-      html += `<div class="sender-tag">${esc(personName(m.sender_id))}</div>`;
+    const who   = out ? me : (state.people.get(m.sender_id) ?? null);
+    const tint  = who?.bubble_color || 'blue';
+    // Head the block with an icon and a name whenever the speaker
+    // changes, so a glance tells you who is talking without repeating
+    // it on every line of a monologue.
+    const heads = newSpeaker || gap;
+
+    if (heads) {
+      html += `
+        <div class="speaker ${out ? 'out' : 'in'}" data-tint="${esc(tint)}">
+          <span class="avatar avatar-xs" data-avatar="${esc(m.sender_id)}"></span>
+          <span class="speaker-name">${esc(out ? me.username : personName(m.sender_id))}</span>
+        </div>`;
     }
 
     const jumbo = !m.image_url && isJumboEmoji(m.body);
@@ -246,7 +257,7 @@ function renderStream() {
     if (m.body) parts.push(`<span class="msg-text">${esc(m.body)}</span>`);
 
     html += `
-      <div class="row ${out ? 'out' : 'in'} ${gap ? 'gap' : ''}">
+      <div class="row ${out ? 'out' : 'in'} ${gap ? 'gap' : ''}" data-tint="${esc(tint)}">
         <div class="bubble ${jumbo ? 'jumbo' : ''}">${parts.join('')}</div>
         <span class="stamp">${shortTime(m.created_at)}</span>
       </div>`;
@@ -255,6 +266,13 @@ function renderStream() {
   });
 
   stream.innerHTML = html;
+
+  $$('[data-avatar]', stream).forEach(el => {
+    const id = el.dataset.avatar;
+    const p  = id === me.id ? me : state.people.get(id);
+    paintAvatar(el, p?.avatar_url, p?.username || '?');
+  });
+
   $$('.bubble img', stream).forEach(img =>
     img.addEventListener('click', () => lightbox(img.src)));
 
@@ -432,6 +450,16 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEmoji()
 /* ------------------------------------------------------------------ */
 /*  modals                                                            */
 /* ------------------------------------------------------------------ */
+
+/* The bubble colours a player can pick from. Keep these in step with
+   the [data-tint] rules in css/neo.css and the check constraint in
+   sql/bubble-colors.sql. */
+const TINTS = [
+  ['blue',   'Blue'],   ['green',  'Green'],
+  ['purple', 'Purple'], ['red',    'Red'],
+  ['amber',  'Amber'],  ['teal',   'Teal'],
+  ['pink',   'Pink'],   ['slate',  'Slate']
+];
 
 function modal({ title, body, footer }) {
   const root = $('#modalRoot');
@@ -634,6 +662,17 @@ function openProfileModal() {
         <input id="pNum" class="mono" value="${esc(formatNumber(me.phone_number))}" maxlength="18">
         <div class="hint">Changing this does not break existing threads.</div>
       </div>
+      <div class="field">
+        <label>Your bubble colour</label>
+        <div class="tints" id="pTints">
+          ${TINTS.map(([id, name]) => `
+            <button type="button" class="tint" data-tint="${id}"
+                    data-pick="${id}" title="${name}"
+                    aria-label="${name}"
+                    aria-pressed="${(me.bubble_color || 'blue') === id}"></button>`).join('')}
+        </div>
+        <div class="hint">Everyone in a group thread sees your messages in this colour.</div>
+      </div>
       <div id="pMsg"></div>`,
     footer: `
       <button class="btn btn-ghost" data-close>Close</button>
@@ -641,6 +680,26 @@ function openProfileModal() {
   });
 
   $('#pPick', root).addEventListener('click', () => $('#pFile', root).click());
+
+  $$('[data-pick]', root).forEach(sw => {
+    sw.addEventListener('click', async () => {
+      const pick = sw.dataset.pick;
+      const box  = $('#pMsg', root);
+      const { error } = await supa.from('profiles')
+        .update({ bubble_color: pick }).eq('id', me.id);
+
+      if (error) {
+        box.innerHTML = `<div class="notice notice-error">${esc(error.message)}</div>`;
+        return;
+      }
+      me.bubble_color = pick;
+      state.people.set(me.id, { ...(state.people.get(me.id) ?? {}), ...me });
+      $$('[data-pick]', root).forEach(o =>
+        o.setAttribute('aria-pressed', String(o.dataset.pick === pick)));
+      renderStream();
+      box.innerHTML = '<div class="notice notice-ok">Bubble colour updated.</div>';
+    });
+  });
 
   $('#pFile', root).addEventListener('change', async (e) => {
     const file = e.target.files?.[0];

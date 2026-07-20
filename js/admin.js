@@ -8,13 +8,14 @@
 // =====================================================================
 
 import {
-  supa, setClockSource, requireProfile, mountCarrier, formatNumber, fullStamp,
+  supa, setClockSource, requireProfile, ungate, mountCarrier, formatNumber, fullStamp,
   esc, toast, lightbox, downloadBlob, toCSV, $, $$
 } from './supa.js';
 import { loadClock, storyNow } from './clock.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
+ungate();
 
 await loadClock();
 setClockSource(storyNow);
