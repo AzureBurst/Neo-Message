@@ -430,3 +430,48 @@ their screen and they get a short notice. No reload needed.
 **Setup:** run `sql/admin-delete.sql` once in the Supabase SQL Editor.
 The admin check lives inside the database functions, so a player cannot
 call them even by hand.
+
+---
+
+## When messages are slow to arrive
+
+Symptom: messages only show up after a refresh.
+
+That means realtime is not connected, and it is almost always one
+missing line of SQL. Run `sql/realtime-check.sql` in the Supabase SQL
+Editor. The first query lists which tables publish changes — if
+`messages` is not in it, that is your answer, and the rest of the file
+fixes it.
+
+### The dot in the header
+
+Next to the 🔊 button:
+
+- **Green, steady** — realtime is connected, messages arrive instantly
+- **Amber, pulsing** — the app has fallen back to polling every four
+  seconds and everything still works, just a beat slower
+
+Hover it for the same information in words.
+
+### Why it still works either way
+
+Two safety nets sit under realtime:
+
+**Your own messages appear immediately.** They are drawn from the
+insert's own response rather than waiting for the echo to come back
+around, so sending never feels laggy regardless of connection quality.
+
+**Everything else is polled.** Every four seconds while realtime is
+down, every twenty-five as a backstop while it is up, and once
+immediately whenever you switch back to the tab. The query only asks
+for rows newer than the last one on your screen, so it stays cheap.
+
+A session will run fine on polling alone. Fixing realtime just makes it
+feel instant.
+
+### About that received.mp3 404
+
+Harmless, and expected. The app looks for an optional override file,
+does not find one, and falls back to the tone it generates itself. You
+can ignore it, or silence it by dropping a `received.mp3` into
+`assets/sfx/`.

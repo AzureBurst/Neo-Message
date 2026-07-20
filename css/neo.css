@@ -1338,3 +1338,22 @@ body.gated .gate-note { display: flex; }
   text-align: center;
   color: var(--dim);
 }
+
+/* Connection state: solid when realtime is up, pulsing amber when the
+   app has fallen back to polling. Small on purpose — it should be
+   findable when something feels slow, not attention-seeking. */
+.live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex: 0 0 7px;
+  background: var(--warn, #E8A33D);
+  animation: live-wait 1.4s ease-in-out infinite;
+}
+.live-dot.is-live {
+  background: #37D399;
+  animation: none;
+}
+@keyframes live-wait {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .3; }
+}

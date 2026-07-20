@@ -332,12 +332,12 @@ async function send() {
     return;
   }
 
-  const { error } = await supa.from('messages').insert({
+  const { data, error } = await supa.from('messages').insert({
     conversation_id: state.openId,
     sender_id: me.id,
     body: body || null,
     image_url: imageUrl
-  });
+  }).select().single();
 
   if (error) {
     toast('Message did not send. Try again.', 'error');
@@ -346,6 +346,23 @@ async function send() {
   }
 
   playSent();
+
+  /* Show it straight away. Waiting for the realtime echo makes sending
+     feel broken on a slow connection, and if realtime is misconfigured
+     it never arrives at all. The row is replaced by the real one when
+     the echo lands, or by the next poll. */
+  if (data) {
+    state.messages.push(data);
+    renderStream();
+    const t = state.threads.find(x => x.id === state.openId);
+    if (t) {
+      t.last = data;
+      t.sortAt = data.created_at;
+      state.threads.sort((a, b) => new Date(b.sortAt) - new Date(a.sortAt));
+      renderThreads();
+    }
+  }
+
   input.value = '';
   input.style.height = 'auto';
   clearAttachment();
@@ -841,6 +858,64 @@ function openProfileModal() {
 /*  realtime                                                          */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  keeping the screen current                                        */
+/*                                                                    */
+/*  Realtime is the fast path. Polling is the safety net: if the       */
+/*  websocket never connects — a misconfigured publication, a captive  */
+/*  wifi portal, a corporate proxy — messages still arrive, just a few */
+/*  seconds later instead of instantly. The indicator in the header    */
+/*  says which one you are on.                                        */
+/* ------------------------------------------------------------------ */
+
+let live = false;
+
+function setLive(on) {
+  live = on;
+  const dot = $('#liveDot');
+  if (!dot) return;
+  dot.classList.toggle('is-live', on);
+  dot.title = on
+    ? 'Live — messages arrive instantly'
+    : 'Catching up every few seconds. Realtime is not connected.';
+}
+
+/** Pulls anything we have not seen in the open thread, plus the list. */
+async function pollNow() {
+  if (state.openId) {
+    const newest = state.messages.length
+      ? state.messages[state.messages.length - 1].created_at
+      : null;
+
+    let q = supa.from('messages').select('*')
+      .eq('conversation_id', state.openId)
+      .order('created_at');
+    if (newest) q = q.gt('created_at', newest);
+
+    const { data } = await q;
+    const fresh = (data ?? []).filter(m => !state.messages.some(x => x.id === m.id));
+
+    if (fresh.length) {
+      if (fresh.some(m => m.sender_id !== me.id)) playReceived();
+      state.messages.push(...fresh);
+      await cachePeople(fresh.map(m => m.sender_id));
+      renderStream();
+    }
+  }
+  await loadThreads();
+}
+
+/* Poll fast while realtime is down, slowly as a backstop when it is up.
+   Four seconds is well inside what feels responsive at a table, and the
+   query is tiny — only rows newer than the last one on screen. */
+setInterval(() => { if (!live) pollNow(); }, 4000);
+setInterval(() => { if (live)  pollNow(); }, 25000);
+
+/* If the tab was in the background, catch up the moment it returns. */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') pollNow();
+});
+
 supa.channel('neo-messages')
   .on('postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'messages' },
@@ -888,7 +963,11 @@ supa.channel('neo-messages')
         }
         await loadThreads();
       })
-  .subscribe();
+  .subscribe((status) => {
+    // SUBSCRIBED means the websocket is up and the table is published.
+    setLive(status === 'SUBSCRIBED');
+    if (status !== 'SUBSCRIBED') pollNow();
+  });
 
 
 /* ------------------------------------------------------------------ */
