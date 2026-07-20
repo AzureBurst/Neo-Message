@@ -9,6 +9,7 @@ import {
 } from './supa.js';
 import { mountPuppetBar, openNpcModal, hasHome } from './npc.js';
 import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
+import { playSent, isMuted, toggleMute } from './sfx.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -50,6 +51,15 @@ $('#meBtn').addEventListener('click', openProfileModal);
 $('#contactsBtn').addEventListener('click', openContactsModal);
 $('#npcBtn').addEventListener('click', () => openNpcModal(modal));
 $('#clockBtn').addEventListener('click', () => openClockModal(modal));
+
+const muteBtn = $('#muteBtn');
+const paintMute = () => {
+  muteBtn.textContent = isMuted() ? '🔇' : '🔊';
+  muteBtn.title = isMuted() ? 'Sounds off' : 'Sounds on';
+  muteBtn.setAttribute('aria-pressed', String(isMuted()));
+};
+paintMute();
+muteBtn.addEventListener('click', () => { toggleMute(); paintMute(); });
 $('#newBtn').addEventListener('click', openNewThreadModal);
 $('#backBtn').addEventListener('click', () => $('#panes').classList.remove('reading'));
 
@@ -335,6 +345,7 @@ async function send() {
     return;
   }
 
+  playSent();
   input.value = '';
   input.style.height = 'auto';
   clearAttachment();
@@ -506,13 +517,14 @@ async function openContactsModal() {
     title: 'Contacts',
     body: `
       <div class="field">
-        <label for="addNum">Add by number</label>
-        <div style="display:flex;gap:8px">
-          <input id="addNum" class="mono" placeholder="(555) 014-2288" maxlength="18">
+        <label for="addFind">Add someone</label>
+        <div class="inline-row">
+          <input id="addFind" placeholder="Username or number" maxlength="24" autocomplete="off">
           <button class="btn btn-sm" id="addGo" style="flex-shrink:0">Add</button>
         </div>
-        <div class="hint">Ask your friend for the number they signed up with.</div>
+        <div class="hint">Type a username to search, or paste the number they signed up with.</div>
       </div>
+      <div id="addResults" class="find-results"></div>
       <div id="addMsg"></div>
       <div style="margin-top:16px" id="contactList">
         ${list.length ? list.map(c => `
@@ -532,22 +544,99 @@ async function openContactsModal() {
       </div>`
   });
 
-  $('#addGo', root).addEventListener('click', async () => {
-    const num = $('#addNum', root).value.trim();
-    if (!num) return;
+  const findBox = $('#addFind', root);
+  const results = $('#addResults', root);
+  const msgBox  = $('#addMsg', root);
 
-    const { data, error } = await supa.rpc('add_contact_by_number', {
-      number: num, nick: null
-    });
+  /** Adds someone we already have the id for. */
+  async function addById(id, name) {
+    const { error } = await supa.from('contacts')
+      .insert({ owner_id: me.id, contact_id: id });
 
-    const box = $('#addMsg', root);
     if (error) {
-      box.innerHTML = `<div class="notice notice-error">${esc(error.message)}</div>`;
+      msgBox.innerHTML = `<div class="notice notice-${/duplicate|unique/i.test(error.message) ? 'info' : 'error'}">${
+        /duplicate|unique/i.test(error.message)
+          ? esc(name) + ' is already in your contacts.'
+          : esc(error.message)}</div>`;
       return;
     }
-    box.innerHTML = `<div class="notice notice-ok">${esc(data.username)} added.</div>`;
-    $('#addNum', root).value = '';
+    msgBox.innerHTML = `<div class="notice notice-ok">${esc(name)} added.</div>`;
     setTimeout(() => { close(); openContactsModal(); }, 700);
+  }
+
+  /* Live username search. Profiles are readable by anyone signed in —
+     that is what makes looking each other up possible at all — so this
+     needs no extra database work. */
+  let findTimer = null;
+  findBox.addEventListener('input', () => {
+    clearTimeout(findTimer);
+    const q = findBox.value.trim();
+
+    if (q.length < 2 || /^[\d ()\-+.]+$/.test(q)) { results.innerHTML = ''; return; }
+
+    findTimer = setTimeout(async () => {
+      const { data } = await supa
+        .from('profiles')
+        .select('id, username, phone_number, avatar_url')
+        .ilike('username', `%${q}%`)
+        .neq('id', me.id)
+        .limit(8);
+
+      if (!data?.length) {
+        results.innerHTML = '<div class="find-none">Nobody by that name.</div>';
+        return;
+      }
+
+      results.innerHTML = data.map(p => `
+        <button type="button" class="find-row" data-id="${esc(p.id)}"
+                data-name="${esc(p.username)}">
+          <span class="avatar avatar-sm" data-find-avatar="${esc(p.id)}"></span>
+          <span class="find-id">
+            <strong>${esc(p.username)}</strong>
+            <span class="mono">${esc(formatNumber(p.phone_number))}</span>
+          </span>
+          <span class="find-add">Add</span>
+        </button>`).join('');
+
+      data.forEach(p => paintAvatar(
+        results.querySelector(`[data-find-avatar="${p.id}"]`), p.avatar_url, p.username));
+
+      $$('.find-row', results).forEach(r => r.addEventListener('click',
+        () => addById(r.dataset.id, r.dataset.name)));
+    }, 220);
+  });
+
+  $('#addGo', root).addEventListener('click', async () => {
+    const q = findBox.value.trim();
+    if (!q) return;
+
+    // Digits mean a number. Anything else is a username.
+    if (/^[\d ()\-+.]+$/.test(q)) {
+      const { data, error } = await supa.rpc('add_contact_by_number', {
+        number: q, nick: null
+      });
+      if (error) {
+        msgBox.innerHTML = `<div class="notice notice-error">${esc(error.message)}</div>`;
+        return;
+      }
+      msgBox.innerHTML = `<div class="notice notice-ok">${esc(data.username)} added.</div>`;
+      findBox.value = '';
+      setTimeout(() => { close(); openContactsModal(); }, 700);
+      return;
+    }
+
+    const { data } = await supa.from('profiles')
+      .select('id, username').ilike('username', q).neq('id', me.id).maybeSingle();
+
+    if (!data) {
+      msgBox.innerHTML = '<div class="notice notice-error">No account with that username.</div>';
+      return;
+    }
+    await addById(data.id, data.username);
+  });
+
+  findBox.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#addGo', root).click();
   });
 
   $$('.contact-row', root).forEach(row =>

@@ -354,3 +354,42 @@ Three files have to agree:
 2. `js/app.js` — add the pair to the `TINTS` array
 3. `sql/bubble-colors.sql` — add the name to the check constraint, then
    re-run that statement
+
+---
+
+## Sounds
+
+A short two-note tone plays when your message goes out. It is generated
+in the browser, so there is no audio file to host and nothing extra to
+upload.
+
+To use your own instead, drop `sent.mp3` into `assets/sfx/` and it takes
+over. See that folder's README.
+
+The 🔊 button in the sidebar mutes it. That is a per-browser setting, so
+muting yours does not mute anyone else at the table.
+
+Browsers block audio until the page has been interacted with, which
+never bites here — you cannot send a message without typing or clicking
+first.
+
+## Finding people by username
+
+The contacts panel now searches. Type two or more letters of a username
+and matching accounts appear with their icon and number; click one to
+add them. Paste a number instead and it still works exactly as before —
+the field decides which you meant by whether you typed digits.
+
+This needs no database changes. Profiles have always been readable by
+anyone signed in, which is what made adding by number possible in the
+first place.
+
+Usernames are searched loosely, so `haz` finds `Hazel`.
+
+## Tapping images
+
+Images in the stream open full size on a tap or click, dimming the app
+behind them. Click anywhere or press Escape to close.
+
+This was in from the start but a backdrop layering rule I added later
+was covering it up. Fixed.

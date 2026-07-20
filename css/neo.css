@@ -65,10 +65,13 @@ html, body {
   height: 100%;
 }
 
+html {
+  background: linear-gradient(160deg, #000000 0%, #131315 45%, #2E2E33 100%) fixed;
+  min-height: 100%;
+}
+
 body {
-  background:
-    linear-gradient(160deg, #000000 0%, #131315 45%, #2E2E33 100%)
-    fixed;
+  background: transparent;
   color: var(--text);
   font-family: var(--font-body);
   font-size: 15px;
@@ -1110,7 +1113,7 @@ body::before {
   content: '';
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
   background-image: url('../assets/backdrop.png');
   background-repeat: no-repeat;
@@ -1121,9 +1124,6 @@ body::before {
   mix-blend-mode: luminosity;
 }
 
-/* Everything real sits above it. */
-body > *:not(.puppet-bar) { position: relative; z-index: 1; }
-.puppet-bar { z-index: 60; }
 
 @media (max-width: 700px) {
   body::before {
@@ -1277,3 +1277,56 @@ body.gated .gate-note { display: flex; }
   animation: gate-rescue 0s linear 5s forwards;
 }
 @keyframes gate-rescue { to { opacity: 1; } }
+
+/* Images in the stream open full size — say so with the cursor. */
+.bubble img { cursor: zoom-in; }
+
+.lightbox { z-index: 200; }
+.lightbox img { box-shadow: 0 24px 70px rgba(0, 0, 0, .6); }
+
+
+/* =====================================================================
+   FINDING PEOPLE BY NAME
+   ===================================================================== */
+
+.find-results:not(:empty) {
+  margin: 10px 0 4px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.find-row + .find-row { border-top: 1px solid var(--edge); }
+.find-row:hover { background: var(--panel-3); }
+
+.find-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.find-id strong { font-size: 14px; }
+.find-id .mono { font-size: 12px; color: var(--muted); }
+
+.find-add {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sent);
+}
+
+.find-none {
+  padding: 11px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 13px;
+}
