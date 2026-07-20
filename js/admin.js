@@ -15,24 +15,24 @@ import { loadClock, storyNow } from './clock.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
-ungate();
 
 await loadClock();
 setClockSource(storyNow);
-mountCarrier($('#carrier'), { admin: true, label: 'NEO ADMIN' });
+/* A player who finds this URL is sent quietly back to the messenger.
+   No lockout screen, because a lockout screen confirms there is
+   something here worth being locked out of — and the old one printed
+   the promotion SQL, which is worse. The page has not revealed itself
+   at this point: the gate is still down, so nothing has painted.
 
+   If you are the GM and this bounces you, your account is not flagged
+   yet. See "Make yourself admin" in the README. */
 if (!me.is_admin) {
-  document.querySelector('.admin-wrap').innerHTML = `
-    <div class="notice notice-error" style="margin-top:40px">
-      This account is not an admin. Ask whoever runs the game to flag it,
-      or run this in the Supabase SQL editor:
-      <code class="mono" style="display:block;margin-top:8px;color:var(--signal)">
-        update profiles set is_admin = true where username = '${esc(me.username)}';
-      </code>
-    </div>
-    <p style="margin-top:16px"><a href="app.html">Back to messages</a></p>`;
+  location.replace('app.html');
   throw new Error('not admin');
 }
+
+ungate();
+mountCarrier($('#carrier'), { admin: true, label: 'NEO ADMIN' });
 
 $('#backApp').addEventListener('click', () => location.href = 'app.html');
 $('#refresh').addEventListener('click', () => loadAll());

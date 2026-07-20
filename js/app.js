@@ -40,17 +40,40 @@ const state = {
 paintAvatar($('#meAvatar'), me.avatar_url, me.username);
 $('#meName').textContent = me.username;
 $('#meNum').textContent  = formatNumber(me.phone_number);
-if (me.is_admin) $('#adminBtn').hidden = false;
-if (me.is_admin) $('#clockBtn').hidden = false;
-if (me.is_admin || hasHome()) $('#npcBtn').hidden = false;
+/* The GM's controls are created here rather than sitting in app.html
+   with a `hidden` attribute. A player who opens View Source finds an
+   empty <span> where they used to be.
+
+   To be clear about what this is and is not: it hides the doors, it
+   does not lock them. The locks are the row level security policies and
+   the admin checks inside the database functions, and those hold no
+   matter what anyone types into a console. This just keeps the table
+   from being tempted. */
+function addGmButton(id, glyph, label, onClick) {
+  const b = document.createElement('button');
+  b.className = 'icon-btn';
+  b.id = id;
+  b.textContent = glyph;
+  b.title = label;
+  b.setAttribute('aria-label', label);
+  b.addEventListener('click', onClick);
+  $('#gmSlot').appendChild(b);
+  return b;
+}
+
+if (me.is_admin) {
+  addGmButton('adminBtn', '◉', 'Admin console', () => location.href = 'admin.html');
+  addGmButton('clockBtn', '◔', 'Story clock',   () => openClockModal(modal));
+}
+// Puppets stay reachable while you are wearing one, so you can get back.
+if (me.is_admin || hasHome()) {
+  addGmButton('npcBtn', '◑', 'NPC puppets', () => openNpcModal(modal));
+}
 mountPuppetBar();
 
-$('#adminBtn').addEventListener('click', () => location.href = 'admin.html');
 $('#signOutBtn').addEventListener('click', signOut);
 $('#meBtn').addEventListener('click', openProfileModal);
 $('#contactsBtn').addEventListener('click', openContactsModal);
-$('#npcBtn').addEventListener('click', () => openNpcModal(modal));
-$('#clockBtn').addEventListener('click', () => openClockModal(modal));
 
 const muteBtn = $('#muteBtn');
 const paintMute = () => {

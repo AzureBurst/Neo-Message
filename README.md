@@ -475,3 +475,39 @@ Harmless, and expected. The app looks for an optional override file,
 does not find one, and falls back to the tone it generates itself. You
 can ignore it, or silence it by dropping a `received.mp3` into
 `assets/sfx/`.
+
+---
+
+## Keeping the GM controls out of sight
+
+The ◉ admin, ◔ clock and ◑ puppet buttons are built by JavaScript at
+runtime and only when your account is flagged as an admin. They are not
+in `app.html` at all, so a player who opens View Source finds an empty
+`<span>` where they would be.
+
+A player who types the admin URL directly is redirected back to the
+messenger without seeing anything. There is no lockout screen — a
+lockout screen announces that something worth being locked out of
+exists, and the old one helpfully printed the SQL for granting
+yourself admin, which was worse.
+
+**If this bounces you**, your own account is not flagged yet. See "Make
+yourself admin" above.
+
+### What this is, and what it is not
+
+This is concealment, not security, and the difference matters.
+
+Anyone determined enough can read `js/app.js`, since a static site has
+to hand the browser its own source. The real protection has never been
+in the interface:
+
+- Messages are readable only by members of that conversation, enforced
+  by row level security in the database
+- `admin_delete_conversation`, `admin_clear_conversation` and
+  `set_story_clock` check admin status **inside** the database
+- `guard_admin_flag` stops any account promoting itself through the app
+
+Those hold regardless of what anyone types into a browser console. What
+changed here is that the table is no longer tempted by a button they can
+see but cannot press.
