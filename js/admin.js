@@ -8,13 +8,16 @@
 // =====================================================================
 
 import {
-  supa, requireProfile, mountCarrier, formatNumber, fullStamp,
+  supa, setClockSource, requireProfile, mountCarrier, formatNumber, fullStamp,
   esc, toast, lightbox, downloadBlob, toCSV, $, $$
 } from './supa.js';
+import { loadClock, storyNow } from './clock.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
 
+await loadClock();
+setClockSource(storyNow);
 mountCarrier($('#carrier'), { admin: true, label: 'NEO ADMIN' });
 
 if (!me.is_admin) {

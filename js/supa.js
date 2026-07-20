@@ -68,6 +68,12 @@ export function formatNumber(raw) {
   return raw;
 }
 
+/* The carrier bar asks this for the time. js/clock.js swaps it out for
+   the shared story clock once that has loaded. */
+let clockSource = () => new Date();
+export function setClockSource(fn) { clockSource = fn; }
+export const carrierNow = () => clockSource();
+
 export function clockTime(d = new Date()) {
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
@@ -127,17 +133,29 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 export function mountCarrier(el, { admin = false, label = null } = {}) {
   if (!el) return;
   el.className = 'carrier' + (admin ? ' is-admin' : '');
+  const dateOf = d => d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+
   el.innerHTML = `
     <div class="bars"><i></i><i></i><i></i><i></i></div>
     <span class="carrier-name">${esc(label || CARRIER_NAME)}</span>
     <span class="carrier-spacer"></span>
-    <span class="carrier-clock">${clockTime()}</span>
+    <span class="carrier-when">
+      <span class="carrier-date">${dateOf(carrierNow())}</span>
+      <span class="carrier-clock">${clockTime(carrierNow())}</span>
+    </span>
     <span class="carrier-spacer"></span>
     <span>LTE</span>
     <span class="battery"><i></i></span>`;
 
   const clock = el.querySelector('.carrier-clock');
-  setInterval(() => { clock.textContent = clockTime(); }, 20_000);
+  const date  = el.querySelector('.carrier-date');
+  const paint = () => {
+    const now = carrierNow();
+    clock.textContent = clockTime(now);
+    date.textContent  = dateOf(now);
+  };
+  el.repaint = paint;
+  setInterval(paint, 20_000);
 }
 
 /** Fills an .avatar element with an image, or initials when there is none. */

@@ -280,3 +280,39 @@ Match the domain to your `AUTH_DOMAIN` in `js/config.js`.
 - Puppets have no admin rights and cannot reach the admin console.
 - The **✕** next to a puppet removes it from your local list only. To delete
   the account itself, use **Authentication → Users** in Supabase.
+
+---
+
+## Story clock
+
+The GM can pin the app to a date and time inside your story. Click the
+**◔** button in the sidebar, pick a moment, tick **Freeze**, and apply.
+
+Every player's status bar switches to that date and time and stops
+advancing. Untick Freeze and everything returns to real time.
+
+The setting lives in the database rather than in one browser, so it
+reaches everyone at the table, and changes arrive live — nobody has to
+reload.
+
+**Setup:** run `sql/story-clock.sql` once in the Supabase SQL Editor.
+It creates the `app_settings` table, the `set_story_clock` function, and
+the security rules that let players read the clock but only admins set
+it. The admin check runs on the server, so it cannot be bypassed from a
+browser console.
+
+Note that this changes the clock in the status bar. Timestamps on
+individual messages still record when they were really sent, because
+those come from the database and are what your admin log exports.
+
+## Look and feel
+
+- **Chat typeface** is Inpin HongMengTi. Drop the font file into
+  `assets/fonts/` — see the README in that folder for the exact filename.
+  Without it the app falls back to HarmonyOS Sans SC and friends.
+- **Backdrop** is `assets/backdrop.png` at 20% opacity behind everything.
+  Swap that file for any other artwork; adjust `opacity` in the
+  `body::before` rule in `css/neo.css`.
+- **Palette** is monochrome, black through gray. All of it comes from the
+  variables at the top of `css/neo.css`. If you want colour back, change
+  `--sent` and set `--on-sent` to `#fff`.

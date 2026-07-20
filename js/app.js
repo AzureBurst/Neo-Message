@@ -3,16 +3,20 @@
 // =====================================================================
 
 import {
-  supa, requireProfile, signOut, mountCarrier, paintAvatar,
+  supa, requireProfile, signOut, mountCarrier, paintAvatar, setClockSource,
   formatNumber, shortTime, dayLabel, isJumboEmoji, esc, toast,
   lightbox, uploadFile, shrinkImage, $, $$
 } from './supa.js';
 import { mountPuppetBar, openNpcModal, hasHome } from './npc.js';
+import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
 
+await loadClock();
+setClockSource(storyNow);
 mountCarrier($('#carrier'));
+onClockChange(() => $('#carrier').repaint?.());
 
 /* ------------------------------------------------------------------ */
 /*  state                                                             */
@@ -35,6 +39,7 @@ paintAvatar($('#meAvatar'), me.avatar_url, me.username);
 $('#meName').textContent = me.username;
 $('#meNum').textContent  = formatNumber(me.phone_number);
 if (me.is_admin) $('#adminBtn').hidden = false;
+if (me.is_admin) $('#clockBtn').hidden = false;
 if (me.is_admin || hasHome()) $('#npcBtn').hidden = false;
 mountPuppetBar();
 
@@ -43,6 +48,7 @@ $('#signOutBtn').addEventListener('click', signOut);
 $('#meBtn').addEventListener('click', openProfileModal);
 $('#contactsBtn').addEventListener('click', openContactsModal);
 $('#npcBtn').addEventListener('click', () => openNpcModal(modal));
+$('#clockBtn').addEventListener('click', () => openClockModal(modal));
 $('#newBtn').addEventListener('click', openNewThreadModal);
 $('#backBtn').addEventListener('click', () => $('#panes').classList.remove('reading'));
 

@@ -9,24 +9,27 @@
 
 :root {
   /* --- surfaces, darkest to lightest --- */
-  --ink:      #0B0E14;
-  --panel:    #141A24;
-  --panel-2:  #1D2532;
-  --panel-3:  #263041;
-  --edge:     #2A3444;
+  --ink:      #08080A;
+  --panel:    #131315;
+  --panel-2:  #1C1C1F;
+  --panel-3:  #27272B;
+  --edge:     #34343A;
 
   /* --- text --- */
-  --text:     #E6EAF2;
-  --muted:    #8695AC;
-  --dim:      #5C6B84;
+  --text:     #EDEDEF;
+  --muted:    #9A9AA2;
+  --dim:      #6A6A73;
 
   /* --- accents ---
      signal = the network. Status bar, system notices, admin chrome.
      sent   = you. Your own message bubbles, primary buttons.        */
-  --signal:   #FF7A3D;
-  --signal-d: #C9541F;
-  --sent:     #2F6BFF;
-  --sent-d:   #1E4FCC;
+  --signal:   #B9B9C0;
+  --signal-d: #75757D;
+  --sent:     #E4E4E8;
+  --sent-d:   #A8A8B0;
+  /* Text that sits on top of --sent. Flip to #fff if you re-skin to a
+     dark accent colour. */
+  --on-sent:  #0B0B0D;
   --danger:   #FF4D5E;
   --ok:       #3DDC91;
 
@@ -41,6 +44,11 @@
   /* --- type --- */
   --font-ui:   'Archivo', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
+  /* The chat itself. Falls back gracefully until the font file is in
+     assets/fonts/ — see the @font-face block below. */
+  --font-chat: 'Inpin HongMengTi', 'HarmonyOS Sans SC',
+               'Noto Sans SC', 'PingFang SC',
+               'Microsoft YaHei', 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
@@ -54,9 +62,8 @@ html, body {
 
 body {
   background:
-    radial-gradient(1100px 700px at 15% -10%, #1A2536 0%, transparent 60%),
-    radial-gradient(900px 600px at 110% 110%, #1B1622 0%, transparent 55%),
-    var(--ink);
+    linear-gradient(160deg, #000000 0%, #131315 45%, #2E2E33 100%)
+    fixed;
   color: var(--text);
   font-family: var(--font-body);
   font-size: 15px;
@@ -92,7 +99,7 @@ a:hover { text-decoration: underline; }
   align-items: center;
   gap: 10px;
   padding: 9px 16px;
-  background: linear-gradient(180deg, rgba(255,122,61,.10), transparent);
+  background: linear-gradient(180deg, rgba(255,255,255,.07), transparent);
   border-bottom: 1px solid var(--edge);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -287,7 +294,7 @@ input.mono, .field input.mono { font-family: var(--font-mono); letter-spacing: .
   border: 0;
   border-radius: var(--r-sm);
   background: var(--sent);
-  color: #fff;
+  color: var(--on-sent);
   font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 600;
@@ -565,7 +572,7 @@ input.mono, .field input.mono { font-family: var(--font-mono); letter-spacing: .
 
 .row.out .bubble {
   background: linear-gradient(165deg, var(--sent), var(--sent-d));
-  color: #fff;
+  color: var(--on-sent);
   border-bottom-right-radius: 6px;
 }
 .row.in .bubble {
@@ -666,7 +673,7 @@ input.mono, .field input.mono { font-family: var(--font-mono); letter-spacing: .
   border-radius: 50%;
   background: var(--sent);
   border: 0;
-  color: #fff;
+  color: var(--on-sent);
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -1058,4 +1065,93 @@ body.puppeting { padding-top: 30px; }
 @media (max-width: 620px) {
   .npc-row { grid-template-columns: 1fr auto; }
   .npc-pass { grid-column: 1 / -1; justify-self: start; }
+}
+
+/* =====================================================================
+   CHAT TYPEFACE
+   Drop the font file into assets/fonts/ and it takes over the message
+   stream. Until then the fallbacks in --font-chat keep everything
+   readable, so a missing file never breaks the page.
+   Supply woff2 if you can; woff is the safety net for older browsers.
+   ===================================================================== */
+
+@font-face {
+  font-family: 'Inpin HongMengTi';
+  src: url('../assets/fonts/InpinHongMengTi.woff2') format('woff2'),
+       url('../assets/fonts/InpinHongMengTi.woff')  format('woff'),
+       url('../assets/fonts/InpinHongMengTi.ttf')   format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+/* The conversation only. Buttons, labels and phone numbers keep their
+   own faces so the interface stays legible at small sizes. */
+.bubble,
+.composer textarea,
+.thread-preview,
+.msg-body {
+  font-family: var(--font-chat);
+}
+
+
+/* =====================================================================
+   BACKDROP
+   The logo sits behind everything at low opacity. It is decorative, so
+   it is a pseudo-element rather than an <img> — nothing to read out,
+   nothing to click through.
+   ===================================================================== */
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url('../assets/backdrop.png');
+  background-repeat: no-repeat;
+  background-position: center 42%;
+  background-size: min(76vw, 900px) auto;
+  opacity: .20;
+  /* Keeps the artwork from glowing white against the dark gradient. */
+  mix-blend-mode: luminosity;
+}
+
+/* Everything real sits above it. */
+body > *:not(.puppet-bar) { position: relative; z-index: 1; }
+.puppet-bar { z-index: 60; }
+
+@media (max-width: 700px) {
+  body::before {
+    background-size: 130vw auto;
+    opacity: .13;
+  }
+}
+
+
+/* =====================================================================
+   STORY CLOCK
+   ===================================================================== */
+
+.carrier-when {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.carrier-date {
+  color: var(--dim);
+  letter-spacing: .06em;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 4px 0 14px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.check input { width: 16px; height: 16px; accent-color: var(--sent); }
+
+input[type="datetime-local"] {
+  color-scheme: dark;
 }
