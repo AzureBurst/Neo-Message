@@ -16,7 +16,7 @@
 //  security rules and must stay off the internet.
 // =====================================================================
 
-export const SUPABASE_URL = 'https://lcccnnzwnfmlqrjluudw.supabase.co/rest/v1/';
+export const SUPABASE_URL = 'https://lcccnnzwnfmlqrjluudw.supabase.co';
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjY2Nubnp3bmZtbHFyamx1dWR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0ODkwMDQsImV4cCI6MjEwMDA2NTAwNH0.QCJ3TfVMir8xleA4_nRtTq0dkJpIY_0RjkzmmJsQ1Ws';
 
 // Cosmetic settings — change these freely.
