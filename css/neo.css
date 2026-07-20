@@ -973,3 +973,89 @@ td.t-who  { font-family: var(--font-ui); font-weight: 600; white-space: nowrap; 
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--edge); background-clip: content-box; }
+
+/* =====================================================================
+   NPC PUPPETS
+   The bar reads as the network interrupting you, so it borrows the
+   signal colour rather than introducing a new one.
+   ===================================================================== */
+
+.puppet-bar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  background: linear-gradient(180deg, var(--signal) 0%, var(--signal-d) 100%);
+  color: #14100C;
+  font: 600 12.5px/1 var(--font-ui);
+  letter-spacing: .02em;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, .45);
+}
+.puppet-bar strong { font-weight: 700; }
+
+.puppet-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #14100C;
+  animation: puppet-pulse 1.6s ease-in-out infinite;
+}
+@keyframes puppet-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .25; }
+}
+
+.puppet-back {
+  margin-left: auto;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 16, 12, .82);
+  color: #FFE9DC;
+  font: 600 12px/1 var(--font-ui);
+  cursor: pointer;
+}
+.puppet-back:hover { background: #14100C; }
+
+/* Push the whole app down so the bar never covers the carrier strip. */
+body.puppeting { padding-top: 30px; }
+
+.npc-list { margin-bottom: 18px; }
+
+.npc-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+.npc-row + .npc-row { margin-top: 7px; }
+
+.npc-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.npc-id strong { font-size: 14px; }
+.npc-id .mono { font-size: 12px; color: var(--muted); }
+
+.npc-pass {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--dim);
+  font-size: 11.5px;
+  user-select: all;
+}
+
+.inline-row { display: flex; gap: 8px; align-items: center; }
+.inline-row input { flex: 1; }
+
+.muted { color: var(--muted); }
+.small { font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 620px) {
+  .npc-row { grid-template-columns: 1fr auto; }
+  .npc-pass { grid-column: 1 / -1; justify-self: start; }
+}

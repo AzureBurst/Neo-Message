@@ -7,6 +7,7 @@ import {
   formatNumber, shortTime, dayLabel, isJumboEmoji, esc, toast,
   lightbox, uploadFile, shrinkImage, $, $$
 } from './supa.js';
+import { mountPuppetBar, openNpcModal, hasHome } from './npc.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -34,11 +35,14 @@ paintAvatar($('#meAvatar'), me.avatar_url, me.username);
 $('#meName').textContent = me.username;
 $('#meNum').textContent  = formatNumber(me.phone_number);
 if (me.is_admin) $('#adminBtn').hidden = false;
+if (me.is_admin || hasHome()) $('#npcBtn').hidden = false;
+mountPuppetBar();
 
 $('#adminBtn').addEventListener('click', () => location.href = 'admin.html');
 $('#signOutBtn').addEventListener('click', signOut);
 $('#meBtn').addEventListener('click', openProfileModal);
 $('#contactsBtn').addEventListener('click', openContactsModal);
+$('#npcBtn').addEventListener('click', () => openNpcModal(modal));
 $('#newBtn').addEventListener('click', openNewThreadModal);
 $('#backBtn').addEventListener('click', () => $('#panes').classList.remove('reading'));
 
