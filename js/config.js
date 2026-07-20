@@ -16,7 +16,7 @@
 //  security rules and must stay off the internet.
 // =====================================================================
 
-export const SUPABASE_URL = 'https://lcccnnzwnfmlqrjluudw.supabase.co/rest/v1/';
+export const SUPABASE_URL = 'https://lcccnnzwnfmlqrjluudw.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_qCWgFQhcAMDX0MugyMRTiA_PJZQ6EOH';
 
 // Cosmetic settings — change these freely.
