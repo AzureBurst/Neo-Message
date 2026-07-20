@@ -9,7 +9,7 @@ import {
 } from './supa.js';
 import { mountPuppetBar, openNpcModal, hasHome } from './npc.js';
 import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
-import { playSent, isMuted, toggleMute } from './sfx.js';
+import { playSent, playReceived, isMuted, toggleMute } from './sfx.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -847,6 +847,10 @@ supa.channel('neo-messages')
       async (payload) => {
         const m = payload.new;
 
+        // Your own message already played its tone on send. Realtime
+        // echoes it straight back, so without this you would hear both.
+        if (m.sender_id !== me.id) playReceived();
+
         // Only react to threads I'm actually in.
         if (!state.threads.some(t => t.id === m.conversation_id)) {
           await loadThreads();
@@ -872,6 +876,18 @@ supa.channel('neo-messages')
       { event: 'INSERT', schema: 'public', table: 'conversation_members',
         filter: `user_id=eq.${me.id}` },
       () => loadThreads())
+  .on('postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'conversations' },
+      async (payload) => {
+        const gone = payload.old?.id;
+        if (!gone) return;
+        if (gone === state.openId) {
+          state.openId = null;
+          state.messages = [];
+          toast('That thread was removed by the GM.', 'info');
+        }
+        await loadThreads();
+      })
   .subscribe();
 
 

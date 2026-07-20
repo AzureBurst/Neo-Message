@@ -1330,3 +1330,11 @@ body.gated .gate-note { display: flex; }
   color: var(--muted);
   font-size: 13px;
 }
+
+/* Admin thread manager */
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.empty-cell {
+  padding: 26px;
+  text-align: center;
+  color: var(--dim);
+}

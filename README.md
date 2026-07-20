@@ -393,3 +393,40 @@ behind them. Click anywhere or press Escape to close.
 
 This was in from the start but a backdrop layering rule I added later
 was covering it up. Fixed.
+
+---
+
+## Receive sound
+
+A message arriving now plays a tone too. Sending rises in pitch,
+receiving falls — opposite shapes are much easier to tell apart mid
+scene than two tones at different pitches, so you know without looking
+whether that was you or them. Incoming is also slightly quieter, since
+it arrives unbidden.
+
+Your own messages do not double up: realtime echoes your insert straight
+back to you, and that echo is filtered out.
+
+Both tones are synthesised. Drop `sent.mp3` or `received.mp3` into
+`assets/sfx/` to override either one. The 🔊 button mutes both.
+
+## Deleting threads
+
+The admin console has a **Threads** table listing every conversation
+with its participants, message count, and last activity.
+
+- **Clear** empties a thread but leaves it in place, so the same group
+  can keep talking. Useful when a scene ends.
+- **Delete** removes the thread, its messages, and its membership
+  entirely.
+
+Both ask for confirmation first, and both are permanent. Download a
+transcript before you delete anything you might want later — that is
+what the export buttons are for.
+
+If a player has the thread open when you delete it, it disappears from
+their screen and they get a short notice. No reload needed.
+
+**Setup:** run `sql/admin-delete.sql` once in the Supabase SQL Editor.
+The admin check lives inside the database functions, so a player cannot
+call them even by hand.

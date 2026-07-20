@@ -20,26 +20,31 @@ export const toggleMute = () => { setMuted(!isMuted()); return isMuted(); };
 let ctx = null;
 const context = () => (ctx ??= new (window.AudioContext || window.webkitAudioContext)());
 
-/* If you drop a file in, it wins. Missing file costs nothing — the
+/* If you drop a file in, it wins. A missing file costs nothing — the
    error is swallowed and we fall back to the synthesised tone. */
-let sample = null;
-try {
-  sample = new Audio('assets/sfx/sent.mp3');
-  sample.preload = 'auto';
-  sample.volume = 0.5;
-} catch { sample = null; }
-let sampleUsable = false;
-if (sample) {
-  sample.addEventListener('canplaythrough', () => { sampleUsable = true; }, { once: true });
-  sample.addEventListener('error', () => { sampleUsable = false; }, { once: true });
+function loadSample(name) {
+  const slot = { el: null, ready: false };
+  try {
+    slot.el = new Audio(`assets/sfx/${name}.mp3`);
+    slot.el.preload = 'auto';
+    slot.el.volume = 0.5;
+    slot.el.addEventListener('canplaythrough', () => { slot.ready = true; }, { once: true });
+    slot.el.addEventListener('error', () => { slot.ready = false; }, { once: true });
+  } catch { slot.el = null; }
+  return slot;
 }
 
+const samples = { sent: loadSample('sent'), received: loadSample('received') };
+
 /**
- * Two quick notes rising a fifth, each fading out fast. Short and dry,
- * so it reads as a confirmation rather than a notification — you will
- * hear it a hundred times in a session.
+ * Two quick notes, each fading out fast. Sending rises; receiving
+ * falls. Opposite shapes are far easier to tell apart mid-conversation
+ * than two tones at different pitches, so you know without looking
+ * whether that was you or them.
  */
-function blip() {
+function blip(kind) {
+  const notes = kind === 'received' ? [[740, 0], [520, 0.08]]
+                                    : [[880, 0], [1320, 0.075]];
   const ac = context();
   if (ac.state === 'suspended') ac.resume();
 
@@ -48,7 +53,7 @@ function blip() {
   gain.connect(ac.destination);
   gain.gain.setValueAtTime(0.0001, now);
 
-  [[880, 0], [1320, 0.075]].forEach(([freq, at]) => {
+  notes.forEach(([freq, at]) => {
     const osc = ac.createOscillator();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, now + at);
@@ -57,14 +62,23 @@ function blip() {
     osc.stop(now + at + 0.14);
   });
 
-  gain.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
+  // Incoming is quieter. It arrives unbidden, so it should not startle.
+  gain.gain.exponentialRampToValueAtTime(kind === 'received' ? 0.11 : 0.16, now + 0.012);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
 }
 
-export function playSent() {
+function play(kind) {
   if (isMuted()) return;
   try {
-    if (sampleUsable) { sample.currentTime = 0; sample.play().catch(() => blip()); }
-    else blip();
-  } catch { /* audio is a nicety, never break sending over it */ }
+    const s = samples[kind];
+    if (s?.ready && s.el) {
+      s.el.currentTime = 0;
+      s.el.play().catch(() => blip(kind));
+    } else {
+      blip(kind);
+    }
+  } catch { /* audio is a nicety — never break messaging over it */ }
 }
+
+export const playSent     = () => play('sent');
+export const playReceived = () => play('received');

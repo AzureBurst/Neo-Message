@@ -44,6 +44,8 @@ let people = [];   // every profile
 /*  load                                                              */
 /* ------------------------------------------------------------------ */
 
+let convos = new Map();
+
 async function loadAll() {
   $('#rows').innerHTML =
     '<tr><td colspan="4" style="padding:30px;text-align:center;color:var(--dim)">Loading…</td></tr>';
@@ -99,10 +101,77 @@ async function loadAll() {
     };
   });
 
+  convos = convoLabel;
   buildFilters(convoLabel);
+  paintThreads();
   paintStats();
   paintUsers();
   render();
+}
+
+function paintThreads() {
+  const body = $('#threadRows');
+  const rows = [...convos.entries()].map(([id, v]) => {
+    const mine = log.filter(l => l.convoId === id);
+    return {
+      id,
+      label: v.label,
+      people: v.people,
+      count: mine.length,
+      last: mine.length ? mine[mine.length - 1].at : null
+    };
+  }).sort((a, b) => new Date(b.last ?? 0) - new Date(a.last ?? 0));
+
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="5" class="empty-cell">No threads yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(r => `
+    <tr data-conv="${esc(r.id)}">
+      <td><strong>${esc(r.label)}</strong></td>
+      <td class="muted">${esc(r.people || '—')}</td>
+      <td class="mono">${r.count}</td>
+      <td class="mono">${r.last ? esc(fullStamp(r.last)) : '—'}</td>
+      <td class="row-actions">
+        <button class="btn btn-ghost btn-sm" data-act="clear"
+                ${r.count ? '' : 'disabled'}>Clear</button>
+        <button class="btn btn-sm btn-danger" data-act="delete">Delete</button>
+      </td>
+    </tr>`).join('');
+
+  $$('#threadRows [data-act]', document).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tr    = btn.closest('tr');
+      const id    = tr.dataset.conv;
+      const label = tr.querySelector('strong').textContent;
+      const act   = btn.dataset.act;
+
+      const question = act === 'delete'
+        ? `Delete "${label}" and every message in it?\n\nThis cannot be undone.`
+        : `Delete every message in "${label}" but keep the thread?\n\nThis cannot be undone.`;
+      if (!confirm(question)) return;
+
+      btn.disabled = true;
+      const { data, error } = await supa.rpc(
+        act === 'delete' ? 'admin_delete_conversation' : 'admin_clear_conversation',
+        { conv: id });
+
+      if (error) {
+        alert(error.message);
+        btn.disabled = false;
+        return;
+      }
+      const n = data?.messages ?? 0;
+      $('#adminAlert').innerHTML =
+        `<div class="notice notice-ok">${
+          act === 'delete'
+            ? `Deleted "${esc(label)}" and ${n} message${n === 1 ? '' : 's'}.`
+            : `Cleared ${n} message${n === 1 ? '' : 's'} from "${esc(label)}".`
+        }</div>`;
+      await loadAll();
+    });
+  });
 }
 
 function buildFilters(convoLabel) {
