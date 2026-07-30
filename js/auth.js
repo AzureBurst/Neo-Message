@@ -8,7 +8,7 @@ mountCarrier($('#carrier'));
 
 // Already signed in? Go straight through.
 const { data: { session } } = await supa.auth.getSession();
-if (session) location.replace('app.html');
+if (session) location.replace('home.html');
 
 const tabIn  = $('#tabIn');
 const tabUp  = $('#tabUp');
@@ -75,7 +75,7 @@ formIn.addEventListener('submit', async (e) => {
     btn.textContent = 'Sign in';
     return;
   }
-  location.replace('app.html');
+  location.replace('home.html');
 });
 
 
@@ -134,7 +134,7 @@ formUp.addEventListener('submit', async (e) => {
   // With email confirmation switched off, signUp signs you in as well.
   const { data: { session: fresh } } = await supa.auth.getSession();
   if (fresh) {
-    location.replace('app.html');
+    location.replace('home.html');
   } else {
     say('Account created. Sign in to continue.', 'ok');
     showTab('in');

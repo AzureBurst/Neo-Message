@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Home</title>
+<meta name="theme-color" content="#08080A">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/neo.css">
+</head>
+<body class="gated">
+  <div id="gateNote" class="gate-note">
+    <span>Checking your session…</span>
+    <a href="index.html" class="gate-escape">Go to sign in</a>
+  </div>
+
+  <main class="home">
+    <div id="carrier"></div>
+
+    <div class="home-body">
+      <div class="home-greeting">
+        <span class="home-hi" id="homeHi">—</span>
+        <button class="home-signout" id="signOutBtn">Sign out</button>
+      </div>
+
+      <div class="home-grid">
+        <a class="app-icon" href="app.html" id="tileMessage">
+          <!-- Drop your own icon at assets/apps/message.png and it shows here -->
+          <span class="app-glyph" data-icon="message">✉</span>
+          <span class="app-name">Neo Message</span>
+          <span class="app-badge" id="msgBadge" hidden></span>
+        </a>
+
+        <a class="app-icon" href="instagrat.html" id="tileGrat">
+          <span class="app-glyph" data-icon="instagrat">◎</span>
+          <span class="app-name">Instagrat</span>
+          <span class="app-badge" id="gratBadge" hidden></span>
+        </a>
+      </div>
+
+      <div class="home-hint" id="adminHint" hidden></div>
+    </div>
+  </main>
+
+<script type="module" src="js/home.js"></script>
+</body>
+</html>

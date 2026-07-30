@@ -1,0 +1,744 @@
+// =====================================================================
+//  INSTAGRAT
+//
+//  A photo app riding on the same login as Neo Message. First visit
+//  asks the player to pick a screen name; after that it is feed,
+//  profiles, posting, following, likes and comments — with every post
+//  passing through a GM's approval queue before anyone else sees it.
+//
+//  Everything here trusts the database to decide what a person may see.
+//  The queries ask plainly for "approved posts"; row level security is
+//  what makes a private account's posts invisible to a stranger. The
+//  interface never has to enforce that itself.
+// =====================================================================
+
+import {
+  supa, requireProfile, ungate, mountCarrier, setClockSource,
+  paintAvatar, uploadFile, shrinkImage, lightbox, esc, toast,
+  shortTime, fullStamp, $, $$
+} from './supa.js';
+import { loadClock, storyNow } from './clock.js';
+
+const me = await requireProfile();
+if (!me) throw new Error('redirecting');
+
+await loadClock();
+setClockSource(storyNow);
+ungate();
+mountCarrier($('#carrier'));
+
+if (me.is_admin) $('.ig-admin-tab').hidden = false;
+
+const main = $('#igMain');
+
+/* Instagrat identity is separate from the Neo Message account. Load it
+   if it exists; if not, the first thing the player sees is setup. */
+let ig = await loadMyIg();
+
+async function loadMyIg() {
+  const { data } = await supa.from('ig_profiles').select('*').eq('id', me.id).maybeSingle();
+  return data || null;
+}
+
+/* ------------------------------------------------------------------ */
+/*  helpers                                                           */
+/* ------------------------------------------------------------------ */
+
+const igCache = new Map();          // id -> ig_profile
+function remember(p) { if (p) igCache.set(p.id, p); return p; }
+
+async function getIg(id) {
+  if (igCache.has(id)) return igCache.get(id);
+  const { data } = await supa.from('ig_profiles').select('*').eq('id', id).maybeSingle();
+  return remember(data);
+}
+
+function handle(p)  { return p ? '@' + p.screen_name : '@unknown'; }
+function name(p)    { return p?.display_name || p?.screen_name || 'unknown'; }
+
+/* ------------------------------------------------------------------ */
+/*  onboarding — pick a screen name                                   */
+/* ------------------------------------------------------------------ */
+
+function showSetup() {
+  main.innerHTML = `
+    <div class="ig-setup">
+      <h2>Set up Instagrat</h2>
+      <p class="muted">This name is yours on Instagrat only. Your phone number
+        and Neo Message name stay private.</p>
+
+      <div class="field">
+        <label for="sName">Screen name</label>
+        <div class="at-input">
+          <span>@</span>
+          <input id="sName" maxlength="24" autocomplete="off"
+                 placeholder="lowercase, letters numbers . _">
+        </div>
+        <div class="hint" id="sNameHint">2–24 characters.</div>
+      </div>
+
+      <div class="field">
+        <label for="sDisplay">Display name <span class="muted">(optional)</span></label>
+        <input id="sDisplay" maxlength="40" placeholder="e.g. Hazel N.">
+      </div>
+
+      <label class="check">
+        <input type="checkbox" id="sPrivate">
+        <span>Private account — you approve who follows you</span>
+      </label>
+
+      <button class="btn btn-primary" id="sGo" style="width:100%">Create profile</button>
+    </div>`;
+
+  const nameEl = $('#sName');
+  nameEl.addEventListener('input', () => {
+    nameEl.value = nameEl.value.toLowerCase().replace(/[^a-z0-9._]/g, '');
+  });
+
+  $('#sGo').addEventListener('click', async (e) => {
+    const screen_name  = nameEl.value.trim();
+    const display_name = $('#sDisplay').value.trim() || null;
+    const is_private   = $('#sPrivate').checked;
+
+    if (!/^[a-z0-9._]{2,24}$/.test(screen_name)) {
+      $('#sNameHint').innerHTML = '<span style="color:var(--danger)">Use 2–24 lowercase letters, numbers, dots or underscores.</span>';
+      return;
+    }
+    e.target.disabled = true;
+    e.target.textContent = 'Creating…';
+
+    const { data, error } = await supa.from('ig_profiles')
+      .insert({ id: me.id, screen_name, display_name, is_private })
+      .select().single();
+
+    if (error) {
+      e.target.disabled = false;
+      e.target.textContent = 'Create profile';
+      toast(/duplicate|unique/i.test(error.message)
+        ? 'That screen name is taken.' : error.message, 'error');
+      return;
+    }
+    ig = remember(data);
+    toast('Welcome to Instagrat.', 'ok');
+    show('feed');
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  views                                                             */
+/* ------------------------------------------------------------------ */
+
+async function show(view, arg) {
+  if (!ig) return showSetup();
+
+  $$('.ig-tab').forEach(t => t.classList.toggle('is-on', t.dataset.view === view));
+  main.scrollTop = 0;
+  main.innerHTML = '<div class="ig-loading">Loading…</div>';
+
+  try {
+    if (view === 'feed')     await viewFeed();
+    else if (view === 'explore')  await viewExplore();
+    else if (view === 'me')       await viewProfile(me.id);
+    else if (view === 'profile')  await viewProfile(arg);
+    else if (view === 'activity') await viewActivity();
+    else if (view === 'review')   await viewReview();
+    else if (view === 'post')     await viewPost(arg);
+  } catch (err) {
+    main.innerHTML = `<div class="ig-empty">Something went wrong: ${esc(err.message)}</div>`;
+  }
+}
+
+/* ---- feed: approved posts from people you can see ---- */
+async function viewFeed() {
+  const { data: posts } = await supa
+    .from('ig_posts').select('*')
+    .eq('status', 'approved')
+    .order('created_at', { ascending: false })
+    .limit(60);
+
+  if (!posts?.length) {
+    main.innerHTML = `
+      <div class="ig-empty">
+        <p>Nothing in your feed yet.</p>
+        <p class="muted">Follow some people, or make the first post.</p>
+        <button class="btn btn-primary" id="emptyPost">New post</button>
+      </div>`;
+    $('#emptyPost')?.addEventListener('click', openComposer);
+    return;
+  }
+
+  await Promise.all([...new Set(posts.map(p => p.author_id))].map(getIg));
+  main.innerHTML = `<div class="ig-feed">${posts.map(cardHtml).join('')}</div>`;
+  await hydrateCards(main);
+}
+
+/* ---- explore: find people ---- */
+async function viewExplore() {
+  main.innerHTML = `
+    <div class="ig-explore">
+      <div class="field">
+        <input id="expFind" placeholder="Search screen names" autocomplete="off">
+      </div>
+      <div id="expResults" class="ig-people"></div>
+    </div>`;
+
+  const box = $('#expResults');
+  const draw = async (q) => {
+    let query = supa.from('ig_profiles').select('*')
+      .neq('id', me.id).order('screen_name').limit(30);
+    if (q) query = query.ilike('screen_name', `%${q}%`);
+    const { data } = await query;
+
+    if (!data?.length) { box.innerHTML = '<div class="ig-empty muted">Nobody found.</div>'; return; }
+    data.forEach(remember);
+    box.innerHTML = data.map(personRow).join('');
+    wirePeople(box);
+  };
+
+  let timer;
+  $('#expFind').addEventListener('input', (e) => {
+    clearTimeout(timer);
+    const q = e.target.value.trim();
+    timer = setTimeout(() => draw(q), 200);
+  });
+  await draw('');
+}
+
+/* ---- a profile ---- */
+async function viewProfile(id) {
+  const p = await getIg(id);
+  if (!p) { main.innerHTML = '<div class="ig-empty">No such profile.</div>'; return; }
+
+  const mine = id === me.id;
+
+  // Follower / following counts (accepted only).
+  const [{ count: followers }, { count: following }] = await Promise.all([
+    supa.from('ig_follows').select('*', { count: 'exact', head: true })
+        .eq('followee_id', id).eq('accepted', true),
+    supa.from('ig_follows').select('*', { count: 'exact', head: true })
+        .eq('follower_id', id).eq('accepted', true)
+  ]);
+
+  // My relationship to them.
+  let rel = 'none';
+  if (!mine) {
+    const { data: f } = await supa.from('ig_follows').select('accepted')
+      .eq('follower_id', me.id).eq('followee_id', id).maybeSingle();
+    rel = f ? (f.accepted ? 'following' : 'requested') : 'none';
+  }
+
+  // Their posts. RLS returns an empty list rather than an error if this
+  // is a private account I do not follow, so the "locked" state is just
+  // "private and I am not in".
+  const { data: posts } = await supa.from('ig_posts').select('*')
+    .eq('author_id', id).eq('status', 'approved')
+    .order('created_at', { ascending: false });
+
+  const locked = p.is_private && !mine && rel !== 'following' && !me.is_admin;
+
+  let action = '';
+  if (mine) {
+    action = `<button class="btn btn-ghost" id="editIg">Edit profile</button>`;
+  } else if (rel === 'following') {
+    action = `<button class="btn btn-ghost" data-follow="${esc(id)}" data-state="following">Following</button>`;
+  } else if (rel === 'requested') {
+    action = `<button class="btn btn-ghost" data-follow="${esc(id)}" data-state="requested" disabled>Requested</button>`;
+  } else {
+    action = `<button class="btn btn-primary" data-follow="${esc(id)}" data-state="none">Follow</button>`;
+  }
+
+  main.innerHTML = `
+    <div class="ig-profile">
+      <div class="ig-profile-head">
+        <span class="avatar avatar-lg" id="igAvatar"></span>
+        <div class="ig-stats">
+          <div><strong>${posts?.length ?? 0}</strong><span>posts</span></div>
+          <div><strong>${followers ?? 0}</strong><span>followers</span></div>
+          <div><strong>${following ?? 0}</strong><span>following</span></div>
+        </div>
+      </div>
+      <div class="ig-bio">
+        <strong>${esc(name(p))}</strong>
+        <span class="muted">${esc(handle(p))}${p.is_private ? ' · 🔒 private' : ''}</span>
+        ${p.bio ? `<p>${esc(p.bio)}</p>` : ''}
+      </div>
+      <div class="ig-profile-actions">${action}</div>
+
+      ${locked
+        ? `<div class="ig-locked">🔒 This account is private. Follow to see their posts.</div>`
+        : `<div class="ig-grid" id="pGrid">${
+            (posts || []).map(gridCell).join('') ||
+            '<div class="ig-empty muted">No posts yet.</div>'}</div>`}
+    </div>`;
+
+  paintAvatar($('#igAvatar'), p.avatar_url, name(p));
+
+  if (mine) $('#editIg')?.addEventListener('click', openEditProfile);
+  wireFollowButtons(main);
+
+  $$('#pGrid [data-post]', main).forEach(c =>
+    c.addEventListener('click', () => show('post', c.dataset.post)));
+}
+
+/* ---- one post, full size, with comments ---- */
+async function viewPost(id) {
+  const { data: post } = await supa.from('ig_posts').select('*').eq('id', id).maybeSingle();
+  if (!post) { main.innerHTML = '<div class="ig-empty">This post is not available.</div>'; return; }
+  await getIg(post.author_id);
+  main.innerHTML = `<div class="ig-feed">${cardHtml(post, { expanded: true })}</div>`;
+  await hydrateCards(main);
+}
+
+/* ---- activity: follow requests to approve ---- */
+async function viewActivity() {
+  const { data: reqs } = await supa.from('ig_follows').select('*')
+    .eq('followee_id', me.id).eq('accepted', false)
+    .order('created_at', { ascending: false });
+
+  await Promise.all((reqs || []).map(r => getIg(r.follower_id)));
+
+  main.innerHTML = `
+    <div class="ig-activity">
+      <h3>Follow requests</h3>
+      ${reqs?.length ? reqs.map(r => {
+        const p = igCache.get(r.follower_id);
+        return `<div class="ig-req" data-req="${esc(r.follower_id)}">
+          <span class="avatar avatar-sm" data-av="${esc(r.follower_id)}"></span>
+          <span class="ig-req-id"><strong>${esc(name(p))}</strong>
+            <span class="muted">${esc(handle(p))}</span></span>
+          <button class="btn btn-sm btn-primary" data-act="accept">Accept</button>
+          <button class="btn btn-sm btn-ghost" data-act="decline">Decline</button>
+        </div>`;
+      }).join('') : '<div class="ig-empty muted">No pending requests.</div>'}
+    </div>`;
+
+  (reqs || []).forEach(r =>
+    paintAvatar(main.querySelector(`[data-av="${r.follower_id}"]`),
+                igCache.get(r.follower_id)?.avatar_url, name(igCache.get(r.follower_id))));
+
+  $$('.ig-req [data-act]', main).forEach(btn => btn.addEventListener('click', async () => {
+    const row = btn.closest('.ig-req');
+    const who = row.dataset.req;
+    if (btn.dataset.act === 'accept') {
+      await supa.from('ig_follows').update({ accepted: true })
+        .eq('follower_id', who).eq('followee_id', me.id);
+    } else {
+      await supa.from('ig_follows').delete()
+        .eq('follower_id', who).eq('followee_id', me.id);
+    }
+    row.remove();
+    paintReqBadge();
+  }));
+}
+
+/* ---- admin: moderation queue ---- */
+async function viewReview() {
+  if (!me.is_admin) { main.innerHTML = '<div class="ig-empty">Not available.</div>'; return; }
+
+  const { data: posts } = await supa.from('ig_posts').select('*')
+    .eq('status', 'pending').order('created_at', { ascending: true });
+
+  await Promise.all((posts || []).map(p => getIg(p.author_id)));
+
+  main.innerHTML = `
+    <div class="ig-review">
+      <h3>Pending posts</h3>
+      <p class="muted small">Approved posts go live for everyone allowed to see the poster.
+        Rejected posts stay visible only to their author, marked as such.</p>
+      ${posts?.length ? posts.map(p => {
+        const a = igCache.get(p.author_id);
+        return `<div class="ig-review-card" data-review="${esc(p.id)}">
+          <img src="${esc(p.image_url)}" alt="" loading="lazy">
+          <div class="ig-review-meta">
+            <strong>${esc(name(a))}</strong> <span class="muted">${esc(handle(a))}</span>
+            <span class="muted mono">${esc(fullStamp(p.created_at))}</span>
+            ${p.caption ? `<p>${esc(p.caption)}</p>` : ''}
+          </div>
+          <div class="ig-review-actions">
+            <button class="btn btn-sm btn-primary" data-act="approved">Approve</button>
+            <button class="btn btn-sm btn-danger" data-act="rejected">Reject</button>
+          </div>
+        </div>`;
+      }).join('') : '<div class="ig-empty muted">Queue is empty.</div>'}
+    </div>`;
+
+  $$('.ig-review-card img', main).forEach(im =>
+    im.addEventListener('click', () => lightbox(im.src)));
+
+  $$('.ig-review-card [data-act]', main).forEach(btn => btn.addEventListener('click', async () => {
+    const card = btn.closest('.ig-review-card');
+    btn.disabled = true;
+    const { error } = await supa.rpc('ig_review_post',
+      { post: card.dataset.review, decision: btn.dataset.act });
+    if (error) { toast(error.message, 'error'); btn.disabled = false; return; }
+    card.remove();
+    paintQueueBadge();
+    if (!$$('.ig-review-card', main).length)
+      $('.ig-review').insertAdjacentHTML('beforeend', '<div class="ig-empty muted">Queue is empty.</div>');
+  }));
+}
+
+/* ------------------------------------------------------------------ */
+/*  post cards                                                        */
+/* ------------------------------------------------------------------ */
+
+function cardHtml(post, { expanded = false } = {}) {
+  const a = igCache.get(post.author_id);
+  const pending  = post.status === 'pending';
+  const rejected = post.status === 'rejected';
+  return `
+    <article class="ig-card" data-card="${esc(post.id)}" data-author="${esc(post.author_id)}">
+      <header class="ig-card-top">
+        <span class="avatar avatar-sm" data-av="${esc(post.author_id)}"></span>
+        <button class="ig-card-name" data-open-profile="${esc(post.author_id)}">
+          ${esc(name(a))} <span class="muted">${esc(handle(a))}</span>
+        </button>
+        ${pending  ? '<span class="ig-flag pending">Pending review</span>' : ''}
+        ${rejected ? '<span class="ig-flag rejected">Not approved</span>' : ''}
+      </header>
+
+      <div class="ig-card-media">
+        <img src="${esc(post.image_url)}" alt="${esc(post.caption || 'Post')}" loading="lazy">
+      </div>
+
+      <div class="ig-card-actions">
+        <button class="ig-like" data-like="${esc(post.id)}" aria-pressed="false">♡</button>
+        <span class="ig-like-count" data-likes="${esc(post.id)}">0</span>
+        <span class="ig-stamp mono">${esc(shortTime(post.created_at))}</span>
+      </div>
+
+      ${post.caption ? `<div class="ig-caption"><strong>${esc(handle(a))}</strong> ${esc(post.caption)}</div>` : ''}
+
+      <div class="ig-comments" data-comments="${esc(post.id)}"></div>
+      ${!pending && !rejected ? `
+      <div class="ig-add-comment">
+        <input placeholder="Add a comment…" maxlength="500" data-comment-input="${esc(post.id)}">
+        <button class="ig-comment-send" data-comment-send="${esc(post.id)}">Post</button>
+      </div>` : ''}
+    </article>`;
+}
+
+function gridCell(post) {
+  return `<button class="ig-grid-cell" data-post="${esc(post.id)}">
+    <img src="${esc(post.image_url)}" alt="${esc(post.caption || 'Post')}" loading="lazy">
+  </button>`;
+}
+
+/* Fill in avatars, like state, and comments once cards are in the DOM. */
+async function hydrateCards(root) {
+  const cards = $$('.ig-card', root);
+
+  cards.forEach(c => {
+    const a = igCache.get(c.dataset.author);
+    paintAvatar(c.querySelector('[data-av]'), a?.avatar_url, name(a));
+  });
+
+  $$('[data-open-profile]', root).forEach(b =>
+    b.addEventListener('click', () => show('profile', b.dataset.openProfile)));
+
+  $$('.ig-card-media img', root).forEach(im =>
+    im.addEventListener('click', () => lightbox(im.src)));
+
+  // Likes + comments per post.
+  await Promise.all(cards.map(async (c) => {
+    const id = c.dataset.card;
+
+    const [{ data: likes }, { data: mine }, { data: comments }] = await Promise.all([
+      supa.from('ig_likes').select('*', { count: 'exact', head: false }).eq('post_id', id),
+      supa.from('ig_likes').select('post_id').eq('post_id', id).eq('liker_id', me.id).maybeSingle(),
+      supa.from('ig_comments').select('*').eq('post_id', id).order('created_at').limit(50)
+    ]);
+
+    const likeBtn = c.querySelector(`[data-like="${id}"]`);
+    const likeNum = c.querySelector(`[data-likes="${id}"]`);
+    if (likeBtn) {
+      let liked = !!mine, count = likes?.length ?? 0;
+      const paint = () => {
+        likeBtn.textContent = liked ? '♥' : '♡';
+        likeBtn.classList.toggle('is-liked', liked);
+        likeBtn.setAttribute('aria-pressed', String(liked));
+        likeNum.textContent = count;
+      };
+      paint();
+      likeBtn.addEventListener('click', async () => {
+        liked = !liked; count += liked ? 1 : -1; paint();       // optimistic
+        if (liked) await supa.from('ig_likes').insert({ post_id: id, liker_id: me.id });
+        else await supa.from('ig_likes').delete().eq('post_id', id).eq('liker_id', me.id);
+      });
+    }
+
+    await renderComments(c, id, comments || []);
+  }));
+}
+
+async function renderComments(card, postId, comments) {
+  const box = card.querySelector(`[data-comments="${postId}"]`);
+  if (!box) return;
+
+  await Promise.all([...new Set(comments.map(c => c.author_id))].map(getIg));
+  box.innerHTML = comments.map(c => {
+    const a = igCache.get(c.author_id);
+    return `<div class="ig-comment">
+      <strong>${esc(handle(a))}</strong> ${esc(c.body)}
+    </div>`;
+  }).join('');
+
+  const input = card.querySelector(`[data-comment-input="${postId}"]`);
+  const send  = card.querySelector(`[data-comment-send="${postId}"]`);
+  if (!send) return;
+
+  const submit = async () => {
+    const body = input.value.trim();
+    if (!body) return;
+    input.value = '';
+    const { data, error } = await supa.from('ig_comments')
+      .insert({ post_id: postId, author_id: me.id, body }).select().single();
+    if (error) { toast(error.message, 'error'); return; }
+    remember(await getIg(me.id));
+    box.insertAdjacentHTML('beforeend',
+      `<div class="ig-comment"><strong>${esc(handle(ig))}</strong> ${esc(data.body)}</div>`);
+  };
+  send.addEventListener('click', submit);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+}
+
+/* ------------------------------------------------------------------ */
+/*  people rows + follow buttons                                      */
+/* ------------------------------------------------------------------ */
+
+function personRow(p) {
+  return `<button class="ig-person" data-open-profile="${esc(p.id)}">
+    <span class="avatar avatar-sm" data-av="${esc(p.id)}"></span>
+    <span class="ig-person-id">
+      <strong>${esc(name(p))}</strong>
+      <span class="muted">${esc(handle(p))}${p.is_private ? ' · 🔒' : ''}</span>
+    </span>
+  </button>`;
+}
+
+function wirePeople(root) {
+  $$('.ig-person', root).forEach(b => {
+    const id = b.dataset.openProfile;
+    paintAvatar(b.querySelector('[data-av]'), igCache.get(id)?.avatar_url, name(igCache.get(id)));
+    b.addEventListener('click', () => show('profile', id));
+  });
+}
+
+function wireFollowButtons(root) {
+  $$('[data-follow]', root).forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.follow;
+    const state = btn.dataset.state;
+
+    if (state === 'following') {
+      // Unfollow.
+      await supa.from('ig_follows').delete()
+        .eq('follower_id', me.id).eq('followee_id', id);
+      btn.dataset.state = 'none';
+      btn.textContent = 'Follow';
+      btn.className = 'btn btn-primary';
+      return;
+    }
+
+    btn.disabled = true;
+    const { data, error } = await supa.rpc('ig_follow', { target: id });
+    btn.disabled = false;
+    if (error) { toast(error.message, 'error'); return; }
+
+    if (data === 'following') {
+      btn.dataset.state = 'following'; btn.textContent = 'Following'; btn.className = 'btn btn-ghost';
+    } else {
+      btn.dataset.state = 'requested'; btn.textContent = 'Requested';
+      btn.className = 'btn btn-ghost'; btn.disabled = true;
+    }
+  }));
+}
+
+/* ------------------------------------------------------------------ */
+/*  composing a post                                                  */
+/* ------------------------------------------------------------------ */
+
+function openComposer() {
+  if (!ig) return showSetup();
+  const root = $('#modalRoot');
+  root.innerHTML = `
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head"><h3>New post</h3>
+          <button class="icon-btn" data-close>✕</button></div>
+        <div class="modal-body">
+          <div class="ig-drop" id="igDrop">
+            <input type="file" id="igFile" accept="image/*" hidden>
+            <div id="igPreviewWrap"><span class="muted">Tap to choose a photo</span></div>
+          </div>
+          <div class="field">
+            <label for="igCap">Caption</label>
+            <textarea id="igCap" rows="2" maxlength="600" placeholder="Say something…"></textarea>
+          </div>
+          <p class="muted small">Posts are reviewed by the GM before anyone else sees them.</p>
+          <div id="igPostMsg"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-primary" id="igSubmit" disabled>Share</button>
+        </div>
+      </div>
+    </div>`;
+
+  const close = () => { root.innerHTML = ''; };
+  $$('[data-close]', root).forEach(b => b.addEventListener('click', close));
+  $('.scrim', root).addEventListener('click', e => { if (e.target.classList.contains('scrim')) close(); });
+
+  const file = $('#igFile'), drop = $('#igDrop'), submit = $('#igSubmit');
+  let picked = null;
+
+  drop.addEventListener('click', () => file.click());
+  file.addEventListener('change', () => {
+    picked = file.files[0];
+    if (!picked) return;
+    const url = URL.createObjectURL(picked);
+    $('#igPreviewWrap').innerHTML = `<img src="${url}" alt="preview">`;
+    submit.disabled = false;
+  });
+
+  submit.addEventListener('click', async () => {
+    if (!picked) return;
+    submit.disabled = true;
+    submit.textContent = 'Uploading…';
+    const msg = $('#igPostMsg');
+    try {
+      const small = await shrinkImage(picked, 1600, 0.85);
+      const url   = await uploadFile('ig_media', me.id, small);
+      const { error } = await supa.from('ig_posts')
+        .insert({ author_id: me.id, image_url: url, caption: $('#igCap').value.trim() || null });
+      if (error) throw error;
+      close();
+      toast('Posted. It will appear once the GM approves it.', 'ok');
+      show('me');
+    } catch (err) {
+      msg.innerHTML = `<div class="notice notice-error">${esc(err.message)}</div>`;
+      submit.disabled = false;
+      submit.textContent = 'Share';
+    }
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  editing your own profile                                          */
+/* ------------------------------------------------------------------ */
+
+function openEditProfile() {
+  const root = $('#modalRoot');
+  root.innerHTML = `
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head"><h3>Edit profile</h3>
+          <button class="icon-btn" data-close>✕</button></div>
+        <div class="modal-body">
+          <div class="ig-edit-avatar">
+            <span class="avatar avatar-lg" id="eAvatar"></span>
+            <button class="btn btn-ghost btn-sm" id="ePick">Change photo</button>
+            <input type="file" id="eFile" accept="image/*" hidden>
+          </div>
+          <div class="field">
+            <label for="eDisplay">Display name</label>
+            <input id="eDisplay" maxlength="40" value="${esc(ig.display_name || '')}">
+          </div>
+          <div class="field">
+            <label for="eBio">Bio</label>
+            <textarea id="eBio" rows="3" maxlength="300">${esc(ig.bio || '')}</textarea>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="ePrivate" ${ig.is_private ? 'checked' : ''}>
+            <span>Private account</span>
+          </label>
+          <div id="eMsg"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-primary" id="eSave">Save</button>
+        </div>
+      </div>
+    </div>`;
+
+  const close = () => { root.innerHTML = ''; };
+  $$('[data-close]', root).forEach(b => b.addEventListener('click', close));
+  $('.scrim', root).addEventListener('click', e => { if (e.target.classList.contains('scrim')) close(); });
+  paintAvatar($('#eAvatar'), ig.avatar_url, name(ig));
+
+  let newAvatar = null;
+  $('#ePick').addEventListener('click', () => $('#eFile').click());
+  $('#eFile').addEventListener('change', () => {
+    newAvatar = $('#eFile').files[0];
+    if (newAvatar) $('#eAvatar').style.backgroundImage = `url('${URL.createObjectURL(newAvatar)}')`,
+                   $('#eAvatar').textContent = '';
+  });
+
+  $('#eSave').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = 'Saving…';
+    const patch = {
+      display_name: $('#eDisplay').value.trim() || null,
+      bio: $('#eBio').value.trim() || null,
+      is_private: $('#ePrivate').checked
+    };
+    try {
+      if (newAvatar) {
+        const small = await shrinkImage(newAvatar, 600, 0.85);
+        patch.avatar_url = await uploadFile('ig_media', me.id, small);
+      }
+      const { data, error } = await supa.from('ig_profiles')
+        .update(patch).eq('id', me.id).select().single();
+      if (error) throw error;
+      ig = remember(data);
+      close();
+      toast('Profile updated.', 'ok');
+      show('me');
+    } catch (err) {
+      $('#eMsg').innerHTML = `<div class="notice notice-error">${esc(err.message)}</div>`;
+      e.target.disabled = false; e.target.textContent = 'Save';
+    }
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  badges                                                            */
+/* ------------------------------------------------------------------ */
+
+async function paintReqBadge() {
+  const { count } = await supa.from('ig_follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('followee_id', me.id).eq('accepted', false);
+  const b = $('#reqBadge');
+  if (count) { b.hidden = false; b.textContent = count > 9 ? '9+' : count; }
+  else b.hidden = true;
+}
+
+async function paintQueueBadge() {
+  if (!me.is_admin) return;
+  const { count } = await supa.from('ig_posts')
+    .select('*', { count: 'exact', head: true }).eq('status', 'pending');
+  const b = $('#queueBadge');
+  if (count) { b.hidden = false; b.textContent = count > 9 ? '9+' : count; }
+  else b.hidden = true;
+}
+
+/* ------------------------------------------------------------------ */
+/*  wiring                                                            */
+/* ------------------------------------------------------------------ */
+
+$$('.ig-tab').forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
+$('#newPostBtn').addEventListener('click', openComposer);
+
+// Live: a decision on your pending post, or a new request coming in.
+supa.channel('ig-live')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'ig_posts' }, () => {
+    paintQueueBadge();
+  })
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'ig_follows',
+      filter: `followee_id=eq.${me.id}` }, () => {
+    paintReqBadge();
+  })
+  .subscribe();
+
+paintReqBadge();
+paintQueueBadge();
+
+// First paint.
+show(ig ? 'feed' : 'setup');
