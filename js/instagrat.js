@@ -56,6 +56,29 @@ async function getIg(id) {
 function handle(p)  { return p ? '@' + p.screen_name : '@unknown'; }
 function name(p)    { return p?.display_name || p?.screen_name || 'unknown'; }
 
+/* A small modal in #modalRoot. Returns { root, close } so callers can
+   wire their own controls. Used by the admin tools and the followers
+   list; the post composer and profile editor predate it and build their
+   own. */
+function sheet({ title, body, footer }) {
+  const root = $('#modalRoot');
+  root.innerHTML = `
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head"><h3>${esc(title)}</h3>
+          <button class="icon-btn" data-close>✕</button></div>
+        <div class="modal-body">${body}</div>
+        ${footer ? `<div class="modal-foot">${footer}</div>` : ''}
+      </div>
+    </div>`;
+  const close = () => { root.innerHTML = ''; };
+  $$('[data-close]', root).forEach(b => b.addEventListener('click', close));
+  $('.scrim', root).addEventListener('click', e => {
+    if (e.target.classList.contains('scrim')) close();
+  });
+  return { root, close };
+}
+
 /* ------------------------------------------------------------------ */
 /*  onboarding — pick a screen name                                   */
 /* ------------------------------------------------------------------ */
@@ -252,9 +275,11 @@ async function viewProfile(id) {
       <div class="ig-profile-head">
         <span class="avatar avatar-lg" id="igAvatar"></span>
         <div class="ig-stats">
-          <div><strong>${posts?.length ?? 0}</strong><span>posts</span></div>
-          <div><strong>${followers ?? 0}</strong><span>followers</span></div>
-          <div><strong>${following ?? 0}</strong><span>following</span></div>
+          <div><strong>${fmt(posts?.length ?? 0)}</strong><span>posts</span></div>
+          <button class="ig-stat-btn" data-list="followers">
+            <strong>${fmt((followers ?? 0) + (Number(p.fake_followers) || 0))}</strong><span>followers</span></button>
+          <button class="ig-stat-btn" data-list="following">
+            <strong>${fmt(following ?? 0)}</strong><span>following</span></button>
         </div>
       </div>
       <div class="ig-bio">
@@ -262,7 +287,10 @@ async function viewProfile(id) {
         <span class="muted">${esc(handle(p))}${p.is_private ? ' · 🔒 private' : ''}</span>
         ${p.bio ? `<p>${esc(p.bio)}</p>` : ''}
       </div>
-      <div class="ig-profile-actions">${action}</div>
+      <div class="ig-profile-actions">
+        ${action}
+        ${me.is_admin && !mine ? `<button class="btn btn-ghost" id="padFollowers">Set fake followers</button>` : ''}
+      </div>
 
       ${locked
         ? `<div class="ig-locked">🔒 This account is private. Follow to see their posts.</div>`
@@ -276,8 +304,76 @@ async function viewProfile(id) {
   if (mine) $('#editIg')?.addEventListener('click', openEditProfile);
   wireFollowButtons(main);
 
+  // Tapping a count lists the real accounts behind it — padding never
+  // appears here, because padding is a number, not a follow row.
+  $$('.ig-stat-btn', main).forEach(b =>
+    b.addEventListener('click', () => showFollowList(id, b.dataset.list, p)));
+
+  if (me.is_admin && !mine) {
+    $('#padFollowers')?.addEventListener('click', () =>
+      sheetSetFollowers(id, Number(p.fake_followers) || 0, followers ?? 0));
+  }
+
   $$('#pGrid [data-post]', main).forEach(c =>
     c.addEventListener('click', () => show('post', c.dataset.post)));
+}
+
+/* The real accounts on either side of a follow. Padding is invisible
+   here by construction. */
+async function showFollowList(profileId, which, profile) {
+  const col   = which === 'followers' ? 'followee_id' : 'follower_id';
+  const other = which === 'followers' ? 'follower_id' : 'followee_id';
+
+  const { data: rows } = await supa.from('ig_follows')
+    .select(other).eq(col, profileId).eq('accepted', true);
+
+  const ids = (rows || []).map(r => r[other]);
+  await Promise.all(ids.map(getIg));
+
+  const pad = which === 'followers' ? (Number(profile.fake_followers) || 0) : 0;
+
+  const { root } = sheet({
+    title: which === 'followers' ? 'Followers' : 'Following',
+    body: `
+      ${pad ? `<p class="muted small">Showing ${ids.length} real
+        account${ids.length === 1 ? '' : 's'}. The profile displays
+        ${fmt(ids.length + pad)} with padding.</p>` : ''}
+      <div class="ig-people">
+        ${ids.length ? ids.map(id => personRow(igCache.get(id))).join('')
+          : '<div class="ig-empty muted">Nobody yet.</div>'}
+      </div>`
+  });
+  wirePeople(root);
+}
+
+function sheetSetFollowers(profileId, current, real) {
+  const { root, close } = sheet({
+    title: 'Fake followers',
+    body: `
+      <p class="muted small">Extra followers shown on top of the
+        ${fmt(real)} real one${real === 1 ? '' : 's'}. Tapping the count
+        still lists only real accounts.</p>
+      <div class="field">
+        <label for="ff">Padding</label>
+        <input type="number" id="ff" min="0" value="${current}">
+      </div>
+      <p class="muted small">Displayed total: <strong id="ffTotal">${fmt(real + current)}</strong></p>`,
+    footer: `<button class="btn btn-primary" id="ffSave">Apply</button>`
+  });
+  const inp = $('#ff', root);
+  inp.addEventListener('input', () => {
+    $('#ffTotal', root).textContent = fmt(real + (parseInt(inp.value, 10) || 0));
+  });
+  $('#ffSave', root).addEventListener('click', async (e) => {
+    const n = Math.max(0, parseInt(inp.value, 10) || 0);
+    e.target.disabled = true;
+    const { error } = await supa.rpc('ig_admin_set_followers', { target: profileId, extra: n });
+    if (error) { toast(error.message, 'error'); e.target.disabled = false; return; }
+    igCache.delete(profileId);         // force fresh padding next read
+    close();
+    toast('Followers updated.', 'ok');
+    show('profile', profileId);
+  });
 }
 
 /* ---- one post, full size, with comments ---- */
@@ -386,8 +482,10 @@ function cardHtml(post, { expanded = false } = {}) {
   const a = igCache.get(post.author_id);
   const pending  = post.status === 'pending';
   const rejected = post.status === 'rejected';
+  const canDelete = me.is_admin || post.author_id === me.id;
   return `
-    <article class="ig-card" data-card="${esc(post.id)}" data-author="${esc(post.author_id)}">
+    <article class="ig-card" data-card="${esc(post.id)}" data-author="${esc(post.author_id)}"
+             data-fakelikes="${Number(post.fake_likes) || 0}">
       <header class="ig-card-top">
         <span class="avatar avatar-sm" data-av="${esc(post.author_id)}"></span>
         <button class="ig-card-name" data-open-profile="${esc(post.author_id)}">
@@ -395,6 +493,7 @@ function cardHtml(post, { expanded = false } = {}) {
         </button>
         ${pending  ? '<span class="ig-flag pending">Pending review</span>' : ''}
         ${rejected ? '<span class="ig-flag rejected">Not approved</span>' : ''}
+        ${canDelete ? `<button class="ig-card-menu" data-menu title="Manage">⋯</button>` : ''}
       </header>
 
       <div class="ig-card-media">
@@ -452,35 +551,163 @@ async function hydrateCards(root) {
     const likeBtn = c.querySelector(`[data-like="${id}"]`);
     const likeNum = c.querySelector(`[data-likes="${id}"]`);
     if (likeBtn) {
-      let liked = !!mine, count = likes?.length ?? 0;
+      const real = likes?.length ?? 0;
+      const pad  = Number(c.dataset.fakelikes) || 0;   // the GM's padding
+      let liked = !!mine, mineDelta = 0;
       const paint = () => {
         likeBtn.textContent = liked ? '♥' : '♡';
         likeBtn.classList.toggle('is-liked', liked);
         likeBtn.setAttribute('aria-pressed', String(liked));
-        likeNum.textContent = count;
+        // Shown count is real likes + padding, moving with your own tap.
+        likeNum.textContent = fmt(real + pad + mineDelta);
       };
-      paint();
+      // mineDelta accounts for my own toggle relative to whether I
+      // already liked, so the number never double-counts me.
       likeBtn.addEventListener('click', async () => {
-        liked = !liked; count += liked ? 1 : -1; paint();       // optimistic
+        liked = !liked;
+        mineDelta = liked === !!mine ? 0 : (liked ? 1 : -1);
+        paint();
         if (liked) await supa.from('ig_likes').insert({ post_id: id, liker_id: me.id });
         else await supa.from('ig_likes').delete().eq('post_id', id).eq('liker_id', me.id);
       });
+      paint();
     }
+
+    // The ⋯ manage menu (author or admin).
+    const menu = c.querySelector('[data-menu]');
+    if (menu) menu.addEventListener('click', () => openManage(c, id));
 
     await renderComments(c, id, comments || []);
   }));
+}
+
+/** Thousands separators so a padded 4200 reads like a real number. */
+function fmt(n) { return Number(n).toLocaleString(); }
+
+/* ------------------------------------------------------------------ */
+/*  the ⋯ manage sheet on a post                                      */
+/* ------------------------------------------------------------------ */
+
+function openManage(card, postId) {
+  const isAuthor = card.dataset.author === me.id;
+  const pad = Number(card.dataset.fakelikes) || 0;
+
+  const adminBits = me.is_admin ? `
+    <button class="menu-item" data-do="likes">Set fake likes
+      <span class="muted">(currently +${pad})</span></button>
+    <button class="menu-item" data-do="ghost">Add a comment as someone…</button>` : '';
+
+  const { root, close } = sheet({
+    title: 'Manage post',
+    body: `<div class="menu-list">
+      ${adminBits}
+      <button class="menu-item danger" data-do="delete">Delete post</button>
+    </div>`
+  });
+
+  $('[data-do="delete"]', root).addEventListener('click', async () => {
+    if (!confirm('Delete this post? This cannot be undone.')) return;
+    const { error } = await supa.from('ig_posts').delete().eq('id', postId);
+    if (error) return toast(error.message, 'error');
+    close();
+    card.remove();
+    toast('Post deleted.', 'ok');
+    // If that was the only thing on screen (single-post view), go back
+    // somewhere with content.
+    if (!$$('.ig-card', main).length) show('feed');
+  });
+
+  $('[data-do="likes"]', root)?.addEventListener('click', () => {
+    close();
+    sheetSetLikes(card, postId, pad);
+  });
+
+  $('[data-do="ghost"]', root)?.addEventListener('click', () => {
+    close();
+    sheetGhostComment(card, postId);
+  });
+}
+
+function sheetSetLikes(card, postId, current) {
+  const { root, close } = sheet({
+    title: 'Fake likes',
+    body: `
+      <p class="muted small">Extra likes added on top of the real ones.
+        Real likes still count and still move.</p>
+      <div class="field">
+        <label for="fl">Padding</label>
+        <input type="number" id="fl" min="0" value="${current}">
+      </div>`,
+    footer: `<button class="btn btn-primary" id="flSave">Apply</button>`
+  });
+  $('#flSave', root).addEventListener('click', async (e) => {
+    const n = Math.max(0, parseInt($('#fl', root).value, 10) || 0);
+    e.target.disabled = true;
+    const { error } = await supa.rpc('ig_admin_set_likes', { post: postId, extra: n });
+    if (error) { toast(error.message, 'error'); e.target.disabled = false; return; }
+    card.dataset.fakelikes = String(n);
+    // Repaint the count without a full reload.
+    const { data: likes } = await supa.from('ig_likes').select('post_id').eq('post_id', postId);
+    const mineLiked = card.querySelector('.ig-like')?.getAttribute('aria-pressed') === 'true';
+    card.querySelector('.ig-like-count').textContent = fmt((likes?.length ?? 0) + n);
+    close();
+    toast('Likes updated.', 'ok');
+  });
+}
+
+function sheetGhostComment(card, postId) {
+  const box = card.querySelector(`[data-comments="${postId}"]`);
+  const { root, close } = sheet({
+    title: 'Comment as someone',
+    body: `
+      <p class="muted small">Posts a comment under a made-up name. Add as
+        many as you like — the sheet stays open.</p>
+      <div class="field">
+        <label for="gName">Name</label>
+        <input id="gName" maxlength="24" placeholder="e.g. hazel_irl">
+      </div>
+      <div class="field">
+        <label for="gBody">Comment</label>
+        <textarea id="gBody" rows="2" maxlength="500"></textarea>
+      </div>
+      <div id="gMsg"></div>`,
+    footer: `<button class="btn btn-ghost" data-close>Done</button>
+             <button class="btn btn-primary" id="gAdd">Add comment</button>`
+  });
+
+  $('#gAdd', root).addEventListener('click', async (e) => {
+    const ghost = $('#gName', root).value.trim();
+    const body  = $('#gBody', root).value.trim();
+    if (!ghost || !body) {
+      $('#gMsg', root).innerHTML = '<div class="notice notice-error">Name and comment are both needed.</div>';
+      return;
+    }
+    e.target.disabled = true;
+    const { data, error } = await supa.rpc('ig_admin_comment',
+      { post: postId, ghost, body });
+    e.target.disabled = false;
+    if (error) {
+      $('#gMsg', root).innerHTML = `<div class="notice notice-error">${esc(error.message)}</div>`;
+      return;
+    }
+    if (box) box.insertAdjacentHTML('beforeend',
+      `<div class="ig-comment"><strong>${esc(ghost)}</strong> ${esc(body)}</div>`);
+    $('#gBody', root).value = '';
+    $('#gMsg', root).innerHTML = '<div class="notice notice-ok">Added.</div>';
+  });
 }
 
 async function renderComments(card, postId, comments) {
   const box = card.querySelector(`[data-comments="${postId}"]`);
   if (!box) return;
 
-  await Promise.all([...new Set(comments.map(c => c.author_id))].map(getIg));
+  // Ghost comments carry their own name and link to no profile, so only
+  // the real ones need a profile lookup.
+  await Promise.all([...new Set(comments.filter(c => !c.ghost_name)
+    .map(c => c.author_id))].map(getIg));
   box.innerHTML = comments.map(c => {
-    const a = igCache.get(c.author_id);
-    return `<div class="ig-comment">
-      <strong>${esc(handle(a))}</strong> ${esc(c.body)}
-    </div>`;
+    const label = c.ghost_name ? esc(c.ghost_name) : esc(handle(igCache.get(c.author_id)));
+    return `<div class="ig-comment"><strong>${label}</strong> ${esc(c.body)}</div>`;
   }).join('');
 
   const input = card.querySelector(`[data-comment-input="${postId}"]`);

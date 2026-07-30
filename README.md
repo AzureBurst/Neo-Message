@@ -51,6 +51,17 @@ You should see a success message. This creates the tables, the security
 rules, the storage buckets, and the functions the app calls. Re-running it
 later is safe.
 
+Then run the feature files the same way — each is a separate paste-and-run,
+and order among them does not matter as long as `schema.sql` went first:
+
+- `sql/story-clock.sql` — the GM's story clock
+- `sql/bubble-colors.sql` — per-player bubble colours
+- `sql/admin-delete.sql` — deleting and clearing threads
+- `sql/instagrat.sql` — the Instagrat photo app
+
+If messages ever only appear after a refresh, run `sql/realtime-check.sql`
+too; it diagnoses and repairs realtime delivery.
+
 ### 3. Turn off email confirmation
 
 Players sign in with usernames, not real email addresses, so there's no
@@ -511,3 +522,116 @@ in the interface:
 Those hold regardless of what anyone types into a browser console. What
 changed here is that the table is no longer tempted by a button they can
 see but cannot press.
+
+---
+
+# Instagrat
+
+A second app on the same phone: a photo feed that shares the Neo Message
+login but gives everyone a separate identity, plus a GM approval queue
+for every post.
+
+## Setup
+
+Run `sql/instagrat.sql` once in the Supabase SQL Editor, after
+`schema.sql`. It creates the Instagrat tables, the moderation and follow
+functions, the `ig_media` storage bucket, and all the row-level-security
+policies. Idempotent, so it is safe to re-run.
+
+That is the only setup. The app shares the keys already in
+`js/config.js`.
+
+## How it fits together
+
+Signing in now lands on **home.html**, a phone home screen with two app
+tiles. From either app the ⌂ button returns here. Drop square PNGs at
+`assets/apps/message.png` and `assets/apps/instagrat.png` to replace the
+placeholder glyphs — see `assets/apps/README.md`.
+
+## Identity
+
+First visit to Instagrat asks for a **screen name** (lowercase, unique)
+and optional display name and bio. This is separate from the Neo Message
+account: a player's phone number and messaging username never appear on
+Instagrat. One login, two identities.
+
+## Public and private
+
+An account is public or private, set at sign-up and changeable under Edit
+profile.
+
+- **Public** — approved posts show in anyone's feed, and anyone can
+  follow without asking.
+- **Private** — posts are visible only to followers the account has
+  accepted. A follow becomes a request the owner approves under the ♡
+  activity tab.
+
+This is enforced in the database, not just the interface. A private
+account's posts are unreadable to a non-follower even if they go poking
+at the API — the row-level-security policy checks the follow relationship
+on every read.
+
+## Posting and approval
+
+Every post is held as **pending** until a GM reviews it. The author sees
+their own pending post marked "Pending review"; nobody else sees it at
+all. Approve or reject from the ⚑ tab, which is visible only to admins
+and carries a badge with the queue count.
+
+An approved post goes live for everyone allowed to see its author. A
+rejected post stays visible only to its author, marked "Not approved",
+so they know what happened.
+
+The admin check for approving lives inside the database function, so it
+holds regardless of the interface.
+
+## Feed, likes, comments
+
+The feed is approved posts from accounts you can see, newest first. Tap a
+photo to open it full size. Like with the heart; comment in the box under
+each post. Likes are optimistic — they respond instantly and settle with
+the server.
+
+## What is deliberately not here yet
+
+- **Videos.** Images only for now, to stay inside the free storage tier.
+  The composer and schema can take video later without restructuring.
+- **A message unread badge.** The home screen shows Instagrat's pending
+  count but not unread messages, because the messenger has no per-user
+  read tracking yet. Adding it later is straightforward.
+
+## Instagrat — GM tools
+
+Run `sql/instagrat-admin.sql` once in the SQL Editor, after
+`instagrat.sql`, to switch these on.
+
+**Delete posts.** The ⋯ button on any post opens a manage sheet. An
+admin can delete any post; a player sees the same button on their own
+posts and can delete those. Deleting takes its likes and comments with
+it.
+
+**Fake follower counts.** On someone's profile the GM gets a "Set fake
+followers" button. The number you set is padding shown on top of their
+real followers. Crucially, tapping the follower count still lists only
+the real accounts — the padding is a stored number, never a fake
+account, so it can never masquerade as one. The sheet shows you the
+resulting total as you type.
+
+**Fake likes.** The ⋯ manage sheet lets an admin pad a post's like
+count. Real likes still count and still move under the padding, so a
+player liking a padded post sees the number tick up as expected.
+
+**Ghost comments.** From ⋯ → "Add a comment as someone", an admin types
+any name and drops a comment under it. The sheet stays open so you can
+populate a thread quickly. The comment belongs to your account behind
+the scenes for accountability, but shows under the made-up name.
+
+### These are locked to the GM in the database
+
+The padding columns sit on tables players can already write to — their
+own profile, their own comments — so a policy alone would not stop
+someone padding their own numbers. Triggers do: changing follower
+padding, or posting a comment under a ghost name, is rejected for anyone
+who is not an admin, no matter how the request is made. The like and
+follower setters are admin-checked functions. None of it can be reached
+from a player's browser.
