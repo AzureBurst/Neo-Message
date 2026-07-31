@@ -18,6 +18,7 @@ import {
   shortTime, fullStamp, $, $$
 } from './supa.js';
 import { loadClock, storyNow } from './clock.js';
+import { attachEmoji } from './emoji.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -512,6 +513,7 @@ function cardHtml(post, { expanded = false } = {}) {
       ${!pending && !rejected ? `
       <div class="ig-add-comment">
         <input placeholder="Add a comment…" maxlength="500" data-comment-input="${esc(post.id)}">
+        <button class="ig-emoji-btn" data-emoji title="Emoji">☺</button>
         <button class="ig-comment-send" data-comment-send="${esc(post.id)}">Post</button>
       </div>` : ''}
     </article>`;
@@ -697,36 +699,101 @@ function sheetGhostComment(card, postId) {
   });
 }
 
+function commentLabel(c) {
+  return c.ghost_name ? esc(c.ghost_name) : esc(handle(igCache.get(c.author_id)));
+}
+
+function commentHtml(c, { isReply = false } = {}) {
+  return `
+    <div class="ig-comment ${isReply ? 'is-reply' : ''}" data-comment-id="${esc(c.id)}">
+      <div class="ig-comment-line">
+        <strong>${commentLabel(c)}</strong> ${esc(c.body)}
+      </div>
+      <button class="ig-reply-btn" data-reply="${esc(c.id)}" data-reply-to="${commentLabel(c)}">Reply</button>
+      <div class="ig-replies" data-replies="${esc(c.id)}"></div>
+    </div>`;
+}
+
 async function renderComments(card, postId, comments) {
   const box = card.querySelector(`[data-comments="${postId}"]`);
   if (!box) return;
 
-  // Ghost comments carry their own name and link to no profile, so only
-  // the real ones need a profile lookup.
   await Promise.all([...new Set(comments.filter(c => !c.ghost_name)
     .map(c => c.author_id))].map(getIg));
-  box.innerHTML = comments.map(c => {
-    const label = c.ghost_name ? esc(c.ghost_name) : esc(handle(igCache.get(c.author_id)));
-    return `<div class="ig-comment"><strong>${label}</strong> ${esc(c.body)}</div>`;
-  }).join('');
+
+  // Split into top-level comments and replies grouped by parent.
+  const tops = comments.filter(c => !c.parent_id);
+  const kids = new Map();
+  comments.filter(c => c.parent_id).forEach(c => {
+    if (!kids.has(c.parent_id)) kids.set(c.parent_id, []);
+    kids.get(c.parent_id).push(c);
+  });
+
+  box.innerHTML = tops.map(c => commentHtml(c)).join('');
+  // Hang replies under their parent.
+  tops.forEach(c => {
+    const rbox = box.querySelector(`[data-replies="${c.id}"]`);
+    (kids.get(c.id) || []).forEach(r =>
+      rbox.insertAdjacentHTML('beforeend', commentHtml(r, { isReply: true })));
+  });
 
   const input = card.querySelector(`[data-comment-input="${postId}"]`);
   const send  = card.querySelector(`[data-comment-send="${postId}"]`);
+  const emoji = card.querySelector('[data-emoji]');
   if (!send) return;
+
+  // Emoji drops into the comment box at the cursor.
+  if (emoji) attachEmoji(emoji, () => input, { mount: emoji.closest('.ig-add-comment') });
+
+  /* A pending reply target. null means the next post is a top-level
+     comment; an id means it answers that comment. */
+  let replyTo = null;
+  const setReply = (id, who) => {
+    replyTo = id;
+    if (id) {
+      input.placeholder = `Replying to ${who}…`;
+      input.focus();
+      input.dataset.replying = '1';
+    } else {
+      input.placeholder = 'Add a comment…';
+      delete input.dataset.replying;
+    }
+  };
+
+  // Clicking a comment's Reply aims the composer at it.
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-reply]');
+    if (btn) setReply(btn.dataset.reply, btn.dataset.replyTo);
+  });
+  // Escape cancels a reply and returns to a plain comment.
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') setReply(null); });
 
   const submit = async () => {
     const body = input.value.trim();
     if (!body) return;
     input.value = '';
-    const { data, error } = await supa.from('ig_comments')
-      .insert({ post_id: postId, author_id: me.id, body }).select().single();
+    const parent = replyTo;
+
+    const row = { post_id: postId, author_id: me.id, body };
+    if (parent) row.parent_id = parent;
+
+    const { data, error } = await supa.from('ig_comments').insert(row).select().single();
     if (error) { toast(error.message, 'error'); return; }
     remember(await getIg(me.id));
-    box.insertAdjacentHTML('beforeend',
-      `<div class="ig-comment"><strong>${esc(handle(ig))}</strong> ${esc(data.body)}</div>`);
+
+    const html = commentHtml(data);
+    if (parent) {
+      const rbox = box.querySelector(`[data-replies="${parent}"]`);
+      if (rbox) rbox.insertAdjacentHTML('beforeend', commentHtml(data, { isReply: true }));
+    } else {
+      box.insertAdjacentHTML('beforeend', html);
+    }
+    setReply(null);
   };
   send.addEventListener('click', submit);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -799,7 +866,10 @@ function openComposer() {
           </div>
           <div class="field">
             <label for="igCap">Caption</label>
-            <textarea id="igCap" rows="2" maxlength="600" placeholder="Say something…"></textarea>
+            <div class="ig-cap-wrap">
+              <textarea id="igCap" rows="2" maxlength="600" placeholder="Say something…"></textarea>
+              <button class="ig-emoji-btn" id="igCapEmoji" title="Emoji">☺</button>
+            </div>
           </div>
           <p class="muted small">Posts are reviewed by the GM before anyone else sees them.</p>
           <div id="igPostMsg"></div>
@@ -816,6 +886,8 @@ function openComposer() {
 
   const file = $('#igFile'), drop = $('#igDrop'), submit = $('#igSubmit');
   let picked = null;
+
+  attachEmoji($('#igCapEmoji'), () => $('#igCap'), { mount: $('.ig-cap-wrap') });
 
   drop.addEventListener('click', () => file.click());
   file.addEventListener('change', () => {

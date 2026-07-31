@@ -1654,3 +1654,69 @@ body.gated .gate-note { display: flex; }
 .ig-stat-btn strong { font-family: var(--font-ui); font-size: 18px; }
 .ig-stat-btn span { font-size: 12px; color: var(--muted); }
 .ig-stat-btn:hover strong { text-decoration: underline; }
+
+/* =====================================================================
+   INSTAGRAT — replies, emoji, and the app-open zoom
+   ===================================================================== */
+
+/* Emoji buttons inside Instagrat inputs */
+.ig-emoji-btn {
+  background: none; border: 0; cursor: pointer;
+  color: var(--muted); font-size: 18px; line-height: 1;
+  padding: 0 4px; flex-shrink: 0;
+}
+.ig-emoji-btn:hover { color: var(--text); }
+
+/* The add-comment row and caption wrap both anchor an emoji popup, so
+   they need positioning context, and the popup should sit above them
+   rather than at the messenger's fixed offset. */
+.ig-add-comment, .ig-cap-wrap { position: relative; }
+.ig-add-comment .emoji-pop,
+.ig-cap-wrap .emoji-pop {
+  bottom: calc(100% + 8px);
+  left: auto; right: 0;
+  width: min(300px, 78vw);
+}
+.ig-cap-wrap { display: flex; gap: 6px; align-items: flex-start; }
+.ig-cap-wrap textarea { flex: 1; }
+.ig-cap-wrap .ig-emoji-btn { padding-top: 8px; }
+
+/* Comments + replies */
+.ig-comment-line { font-size: 13.5px; }
+.ig-comment-line strong { font-family: var(--font-ui); }
+.ig-reply-btn {
+  background: none; border: 0; cursor: pointer;
+  color: var(--dim); font: 600 11px var(--font-ui);
+  padding: 1px 0 2px; margin-left: 2px;
+}
+.ig-reply-btn:hover { color: var(--muted); }
+.ig-replies {
+  margin-left: 16px;
+  padding-left: 10px;
+  border-left: 1.5px solid var(--edge);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.ig-replies:empty { display: none; }
+.ig-comment.is-reply { margin-top: 3px; }
+.ig-add-comment input[data-replying] {
+  border-color: var(--sent);
+}
+
+/* App-open zoom */
+.app-open {
+  position: fixed;
+  z-index: 300;
+  border-radius: 17px;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  background: linear-gradient(160deg, var(--panel-2), var(--panel-3));
+  transform-origin: center center;
+  transition: transform .46s cubic-bezier(.4, 0, .2, 1), opacity .46s ease;
+  opacity: .9;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-open { transition: none; }
+}

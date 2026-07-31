@@ -79,3 +79,67 @@ if (me.is_admin) {
   hint.hidden = false;
   hint.textContent = 'You are the GM. Both apps have extra controls for you inside.';
 }
+
+/* ------------------------------------------------------------------ */
+/*  opening an app                                                    */
+/*                                                                    */
+/*  Instead of a hard jump, the tapped icon grows out to fill the      */
+/*  screen the way a phone opens an app. The overlay starts as a copy  */
+/*  of the icon sitting exactly over it, then scales up; navigation    */
+/*  happens as it finishes. Anyone who prefers reduced motion, or a    */
+/*  browser that cannot animate, just gets the plain jump.            */
+/* ------------------------------------------------------------------ */
+
+const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+function openApp(tile, href) {
+  const glyph = tile.querySelector('.app-glyph');
+  const rect  = glyph.getBoundingClientRect();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'app-open';
+  // Start life exactly where the icon is.
+  overlay.style.left   = rect.left + 'px';
+  overlay.style.top    = rect.top + 'px';
+  overlay.style.width  = rect.width + 'px';
+  overlay.style.height = rect.height + 'px';
+
+  // Carry the icon's look into the zoom so it feels like the same object.
+  const art = getComputedStyle(glyph).backgroundImage;
+  if (art && art !== 'none') {
+    overlay.style.backgroundImage = art;
+    overlay.style.backgroundSize = 'cover';
+    overlay.style.backgroundPosition = 'center';
+  } else {
+    overlay.textContent = glyph.textContent;
+  }
+  document.body.appendChild(overlay);
+
+  // Compute the scale needed to cover the viewport from the icon's size.
+  const scale = Math.ceil(Math.max(
+    window.innerWidth  / rect.width,
+    window.innerHeight / rect.height) * 1.4);
+  const cx = window.innerWidth / 2  - (rect.left + rect.width / 2);
+  const cy = window.innerHeight / 2 - (rect.top + rect.height / 2);
+
+  requestAnimationFrame(() => {
+    overlay.style.transform = `translate(${cx}px, ${cy}px) scale(${scale})`;
+    overlay.style.opacity = '1';
+  });
+
+  // Navigate as the growth finishes; the fallback timer covers browsers
+  // that never fire transitionend.
+  let went = false;
+  const go = () => { if (!went) { went = true; location.href = href; } };
+  overlay.addEventListener('transitionend', go, { once: true });
+  setTimeout(go, 520);
+}
+
+document.querySelectorAll('.app-icon').forEach(tile => {
+  tile.addEventListener('click', (e) => {
+    const href = tile.getAttribute('href');
+    if (reduceMotion || e.metaKey || e.ctrlKey) return;  // let normal nav happen
+    e.preventDefault();
+    openApp(tile, href);
+  });
+});

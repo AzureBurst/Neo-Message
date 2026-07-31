@@ -635,3 +635,33 @@ padding, or posting a comment under a ghost name, is rejected for anyone
 who is not an admin, no matter how the request is made. The like and
 follower setters are admin-checked functions. None of it can be reached
 from a player's browser.
+
+## Instagrat — replies and emoji
+
+Run `sql/instagrat-replies.sql` once in the SQL Editor (after
+`instagrat.sql`) to enable threaded replies.
+
+**Replies.** Every comment has a small Reply link. Tapping it aims the
+comment box at that comment — the placeholder shows who you are
+answering — and the reply appears indented beneath it. One level deep,
+which keeps threads readable on a phone. Press Escape to cancel a reply
+and go back to a plain comment. A reply is held to the same post as its
+parent, enforced in the database.
+
+**Emoji.** The ☺ button sits in every comment box and in the post
+caption. It opens the same picker the messenger uses — the emoji list is
+now shared between both apps, so anything you add in one shows in the
+other. Emoji drop in at the cursor.
+
+Admins posting ghost comments can reply as a ghost too; the reply lands
+under the comment being answered.
+
+## Home screen — app open animation
+
+Tapping an app no longer jumps straight there. The icon grows outward to
+fill the screen the way a phone opens an app, then the app loads as the
+zoom finishes. It carries the icon's own artwork into the zoom, so a
+custom PNG animates as itself.
+
+Anyone whose device is set to reduce motion gets the plain instant jump
+instead, and holding Cmd/Ctrl to open in a new tab still works normally.
