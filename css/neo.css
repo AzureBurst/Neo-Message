@@ -1670,14 +1670,7 @@ body.gated .gate-note { display: flex; }
 /* The add-comment row and caption wrap both anchor an emoji popup, so
    they need positioning context, and the popup should sit above them
    rather than at the messenger's fixed offset. */
-.ig-add-comment, .ig-cap-wrap { position: relative; }
-.ig-add-comment .emoji-pop,
-.ig-cap-wrap .emoji-pop {
-  bottom: calc(100% + 8px);
-  left: auto; right: 0;
-  width: min(300px, 78vw);
-}
-.ig-cap-wrap { display: flex; gap: 6px; align-items: flex-start; }
+.ig-cap-wrap { display: flex; gap: 6px; align-items: flex-start; position: relative; }
 .ig-cap-wrap textarea { flex: 1; }
 .ig-cap-wrap .ig-emoji-btn { padding-top: 8px; }
 
@@ -1720,3 +1713,29 @@ body.gated .gate-note { display: flex; }
 @media (prefers-reduced-motion: reduce) {
   .app-open { transition: none; }
 }
+
+/* Emoji popup floated on the body, anchored to its button in JS. Fixed
+   so no overflow:hidden ancestor can clip it — same behaviour on phone
+   and desktop. */
+.emoji-pop-fixed {
+  position: fixed;
+  bottom: auto;
+  left: 0;
+  z-index: 320;
+}
+
+/* Admin "Reply as…" and remembered dummy personas */
+.ig-reply-btn.ghost { color: var(--signal); margin-left: 8px; }
+.ig-reply-btn.ghost:hover { color: var(--text); }
+
+.ghost-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.ghost-chip {
+  padding: 5px 11px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: 500 12px var(--font-ui);
+  cursor: pointer;
+}
+.ghost-chip:hover { background: var(--panel-3); }

@@ -657,43 +657,76 @@ function sheetSetLikes(card, postId, current) {
   });
 }
 
-function sheetGhostComment(card, postId) {
-  const box = card.querySelector(`[data-comments="${postId}"]`);
+/* Remembered dummy personas, so the GM can reply as the same made-up
+   account across different posts. Names live in this browser only. */
+const GHOSTS_KEY = 'ig.ghosts';
+function ghostNames() {
+  try { return JSON.parse(localStorage.getItem(GHOSTS_KEY)) || []; }
+  catch { return []; }
+}
+function rememberGhost(nameStr) {
+  const list = [nameStr, ...ghostNames().filter(n => n !== nameStr)].slice(0, 12);
+  localStorage.setItem(GHOSTS_KEY, JSON.stringify(list));
+}
+
+function sheetGhostComment(card, postId, { parent = null, into = null, asReply = false } = {}) {
+  const box = into || card.querySelector(`[data-comments="${postId}"]`);
+  const saved = ghostNames();
+
   const { root, close } = sheet({
-    title: 'Comment as someone',
+    title: asReply ? 'Reply as a dummy account' : 'Comment as someone',
     body: `
-      <p class="muted small">Posts a comment under a made-up name. Add as
-        many as you like — the sheet stays open.</p>
+      <p class="muted small">${asReply
+        ? 'Replies under a made-up name.'
+        : 'Posts a comment under a made-up name.'} Add as many as you like —
+        the sheet stays open.</p>
+
+      ${saved.length ? `<div class="ghost-chips" id="gChips">
+        ${saved.map(n => `<button type="button" class="ghost-chip" data-ghost-name="${esc(n)}">${esc(n)}</button>`).join('')}
+      </div>` : ''}
+
       <div class="field">
         <label for="gName">Name</label>
-        <input id="gName" maxlength="24" placeholder="e.g. hazel_irl">
+        <input id="gName" maxlength="24" placeholder="e.g. hazel_irl" autocomplete="off">
       </div>
       <div class="field">
-        <label for="gBody">Comment</label>
-        <textarea id="gBody" rows="2" maxlength="500"></textarea>
+        <label for="gBody">${asReply ? 'Reply' : 'Comment'}</label>
+        <div class="ig-cap-wrap">
+          <textarea id="gBody" rows="2" maxlength="500"></textarea>
+          <button class="ig-emoji-btn" id="gEmoji" title="Emoji">☺</button>
+        </div>
       </div>
       <div id="gMsg"></div>`,
     footer: `<button class="btn btn-ghost" data-close>Done</button>
-             <button class="btn btn-primary" id="gAdd">Add comment</button>`
+             <button class="btn btn-primary" id="gAdd">${asReply ? 'Add reply' : 'Add comment'}</button>`
   });
+
+  attachEmoji($('#gEmoji', root), () => $('#gBody', root));
+
+  $$('.ghost-chip', root).forEach(chip =>
+    chip.addEventListener('click', () => {
+      $('#gName', root).value = chip.dataset.ghostName;
+      $('#gBody', root).focus();
+    }));
 
   $('#gAdd', root).addEventListener('click', async (e) => {
     const ghost = $('#gName', root).value.trim();
     const body  = $('#gBody', root).value.trim();
     if (!ghost || !body) {
-      $('#gMsg', root).innerHTML = '<div class="notice notice-error">Name and comment are both needed.</div>';
+      $('#gMsg', root).innerHTML = '<div class="notice notice-error">Name and text are both needed.</div>';
       return;
     }
     e.target.disabled = true;
-    const { data, error } = await supa.rpc('ig_admin_comment',
-      { post: postId, ghost, body });
+    const { error } = await supa.rpc('ig_admin_comment',
+      { post: postId, ghost, body, parent });
     e.target.disabled = false;
     if (error) {
       $('#gMsg', root).innerHTML = `<div class="notice notice-error">${esc(error.message)}</div>`;
       return;
     }
+    rememberGhost(ghost);
     if (box) box.insertAdjacentHTML('beforeend',
-      `<div class="ig-comment"><strong>${esc(ghost)}</strong> ${esc(body)}</div>`);
+      `<div class="ig-comment ${asReply ? 'is-reply' : ''}"><div class="ig-comment-line"><strong>${esc(ghost)}</strong> ${esc(body)}</div></div>`);
     $('#gBody', root).value = '';
     $('#gMsg', root).innerHTML = '<div class="notice notice-ok">Added.</div>';
   });
@@ -710,6 +743,7 @@ function commentHtml(c, { isReply = false } = {}) {
         <strong>${commentLabel(c)}</strong> ${esc(c.body)}
       </div>
       <button class="ig-reply-btn" data-reply="${esc(c.id)}" data-reply-to="${commentLabel(c)}">Reply</button>
+      ${me.is_admin ? `<button class="ig-reply-btn ghost" data-ghost-reply="${esc(c.id)}">Reply as…</button>` : ''}
       <div class="ig-replies" data-replies="${esc(c.id)}"></div>
     </div>`;
 }
@@ -743,7 +777,7 @@ async function renderComments(card, postId, comments) {
   if (!send) return;
 
   // Emoji drops into the comment box at the cursor.
-  if (emoji) attachEmoji(emoji, () => input, { mount: emoji.closest('.ig-add-comment') });
+  if (emoji) attachEmoji(emoji, () => input);
 
   /* A pending reply target. null means the next post is a top-level
      comment; an id means it answers that comment. */
@@ -763,7 +797,15 @@ async function renderComments(card, postId, comments) {
   // Clicking a comment's Reply aims the composer at it.
   box.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-reply]');
-    if (btn) setReply(btn.dataset.reply, btn.dataset.replyTo);
+    if (btn) { setReply(btn.dataset.reply, btn.dataset.replyTo); return; }
+
+    // Admin: reply as a dummy account under this comment.
+    const ghostBtn = e.target.closest('[data-ghost-reply]');
+    if (ghostBtn) {
+      const parentId = ghostBtn.dataset.ghostReply;
+      const rbox = box.querySelector(`[data-replies="${parentId}"]`);
+      sheetGhostComment(card, postId, { parent: parentId, into: rbox, asReply: true });
+    }
   });
   // Escape cancels a reply and returns to a plain comment.
   input.addEventListener('keydown', e => { if (e.key === 'Escape') setReply(null); });
@@ -887,7 +929,7 @@ function openComposer() {
   const file = $('#igFile'), drop = $('#igDrop'), submit = $('#igSubmit');
   let picked = null;
 
-  attachEmoji($('#igCapEmoji'), () => $('#igCap'), { mount: $('.ig-cap-wrap') });
+  attachEmoji($('#igCapEmoji'), () => $('#igCap'));
 
   drop.addEventListener('click', () => file.click());
   file.addEventListener('change', () => {

@@ -33,15 +33,40 @@ export const EMOJI = {
  *
  *   attachEmoji(button, () => currentInputEl)
  *
- * The target is resolved fresh on each open, so one button can serve a
- * field that moves around the page (like the currently focused comment
- * box). Inserts at the cursor and fires an 'input' event so any
- * listeners on the field react.
+ * The picker is placed in a fixed layer on document.body, positioned
+ * against the button. That deliberately escapes any overflow:hidden
+ * ancestor (a rounded post card, say) which would otherwise clip it —
+ * the bug where the popup showed on tall mobile cards but was cut off on
+ * short desktop ones. Inserts at the cursor and fires an 'input' event.
  */
-export function attachEmoji(button, getTarget, { mount } = {}) {
+export function attachEmoji(button, getTarget) {
   let pop = null;
 
-  const close = () => { pop?.remove(); pop = null; };
+  const close = () => {
+    if (!pop) return;
+    pop.remove();
+    pop = null;
+    window.removeEventListener('resize', close);
+    window.removeEventListener('scroll', close, true);
+  };
+
+  const place = () => {
+    const r = button.getBoundingClientRect();
+    const w = Math.min(300, window.innerWidth - 16);
+    // Prefer above the button; drop below if there is not room up top.
+    const opensUp = r.top > 260;
+    pop.style.width = w + 'px';
+    let left = Math.min(r.right - w, window.innerWidth - w - 8);
+    left = Math.max(8, left);
+    pop.style.left = left + 'px';
+    if (opensUp) {
+      pop.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+      pop.style.top = 'auto';
+    } else {
+      pop.style.top = (r.bottom + 8) + 'px';
+      pop.style.bottom = 'auto';
+    }
+  };
 
   button.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -51,7 +76,7 @@ export function attachEmoji(button, getTarget, { mount } = {}) {
     if (!target) return;
 
     pop = document.createElement('div');
-    pop.className = 'emoji-pop';
+    pop.className = 'emoji-pop emoji-pop-fixed';
     const cats = Object.keys(EMOJI);
     pop.innerHTML = `
       <div class="emoji-cats">
@@ -59,8 +84,11 @@ export function attachEmoji(button, getTarget, { mount } = {}) {
       </div>
       <div class="emoji-grid"></div>`;
 
-    (mount || button.parentElement).appendChild(pop);
+    document.body.appendChild(pop);
+    place();
     pop.addEventListener('click', ev => ev.stopPropagation());
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
 
     const paint = (cat) => {
       pop.querySelector('.emoji-grid').innerHTML =

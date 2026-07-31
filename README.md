@@ -665,3 +665,27 @@ custom PNG animates as itself.
 
 Anyone whose device is set to reduce motion gets the plain instant jump
 instead, and holding Cmd/Ctrl to open in a new tab still works normally.
+
+## Instagrat — GM replies as dummy accounts
+
+Each comment shows a GM-only "Reply as…" link beside the normal Reply.
+It opens a sheet where you type any name and drop a reply under it,
+nested beneath the comment you answered.
+
+Names you use are remembered in this browser and appear as one-tap chips
+at the top of the sheet, so the same made-up account — "hazel_irl",
+"blocked_number", whoever — can answer consistently across different
+posts and threads without retyping. The list holds your twelve most
+recent and lives only on your machine.
+
+Every one of these still belongs to your admin account behind the scenes
+for accountability; the made-up name is only what other players see.
+
+## Fix — emoji popup on desktop
+
+The emoji picker now floats in a layer of its own anchored to the ☺
+button, rather than living inside the post card. The card's rounded
+corners clip anything overflowing it, which is why the popup showed on
+tall phone cards but was cut off on shorter desktop ones. It now opens
+the same way on both, flipping above or below the button depending on
+room.

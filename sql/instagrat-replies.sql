@@ -47,6 +47,12 @@ create trigger ig_comments_same_post
 
 -- Extend the ghost-comment RPC so an admin can also reply as a ghost.
 -- The `parent` argument is optional; omit it for a top-level comment.
+--
+-- The earlier 3-argument version from instagrat-admin.sql is dropped
+-- first: leaving both would give PostgREST two candidates for a 3-arg
+-- call and it would refuse as ambiguous.
+drop function if exists public.ig_admin_comment(uuid, text, text);
+
 create or replace function public.ig_admin_comment(
   post uuid, ghost text, body text, parent uuid default null)
 returns jsonb language plpgsql security definer
