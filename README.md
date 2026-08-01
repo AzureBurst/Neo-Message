@@ -720,3 +720,19 @@ date afterwards even if you move the clock on. The date is stamped on the
 server, so it is correct regardless of the poster's device. Posts made
 before you installed this update are dated by when they were really
 created.
+
+### If posts show the real date instead of the app's date
+
+Two things make a post use the story-clock date:
+
+1. `sql/instagrat-tags-date.sql` has been run (it adds the date column).
+2. The post is made while the story clock is frozen to a date.
+
+The app now also sends the story date directly when you post — the same
+date shown in the status bar — so a new post matches what you see up top
+without relying on anything server-side.
+
+Posts made **before** this update keep their real date. To move all
+existing posts onto the currently set story date, run
+`sql/instagrat-redate-existing.sql` once. It changes only the displayed
+date, never the true timestamp.

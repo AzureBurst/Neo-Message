@@ -1165,8 +1165,16 @@ function openComposer() {
     try {
       const small = await shrinkImage(picked, 1600, 0.85);
       const url   = await uploadFile('ig_media', me.id, small);
+      // Stamp the post with the app's current date — the very same
+      // storyNow() the status bar shows — so the post reads as happening
+      // on whatever day the app is set to, not the real calendar date.
       const { data: post, error } = await supa.from('ig_posts')
-        .insert({ author_id: me.id, image_url: url, caption: $('#igCap').value.trim() || null })
+        .insert({
+          author_id: me.id,
+          image_url: url,
+          caption: $('#igCap').value.trim() || null,
+          story_at: storyNow().toISOString()
+        })
         .select().single();
       if (error) throw error;
       // Attach any tags now that the post has an id.
