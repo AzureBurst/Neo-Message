@@ -689,3 +689,34 @@ corners clip anything overflowing it, which is why the popup showed on
 tall phone cards but was cut off on shorter desktop ones. It now opens
 the same way on both, flipping above or below the button depending on
 room.
+
+## Instagrat — comment deletion, photo tags, post dates
+
+Run `sql/instagrat-tags-date.sql` once in the SQL Editor, after
+`instagrat.sql`, for the tags and dates. Comment deletion needs no new
+SQL — the policy from `instagrat.sql` already covers it.
+
+**Deleting comments.** Every comment shows a Delete link to the person
+who wrote it, and to any admin. Deleting a comment takes its replies with
+it. A player can only remove their own; the database enforces that, so
+it holds even if someone goes around the interface. Ghost comments belong
+to the GM, so only the GM can remove those.
+
+**Tagging people on a photo.** When composing a post, after choosing a
+photo a "Tag people" button appears. Tap a spot on the image, search a
+screen name, and a marker drops there. On a posted photo the markers are
+hidden until someone taps the image — the same reveal the real app uses —
+and tapping a marker opens that person's profile. A small ⛶ badge hints
+when a photo carries tags.
+
+The post's author and admins can also add or change tags later, from the
+⋯ manage menu. Only they can — the tag write rules are enforced in the
+database.
+
+**Post dates.** Each post shows the date it was made, taken from the GM's
+story clock at the moment it was posted. So if you have frozen the app to
+a date in your story, posts read as happening then, and they keep that
+date afterwards even if you move the clock on. The date is stamped on the
+server, so it is correct regardless of the poster's device. Posts made
+before you installed this update are dated by when they were really
+created.

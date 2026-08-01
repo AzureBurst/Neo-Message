@@ -1739,3 +1739,84 @@ body.gated .gate-note { display: flex; }
   cursor: pointer;
 }
 .ghost-chip:hover { background: var(--panel-3); }
+
+/* =====================================================================
+   INSTAGRAT — comment delete, post date, photo tags
+   ===================================================================== */
+
+.ig-reply-btn.danger { color: var(--danger); margin-left: 8px; }
+.ig-reply-btn.danger:hover { color: #ff8a95; }
+
+.ig-postdate {
+  margin-left: auto;
+  color: var(--dim);
+  font: 500 11px var(--font-ui);
+  letter-spacing: .02em;
+}
+
+/* Tag markers on a posted photo. Hidden until the image is tapped. */
+.ig-card-media { position: relative; }
+.ig-tag-layer { position: absolute; inset: 0; pointer-events: none; }
+.ig-card-media.show-tags .ig-tag-layer { pointer-events: auto; }
+
+.ig-tag {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: none; border: 0; padding: 0; cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s ease;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.ig-card-media.show-tags .ig-tag { opacity: 1; }
+.ig-tag-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: rgba(0,0,0,.55);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.4);
+}
+.ig-tag-label {
+  background: rgba(0,0,0,.78);
+  color: #fff;
+  font: 600 11px var(--font-ui);
+  padding: 3px 7px; border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* A subtle hint that a photo carries tags */
+.ig-card-media .ig-tag-layer:not(:empty)::after {
+  content: '⛶';
+  position: absolute;
+  left: 10px; bottom: 10px;
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  background: rgba(0,0,0,.5);
+  color: #fff; border-radius: 6px;
+  font-size: 12px;
+  opacity: .85;
+  pointer-events: none;
+}
+.ig-card-media.show-tags .ig-tag-layer:not(:empty)::after { opacity: 0; }
+
+/* The tagging overlay */
+.tagger { position: relative; border-radius: var(--r-sm); overflow: hidden; cursor: crosshair; }
+.tagger img { width: 100%; display: block; }
+.tagger-layer { position: absolute; inset: 0; }
+.tagger-mark {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.tagger-mark.pending .tagger-dot { background: var(--sent); }
+.tagger-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: rgba(0,0,0,.6); border: 2px solid #fff;
+}
+.tagger-name {
+  background: rgba(0,0,0,.8); color: #fff;
+  font: 600 11px var(--font-ui);
+  padding: 2px 6px; border-radius: 6px; white-space: nowrap;
+  display: flex; align-items: center; gap: 5px;
+}
+.tagger-name button { background: none; border: 0; color: #ff9aa2; cursor: pointer; font-size: 12px; padding: 0; }
+.tagger-search { margin-top: 12px; }
+.tagger-search .ig-people { max-height: 180px; overflow-y: auto; }
+.tagger-list { margin-top: 10px; }

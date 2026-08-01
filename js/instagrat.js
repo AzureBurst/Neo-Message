@@ -57,6 +57,16 @@ async function getIg(id) {
 function handle(p)  { return p ? '@' + p.screen_name : '@unknown'; }
 function name(p)    { return p?.display_name || p?.screen_name || 'unknown'; }
 
+/* The date shown on a post. story_at is stamped from the GM's story
+   clock when the post is made, so it reads as the in-fiction day. Older
+   posts without one fall back to when they were really created. */
+function storyDateOf(post) {
+  const iso = post.story_at || post.created_at;
+  return new Date(iso).toLocaleDateString([], {
+    month: 'short', day: 'numeric', year: 'numeric'
+  });
+}
+
 /* A small modal in #modalRoot. Returns { root, close } so callers can
    wire their own controls. Used by the admin tools and the followers
    list; the post composer and profile editor predate it and build their
@@ -497,14 +507,15 @@ function cardHtml(post, { expanded = false } = {}) {
         ${canDelete ? `<button class="ig-card-menu" data-menu title="Manage">⋯</button>` : ''}
       </header>
 
-      <div class="ig-card-media">
+      <div class="ig-card-media" data-media="${esc(post.id)}">
         <img src="${esc(post.image_url)}" alt="${esc(post.caption || 'Post')}" loading="lazy">
+        <div class="ig-tag-layer" data-taglayer="${esc(post.id)}"></div>
       </div>
 
       <div class="ig-card-actions">
         <button class="ig-like" data-like="${esc(post.id)}" aria-pressed="false">♡</button>
         <span class="ig-like-count" data-likes="${esc(post.id)}">0</span>
-        <span class="ig-stamp mono">${esc(shortTime(post.created_at))}</span>
+        <span class="ig-postdate">${esc(storyDateOf(post))}</span>
       </div>
 
       ${post.caption ? `<div class="ig-caption"><strong>${esc(handle(a))}</strong> ${esc(post.caption)}</div>` : ''}
@@ -537,8 +548,20 @@ async function hydrateCards(root) {
   $$('[data-open-profile]', root).forEach(b =>
     b.addEventListener('click', () => show('profile', b.dataset.openProfile)));
 
-  $$('.ig-card-media img', root).forEach(im =>
-    im.addEventListener('click', () => lightbox(im.src)));
+  // Media: a single tap toggles the tag markers (like the real app);
+  // the ⛶ button opens it full size. Load and draw the tags for each.
+  await Promise.all(cards.map(c => loadTags(c.dataset.card, root)));
+
+  $$('.ig-card-media', root).forEach(media => {
+    const img = media.querySelector('img');
+    media.addEventListener('click', (e) => {
+      // Clicking a tag dot or its label should not toggle or zoom.
+      if (e.target.closest('.ig-tag')) return;
+      const layer = media.querySelector('.ig-tag-layer');
+      if (layer && layer.children.length) media.classList.toggle('show-tags');
+      else lightbox(img.src);
+    });
+  });
 
   // Likes + comments per post.
   await Promise.all(cards.map(async (c) => {
@@ -587,12 +610,149 @@ async function hydrateCards(root) {
 function fmt(n) { return Number(n).toLocaleString(); }
 
 /* ------------------------------------------------------------------ */
+/*  photo tags                                                        */
+/* ------------------------------------------------------------------ */
+
+async function loadTags(postId, root) {
+  const layer = root.querySelector(`[data-taglayer="${postId}"]`);
+  if (!layer) return;
+
+  const { data: tags } = await supa.from('ig_post_tags')
+    .select('tagged_id, x, y').eq('post_id', postId);
+  if (!tags?.length) { layer.innerHTML = ''; return; }
+
+  await Promise.all(tags.map(t => getIg(t.tagged_id)));
+  layer.innerHTML = tags.map(t => {
+    const p = igCache.get(t.tagged_id);
+    return `<button class="ig-tag" data-open-profile="${esc(t.tagged_id)}"
+              style="left:${(t.x * 100).toFixed(2)}%;top:${(t.y * 100).toFixed(2)}%">
+        <span class="ig-tag-dot"></span>
+        <span class="ig-tag-label">${esc(handle(p))}</span>
+      </button>`;
+  }).join('');
+
+  layer.querySelectorAll('[data-open-profile]').forEach(b =>
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      show('profile', b.dataset.openProfile);
+    }));
+}
+
+/* The tagging overlay: shows the image, lets you place a marker by
+   tapping, search a person, and save. Used both while composing (before
+   the post exists, working on a preview) and afterwards on a real post. */
+function openTagger({ imageUrl, postId = null, existing = [], onSave }) {
+  let tags = existing.slice();   // { tagged_id, screen_name, x, y }
+
+  const { root, close } = sheet({
+    title: 'Tag people',
+    body: `
+      <p class="muted small">Tap the photo where someone is, then pick who.</p>
+      <div class="tagger" id="tagWrap">
+        <img src="${esc(imageUrl)}" alt="">
+        <div class="tagger-layer" id="tagLayer"></div>
+      </div>
+      <div class="tagger-search" id="tagSearchWrap" hidden>
+        <input id="tagSearch" placeholder="Search screen names" autocomplete="off">
+        <div class="ig-people" id="tagResults"></div>
+      </div>
+      <div id="tagList" class="tagger-list"></div>`,
+    footer: `<button class="btn btn-primary" id="tagSave">Save tags</button>`
+  });
+
+  const wrap = $('#tagWrap', root);
+  const layer = $('#tagLayer', root);
+  let pending = null;       // { x, y } awaiting a person choice
+
+  const drawMarkers = () => {
+    layer.innerHTML = tags.map((t, i) => `
+      <span class="tagger-mark" style="left:${(t.x*100).toFixed(2)}%;top:${(t.y*100).toFixed(2)}%">
+        <span class="tagger-dot"></span>
+        <span class="tagger-name">@${esc(t.screen_name)}<button data-untag="${i}">✕</button></span>
+      </span>`).join('') + (pending
+        ? `<span class="tagger-mark pending" style="left:${(pending.x*100).toFixed(2)}%;top:${(pending.y*100).toFixed(2)}%"><span class="tagger-dot"></span></span>`
+        : '');
+    layer.querySelectorAll('[data-untag]').forEach(b =>
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        tags.splice(Number(b.dataset.untag), 1);
+        renderList(); drawMarkers();
+      }));
+  };
+
+  const renderList = () => {
+    $('#tagList', root).innerHTML = tags.length
+      ? '<div class="muted small">Tagged: ' + tags.map(t => '@' + esc(t.screen_name)).join(', ') + '</div>'
+      : '';
+  };
+
+  wrap.addEventListener('click', (e) => {
+    if (e.target.closest('.tagger-mark')) return;
+    const r = wrap.getBoundingClientRect();
+    pending = {
+      x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
+    };
+    drawMarkers();
+    $('#tagSearchWrap', root).hidden = false;
+    $('#tagSearch', root).focus();
+  });
+
+  let timer;
+  $('#tagSearch', root).addEventListener('input', (e) => {
+    clearTimeout(timer);
+    const q = e.target.value.trim();
+    timer = setTimeout(async () => {
+      let query = supa.from('ig_profiles').select('id, screen_name, display_name, avatar_url')
+        .order('screen_name').limit(20);
+      if (q) query = query.ilike('screen_name', `%${q}%`);
+      const { data } = await query;
+      const box = $('#tagResults', root);
+      box.innerHTML = (data || [])
+        .filter(p => !tags.some(t => t.tagged_id === p.id))
+        .map(p => `<button class="ig-person" data-pick="${esc(p.id)}" data-sn="${esc(p.screen_name)}">
+          <span class="ig-person-id"><strong>@${esc(p.screen_name)}</strong></span>
+        </button>`).join('') || '<div class="ig-empty muted">Nobody found.</div>';
+      box.querySelectorAll('[data-pick]').forEach(b =>
+        b.addEventListener('click', () => {
+          if (!pending) return;
+          tags.push({ tagged_id: b.dataset.pick, screen_name: b.dataset.sn, x: pending.x, y: pending.y });
+          pending = null;
+          $('#tagSearchWrap', root).hidden = true;
+          $('#tagSearch', root).value = '';
+          box.innerHTML = '';
+          drawMarkers(); renderList();
+        }));
+    }, 200);
+  });
+
+  $('#tagSave', root).addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    await onSave(tags);
+    close();
+  });
+
+  drawMarkers(); renderList();
+}
+
+/** Writes the tag set for a post: clears what was there, inserts anew. */
+async function saveTags(postId, tags) {
+  await supa.from('ig_post_tags').delete().eq('post_id', postId);
+  if (tags.length) {
+    const rows = tags.map(t => ({ post_id: postId, tagged_id: t.tagged_id, x: t.x, y: t.y }));
+    const { error } = await supa.from('ig_post_tags').insert(rows);
+    if (error) toast(error.message, 'error');
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  the ⋯ manage sheet on a post                                      */
 /* ------------------------------------------------------------------ */
 
 function openManage(card, postId) {
   const isAuthor = card.dataset.author === me.id;
   const pad = Number(card.dataset.fakelikes) || 0;
+  const imageUrl = card.querySelector('.ig-card-media img')?.src;
 
   const adminBits = me.is_admin ? `
     <button class="menu-item" data-do="likes">Set fake likes
@@ -602,6 +762,7 @@ function openManage(card, postId) {
   const { root, close } = sheet({
     title: 'Manage post',
     body: `<div class="menu-list">
+      <button class="menu-item" data-do="tag">Tag people</button>
       ${adminBits}
       <button class="menu-item danger" data-do="delete">Delete post</button>
     </div>`
@@ -617,6 +778,27 @@ function openManage(card, postId) {
     // If that was the only thing on screen (single-post view), go back
     // somewhere with content.
     if (!$$('.ig-card', main).length) show('feed');
+  });
+
+  $('[data-do="tag"]', root).addEventListener('click', async () => {
+    close();
+    // Load current tags so the overlay opens with them in place.
+    const { data } = await supa.from('ig_post_tags')
+      .select('tagged_id, x, y').eq('post_id', postId);
+    await Promise.all((data || []).map(t => getIg(t.tagged_id)));
+    const existing = (data || []).map(t => ({
+      tagged_id: t.tagged_id, x: t.x, y: t.y,
+      screen_name: igCache.get(t.tagged_id)?.screen_name || '?'
+    }));
+    openTagger({
+      imageUrl, postId, existing,
+      onSave: async (tags) => {
+        await saveTags(postId, tags);
+        toast('Tags saved.', 'ok');
+        // Redraw this card's tag layer in place.
+        await loadTags(postId, main);
+      }
+    });
   });
 
   $('[data-do="likes"]', root)?.addEventListener('click', () => {
@@ -736,6 +918,12 @@ function commentLabel(c) {
   return c.ghost_name ? esc(c.ghost_name) : esc(handle(igCache.get(c.author_id)));
 }
 
+function canDeleteComment(c) {
+  // A real comment: its author or an admin. A ghost belongs to the admin
+  // who made it, so admins can remove ghosts too.
+  return me.is_admin || c.author_id === me.id;
+}
+
 function commentHtml(c, { isReply = false } = {}) {
   return `
     <div class="ig-comment ${isReply ? 'is-reply' : ''}" data-comment-id="${esc(c.id)}">
@@ -744,6 +932,7 @@ function commentHtml(c, { isReply = false } = {}) {
       </div>
       <button class="ig-reply-btn" data-reply="${esc(c.id)}" data-reply-to="${commentLabel(c)}">Reply</button>
       ${me.is_admin ? `<button class="ig-reply-btn ghost" data-ghost-reply="${esc(c.id)}">Reply as…</button>` : ''}
+      ${canDeleteComment(c) ? `<button class="ig-reply-btn danger" data-del-comment="${esc(c.id)}">Delete</button>` : ''}
       <div class="ig-replies" data-replies="${esc(c.id)}"></div>
     </div>`;
 }
@@ -795,7 +984,7 @@ async function renderComments(card, postId, comments) {
   };
 
   // Clicking a comment's Reply aims the composer at it.
-  box.addEventListener('click', (e) => {
+  box.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-reply]');
     if (btn) { setReply(btn.dataset.reply, btn.dataset.replyTo); return; }
 
@@ -805,6 +994,17 @@ async function renderComments(card, postId, comments) {
       const parentId = ghostBtn.dataset.ghostReply;
       const rbox = box.querySelector(`[data-replies="${parentId}"]`);
       sheetGhostComment(card, postId, { parent: parentId, into: rbox, asReply: true });
+      return;
+    }
+
+    // Delete a comment (its author, or an admin). Replies cascade.
+    const delBtn = e.target.closest('[data-del-comment]');
+    if (delBtn) {
+      const cid = delBtn.dataset.delComment;
+      if (!confirm('Delete this comment? Any replies to it go too.')) return;
+      const { error } = await supa.from('ig_comments').delete().eq('id', cid);
+      if (error) { toast(error.message, 'error'); return; }
+      delBtn.closest('.ig-comment')?.remove();
     }
   });
   // Escape cancels a reply and returns to a plain comment.
@@ -914,6 +1114,8 @@ function openComposer() {
             </div>
           </div>
           <p class="muted small">Posts are reviewed by the GM before anyone else sees them.</p>
+          <button class="btn btn-ghost btn-sm" id="igTag" hidden>Tag people</button>
+          <div id="igTagList" class="muted small"></div>
           <div id="igPostMsg"></div>
         </div>
         <div class="modal-foot">
@@ -928,6 +1130,8 @@ function openComposer() {
 
   const file = $('#igFile'), drop = $('#igDrop'), submit = $('#igSubmit');
   let picked = null;
+  let pendingTags = [];       // held until the post is created
+  let previewUrl = null;
 
   attachEmoji($('#igCapEmoji'), () => $('#igCap'));
 
@@ -935,9 +1139,22 @@ function openComposer() {
   file.addEventListener('change', () => {
     picked = file.files[0];
     if (!picked) return;
-    const url = URL.createObjectURL(picked);
-    $('#igPreviewWrap').innerHTML = `<img src="${url}" alt="preview">`;
+    previewUrl = URL.createObjectURL(picked);
+    $('#igPreviewWrap').innerHTML = `<img src="${previewUrl}" alt="preview">`;
     submit.disabled = false;
+    $('#igTag').hidden = false;
+  });
+
+  $('#igTag').addEventListener('click', () => {
+    openTagger({
+      imageUrl: previewUrl,
+      existing: pendingTags,
+      onSave: (tags) => {
+        pendingTags = tags;
+        $('#igTagList').textContent = tags.length
+          ? 'Tagged: ' + tags.map(t => '@' + t.screen_name).join(', ') : '';
+      }
+    });
   });
 
   submit.addEventListener('click', async () => {
@@ -948,9 +1165,12 @@ function openComposer() {
     try {
       const small = await shrinkImage(picked, 1600, 0.85);
       const url   = await uploadFile('ig_media', me.id, small);
-      const { error } = await supa.from('ig_posts')
-        .insert({ author_id: me.id, image_url: url, caption: $('#igCap').value.trim() || null });
+      const { data: post, error } = await supa.from('ig_posts')
+        .insert({ author_id: me.id, image_url: url, caption: $('#igCap').value.trim() || null })
+        .select().single();
       if (error) throw error;
+      // Attach any tags now that the post has an id.
+      if (pendingTags.length) await saveTags(post.id, pendingTags);
       close();
       toast('Posted. It will appear once the GM approves it.', 'ok');
       show('me');
