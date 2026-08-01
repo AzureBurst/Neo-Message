@@ -736,3 +736,25 @@ Posts made **before** this update keep their real date. To move all
 existing posts onto the currently set story date, run
 `sql/instagrat-redate-existing.sql` once. It changes only the displayed
 date, never the true timestamp.
+
+## A code to join the table
+
+The Create account page asks for a **Table code**. Only people who enter
+it can make an account; signing in is unaffected, so existing players are
+not bothered by it.
+
+Set the code in `js/config.js`:
+
+```js
+export const SIGNUP_CODE = 'Pheonix7';
+```
+
+Change it there any time, or set it to an empty string to turn the gate
+off and let anyone with the link sign up.
+
+Because this is a static site, the browser has to be handed the code to
+check it, so a determined person could read it in the page source. It
+stops casual passers-by, not a motivated snoop — right for a private
+table, but don't use a code you rely on elsewhere. For a harder lock you
+would move the check to a server, which this project deliberately does
+not run.

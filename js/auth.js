@@ -3,6 +3,7 @@
 // =====================================================================
 
 import { supa, usernameToEmail, mountCarrier, $, esc, formatNumber } from './supa.js';
+import { SIGNUP_CODE } from './config.js';
 
 mountCarrier($('#carrier'));
 
@@ -87,6 +88,13 @@ formUp.addEventListener('submit', async (e) => {
   const username = $('#upUser').value.trim();
   const number   = numField.value.trim();
   const password = $('#upPass').value;
+  const code     = $('#upCode').value.trim();
+
+  // The table code gate. Compared exactly as configured. An empty
+  // configured code disables the gate entirely.
+  if (SIGNUP_CODE && code !== SIGNUP_CODE) {
+    return say('That table code is not right. Ask your GM for it.');
+  }
 
   if (!/^[A-Za-z0-9_.-]{2,24}$/.test(username)) {
     return say('Usernames can use letters, numbers, dots, dashes and underscores, 2–24 characters.');
