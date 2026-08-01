@@ -29,3 +29,5 @@ export const AUTH_DOMAIN = 'neo.local';
 
 // Largest image a player can attach or use as a profile icon.
 export const MAX_UPLOAD_MB = 5;
+
+export const SIGNUP_CODE = 'Pheonix7';
