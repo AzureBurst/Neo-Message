@@ -782,6 +782,14 @@ function openProfileModal() {
         </div>
         <div class="hint">Everyone in a group thread sees your messages in this colour.</div>
       </div>
+      <div class="field">
+        <label for="pDiscord">Discord notifications <span class="muted">(optional)</span></label>
+        <input id="pDiscord" class="mono" value="${esc(me.discord_id || '')}"
+               placeholder="Your Discord user ID" maxlength="32">
+        <div class="hint">Paste your Discord user ID to be DM'd about new messages.
+          In Discord: Settings → Advanced → Developer Mode, then right-click your
+          name → Copy User ID.</div>
+      </div>
       <div id="pMsg"></div>`,
     footer: `
       <button class="btn btn-ghost" data-close>Close</button>
@@ -838,9 +846,16 @@ function openProfileModal() {
       return;
     }
 
+    // Discord IDs are numeric snowflakes; accept digits only, or blank to unlink.
+    const discordRaw = $('#pDiscord', root).value.trim();
+    if (discordRaw && !/^\d{5,32}$/.test(discordRaw)) {
+      box.innerHTML = '<div class="notice notice-error">A Discord user ID is all digits. Leave it blank to turn notifications off.</div>';
+      return;
+    }
+
     const next = formatNumber(digits);
     const { error } = await supa.from('profiles')
-      .update({ phone_number: next }).eq('id', me.id);
+      .update({ phone_number: next, discord_id: discordRaw || null }).eq('id', me.id);
 
     if (error) {
       box.innerHTML = `<div class="notice notice-error">${
@@ -850,6 +865,7 @@ function openProfileModal() {
       return;
     }
     me.phone_number = next;
+    me.discord_id = discordRaw || null;
     $('#meNum').textContent = next;
     box.innerHTML = '<div class="notice notice-ok">Saved.</div>';
     setTimeout(close, 800);
