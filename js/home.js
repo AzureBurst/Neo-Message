@@ -123,43 +123,20 @@ function setupLock() {
   onClockChange?.(paintLock);
 
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let startY = null, startT = 0, moved = 0, dragging = false;
+  let unlocked = false;
 
   const done = () => {
+    if (unlocked) return;
+    unlocked = true;
     clearInterval(tick);
+    // The swipe-up animation still plays — the lock slides off the top —
+    // it just triggers on a tap now instead of a drag.
     lock.classList.add('unlocking');
     if (reduce) lock.remove();
     else lock.addEventListener('transitionend', () => lock.remove(), { once: true });
   };
 
-  lock.addEventListener('pointerdown', (e) => {
-    dragging = true; startY = e.clientY; startT = performance.now(); moved = 0;
-    lock.style.transition = 'none';
-    lock.setPointerCapture?.(e.pointerId);
-  });
-
-  lock.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
-    const dy = e.clientY - startY;
-    moved = dy;
-    lock.style.transform = `translateY(${dy < 0 ? dy : dy * 0.2}px)`;
-  });
-
-  const release = () => {
-    if (!dragging) return;
-    dragging = false;
-    lock.style.transition = '';
-    const dt = performance.now() - startT;
-    const velocity = moved / Math.max(dt, 1);        // px per ms, negative = up
-    // Easy to unlock: a short drag up, OR a quick flick in any upward amount.
-    if (moved < -48 || (moved < -10 && velocity < -0.45)) done();
-    else lock.style.transform = '';
-  };
-  lock.addEventListener('pointerup', release);
-  lock.addEventListener('pointercancel', release);
-
-  // Tap without a drag, or keyboard, also unlocks.
-  lock.addEventListener('click', () => { if (Math.abs(moved) < 6) done(); });
+  lock.addEventListener('click', done);
   lock.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); done(); }
   });
@@ -173,7 +150,9 @@ function setupLock() {
    sets 'neo.deep' on load; if it is set, we came from inside and skip. */
 const navType = (performance.getEntriesByType?.('navigation')[0] || {}).type;
 const cameFromApp = sessionStorage.getItem('neo.deep') === '1';
+const lastApp = sessionStorage.getItem('neo.lastApp');
 sessionStorage.removeItem('neo.deep');           // consume it
+sessionStorage.removeItem('neo.lastApp');
 
 const shouldLock = navType === 'reload' ? true : !cameFromApp;
 
@@ -181,59 +160,95 @@ if (shouldLock) setupLock();
 else lock.remove();
 
 /* ------------------------------------------------------------------ */
-/*  opening an app                                                    */
+/*  app open / close animations                                       */
 /*                                                                    */
-/*  Instead of a hard jump, the tapped icon grows out to fill the      */
-/*  screen the way a phone opens an app. The overlay starts as a copy  */
-/*  of the icon sitting exactly over it, then scales up; navigation    */
-/*  happens as it finishes. Anyone who prefers reduced motion, or a    */
-/*  browser that cannot animate, just gets the plain jump.            */
+/*  Opening: the tapped icon grows out to fill the screen, then the    */
+/*  app loads. Closing: coming back from an app, that app shrinks back  */
+/*  down into its icon — the same motion in reverse, which closes the   */
+/*  loop and makes the home button feel like a real one. Reduced       */
+/*  motion, or a modifier-click, skips both.                          */
 /* ------------------------------------------------------------------ */
 
 const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-function openApp(tile, href) {
-  const glyph = tile.querySelector('.app-glyph');
-  const rect  = glyph.getBoundingClientRect();
+const TILE_FOR = { app: '#tileMessage', instagrat: '#tileGrat', calendar: '#tileCal' };
 
+/** Builds an overlay sitting exactly over an app's icon, styled like it. */
+function makeOverlay(glyph, rect) {
   const overlay = document.createElement('div');
-  overlay.className = 'app-open';
-  // Start life exactly where the icon is.
+  overlay.className = 'app-open ' + glyph.className.replace('app-glyph', '').trim();
   overlay.style.left   = rect.left + 'px';
   overlay.style.top    = rect.top + 'px';
   overlay.style.width  = rect.width + 'px';
   overlay.style.height = rect.height + 'px';
 
-  // Carry the icon's look into the zoom so it feels like the same object.
-  const art = getComputedStyle(glyph).backgroundImage;
-  if (art && art !== 'none') {
-    overlay.style.backgroundImage = art;
+  const cs = getComputedStyle(glyph);
+  if (cs.backgroundImage && cs.backgroundImage !== 'none') {
+    overlay.style.backgroundImage = cs.backgroundImage;
     overlay.style.backgroundSize = 'cover';
     overlay.style.backgroundPosition = 'center';
-  } else {
-    overlay.textContent = glyph.textContent;
   }
-  document.body.appendChild(overlay);
+  overlay.style.backgroundColor = cs.backgroundColor;
+  // Carry the icon's contents (glyph char, or the calendar date markup).
+  overlay.innerHTML = glyph.innerHTML || '';
+  if (!overlay.innerHTML) overlay.textContent = glyph.textContent;
+  return overlay;
+}
 
-  // Compute the scale needed to cover the viewport from the icon's size.
+function coverTransform(rect) {
   const scale = Math.ceil(Math.max(
     window.innerWidth  / rect.width,
     window.innerHeight / rect.height) * 1.4);
   const cx = window.innerWidth / 2  - (rect.left + rect.width / 2);
   const cy = window.innerHeight / 2 - (rect.top + rect.height / 2);
+  return `translate(${cx}px, ${cy}px) scale(${scale})`;
+}
+
+function openApp(tile, href) {
+  const glyph = tile.querySelector('.app-glyph');
+  const rect  = glyph.getBoundingClientRect();
+  const overlay = makeOverlay(glyph, rect);
+  document.body.appendChild(overlay);
 
   requestAnimationFrame(() => {
-    overlay.style.transform = `translate(${cx}px, ${cy}px) scale(${scale})`;
+    overlay.style.transform = coverTransform(rect);
     overlay.style.opacity = '1';
   });
 
-  // Navigate as the growth finishes; the fallback timer covers browsers
-  // that never fire transitionend.
   let went = false;
   const go = () => { if (!went) { went = true; location.href = href; } };
   overlay.addEventListener('transitionend', go, { once: true });
   setTimeout(go, 520);
 }
+
+/** The reverse: a full-screen overlay collapses into an app's icon. */
+function shrinkInto(appName) {
+  const sel = TILE_FOR[appName];
+  const tile = sel && document.querySelector(sel);
+  const glyph = tile && tile.querySelector('.app-glyph');
+  if (!glyph) return;
+
+  const rect = glyph.getBoundingClientRect();
+  const overlay = makeOverlay(glyph, rect);
+  overlay.style.transition = 'none';
+  overlay.style.transform = coverTransform(rect);   // start covering the screen
+  overlay.style.opacity = '1';
+  document.body.appendChild(overlay);
+
+  // Two frames: let the "covering" state paint, then enable the
+  // transition and fall back to the icon's own spot, fading out.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    overlay.style.transition = '';
+    overlay.style.transform = 'translate(0,0) scale(1)';
+    overlay.style.opacity = '0';
+  }));
+
+  overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+  setTimeout(() => overlay.remove(), 700);
+}
+
+// Play the shrink if we just came back from an app.
+if (cameFromApp && lastApp && !reduceMotion) shrinkInto(lastApp);
 
 document.querySelectorAll('.app-icon').forEach(tile => {
   tile.addEventListener('click', (e) => {

@@ -1967,13 +1967,11 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   background:
     linear-gradient(180deg, rgba(8,8,10,.55) 0%, rgba(8,8,10,.35) 40%, rgba(8,8,10,.75) 100%);
   backdrop-filter: blur(2px);
-  cursor: grab;
+  cursor: pointer;
   user-select: none;
-  touch-action: none;              /* let us handle the vertical drag */
   transition: transform .38s cubic-bezier(.4, 0, .2, 1);
   will-change: transform;
 }
-.lock:active { cursor: grabbing; }
 .lock.unlocking { transform: translateY(-100%); }
 
 .lock-clock { text-align: center; }

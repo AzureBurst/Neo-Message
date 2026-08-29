@@ -963,9 +963,13 @@ pressed. The like heart pops when you tap it. All of it is subtle and all
 of it switches off automatically for anyone whose device is set to reduce
 motion.
 
-**Lock screen, easier.** Unlocking now takes a short swipe up or a quick
-flick — you no longer have to drag the whole way. A tap or Enter / ↑ still
-works too.
+**Lock screen.** A tap (or Enter / ↑) unlocks — no dragging. The lock
+still slides up off the top when it opens, so the swipe animation plays;
+it just triggers on a tap.
+
+**App close animation.** Coming back to the home screen from an app, that
+app shrinks back down into its icon — the open animation in reverse — so
+the home button closes the loop instead of cutting straight to the grid.
 
 **Lock screen, smarter about when it shows.** It appears when you sign in
 and when you refresh the home screen — the moments that feel like waking
