@@ -99,6 +99,80 @@ if (me.is_admin) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  lock screen                                                        */
+/*                                                                    */
+/*  A phone-style lock over the home screen. Swipe up (or click, or    */
+/*  press a key) to unlock. Shown once per browser session so bouncing */
+/*  between an app and home does not re-lock every time; a fresh visit  */
+/*  or a new tab locks again, like waking a phone.                    */
+/* ------------------------------------------------------------------ */
+
+const lock = $('#lockScreen');
+const UNLOCK_KEY = 'neo.unlocked';
+
+function paintLock() {
+  const d = storyNow();
+  $('#lockTime').textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  $('#lockDate').textContent = d.toLocaleDateString([], {
+    weekday: 'long', month: 'long', day: 'numeric'
+  });
+}
+
+function setupLock() {
+  paintLock();
+  const tick = setInterval(paintLock, 15_000);
+  onClockChange?.(paintLock);
+
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  let startY = null, moved = 0, dragging = false;
+
+  const done = () => {
+    clearInterval(tick);
+    sessionStorage.setItem(UNLOCK_KEY, '1');
+    lock.classList.add('unlocking');
+    if (reduce) lock.remove();
+    else lock.addEventListener('transitionend', () => lock.remove(), { once: true });
+  };
+
+  lock.addEventListener('pointerdown', (e) => {
+    dragging = true; startY = e.clientY; moved = 0;
+    lock.style.transition = 'none';
+    lock.setPointerCapture?.(e.pointerId);
+  });
+
+  lock.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    moved = dy;
+    // Follow the finger upward only; a little resistance downward.
+    lock.style.transform = `translateY(${dy < 0 ? dy : dy * 0.2}px)`;
+  });
+
+  const release = () => {
+    if (!dragging) return;
+    dragging = false;
+    lock.style.transition = '';
+    // Unlock if swiped up past a threshold; otherwise snap back.
+    if (moved < -90) done();
+    else lock.style.transform = '';
+  };
+  lock.addEventListener('pointerup', release);
+  lock.addEventListener('pointercancel', release);
+
+  // Tap without a real drag, or keyboard, also unlocks.
+  lock.addEventListener('click', () => { if (Math.abs(moved) < 6) done(); });
+  lock.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); done(); }
+  });
+}
+
+if (sessionStorage.getItem(UNLOCK_KEY) === '1') {
+  lock.remove();          // already unlocked this session
+} else {
+  setupLock();
+}
+
+/* ------------------------------------------------------------------ */
 /*  opening an app                                                    */
 /*                                                                    */
 /*  Instead of a hard jump, the tapped icon grows out to fill the      */

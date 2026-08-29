@@ -223,7 +223,7 @@ a:hover { text-decoration: underline; }
   letter-spacing: -.02em;
   margin: 0 0 4px;
 }
-.wordmark span { color: var(--signal); }
+.wordmark span { color: var(--text); }
 
 .tagline {
   color: var(--muted);
@@ -1947,4 +1947,73 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   .cal-chip { font-size: 0; padding: 3px; }   /* dots-only on small screens */
   .cal-chip::before { content: ''; display: block; width: 100%; height: 4px; border-radius: 2px; background: currentColor; }
   .cal-title #calMonth { min-width: 110px; font-size: 14px; }
+}
+
+/* =====================================================================
+   LOCK SCREEN
+   Sits over the home screen until swiped up. Transparent-ish so the
+   backdrop artwork shows through, with a scrim for legibility.
+   ===================================================================== */
+
+.lock {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18vh 24px 48px;
+  background:
+    linear-gradient(180deg, rgba(8,8,10,.55) 0%, rgba(8,8,10,.35) 40%, rgba(8,8,10,.75) 100%);
+  backdrop-filter: blur(2px);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;              /* let us handle the vertical drag */
+  transition: transform .38s cubic-bezier(.4, 0, .2, 1);
+  will-change: transform;
+}
+.lock:active { cursor: grabbing; }
+.lock.unlocking { transform: translateY(-100%); }
+
+.lock-clock { text-align: center; }
+.lock-time {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: clamp(64px, 20vw, 108px);
+  line-height: 1;
+  letter-spacing: -.02em;
+  color: #fff;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, .5);
+}
+.lock-date {
+  font-family: var(--font-ui);
+  font-size: 17px;
+  color: rgba(255, 255, 255, .82);
+  margin-top: 8px;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, .5);
+}
+
+.lock-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, .72);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: .02em;
+}
+.lock-chevron {
+  font-size: 22px;
+  line-height: 1;
+  animation: lock-bob 1.8s ease-in-out infinite;
+}
+@keyframes lock-bob {
+  0%, 100% { transform: translateY(0); opacity: .6; }
+  50%      { transform: translateY(-6px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lock { transition: none; }
+  .lock-chevron { animation: none; }
 }

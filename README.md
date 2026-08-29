@@ -942,3 +942,14 @@ follows.
 
 Dates are ordinary dates you pick — the story framing is just that
 "today" points at your story's date rather than the real one.
+
+## Lock screen
+
+The home screen opens behind a phone-style lock: the story-clock time and
+date over the wallpaper, with "swipe up to unlock." Swipe up to get in —
+or tap it, or press Enter / ↑ if you're on a keyboard.
+
+It shows once per browser session, so hopping between an app and the home
+screen doesn't make you unlock every time. Opening the site fresh, or in
+a new tab, locks again — like waking a phone. The clock on it is the
+story clock, so it reads whatever date your table is set to.

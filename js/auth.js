@@ -152,7 +152,3 @@ formUp.addEventListener('submit', async (e) => {
   }
 });
 
-// Show the logo image only if the file actually loads, so a missing
-// placeholder never leaves a broken icon on the page.
-const logo = $('#brandLogo');
-logo.addEventListener('load', () => logo.classList.remove('hidden'));

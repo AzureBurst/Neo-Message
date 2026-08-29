@@ -14,6 +14,20 @@
     <a href="index.html" class="gate-escape">Go to sign in</a>
   </div>
 
+  <!-- Swipe-to-unlock lock screen. Shown over the home screen on arrival;
+       js/home.js manages the swipe and reveal. -->
+  <div id="lockScreen" class="lock" role="button" tabindex="0"
+       aria-label="Swipe up to unlock">
+    <div class="lock-clock">
+      <div class="lock-time" id="lockTime">—</div>
+      <div class="lock-date" id="lockDate">—</div>
+    </div>
+    <div class="lock-hint">
+      <span class="lock-chevron">⌃</span>
+      <span>Swipe up to unlock</span>
+    </div>
+  </div>
+
   <main class="home">
     <div id="carrier"></div>
 
