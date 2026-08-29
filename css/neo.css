@@ -2017,3 +2017,64 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   .lock { transition: none; }
   .lock-chevron { animation: none; }
 }
+
+/* =====================================================================
+   MOTION
+   A small, shared set of transitions to make the apps feel like native
+   phone apps: sheets rise, views slide in, controls respond to a press.
+   All of it collapses to nothing under prefers-reduced-motion.
+   ===================================================================== */
+
+@keyframes neo-fade      { from { opacity: 0; }                              to { opacity: 1; } }
+@keyframes neo-sheet-up  { from { opacity: 0; transform: translateY(24px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes neo-view-in   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes neo-slide-in  { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes neo-pop       { from { opacity: 0; transform: scale(.92); }       to { opacity: 1; transform: scale(1); } }
+@keyframes neo-like-pop  { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+
+/* Modals + sheets: scrim fades, panel rises. */
+.scrim { animation: neo-fade .18s ease both; }
+.modal { animation: neo-sheet-up .26s cubic-bezier(.4, 0, .2, 1) both; }
+
+/* Emoji popup and small popovers pop in from their anchor. */
+.emoji-pop { animation: neo-pop .14s ease both; }
+
+/* App content slides up as each view mounts (innerHTML is replaced, so
+   the animation replays on every navigation). */
+.ig-feed, .ig-profile, .ig-explore, .ig-activity, .ig-review, .ig-setup,
+.cal-grid, .cal-day, .admin-wrap > .table-wrap {
+  animation: neo-view-in .24s ease both;
+}
+
+/* Opening a thread on a phone slides the conversation in from the right,
+   the way a list-detail navigation does on iOS/Android. */
+@media (max-width: 780px) {
+  .panes.reading .convo { animation: neo-slide-in .26s cubic-bezier(.4, 0, .2, 1) both; }
+}
+
+/* Thread list and people rows get a gentle press feedback. */
+.thread, .ig-person, .contact-row, .find-row, .app-icon, .cal-cell,
+.menu-item, .ghost-chip, .tint {
+  transition: transform .08s ease, background .12s ease, box-shadow .12s ease;
+}
+.thread:active, .ig-person:active, .contact-row:active, .find-row:active,
+.menu-item:active, .cal-cell:active:not(.empty) { transform: scale(.985); }
+.app-icon:active .app-glyph { transform: scale(.94); }
+
+/* Buttons dip slightly when pressed. */
+.btn, .icon-btn, .ig-post-btn, .cal-nav { transition: transform .08s ease, background .12s ease, opacity .12s ease; }
+.btn:active, .icon-btn:active, .ig-post-btn:active, .cal-nav:active { transform: scale(.95); }
+
+/* The like heart pops when you tap it on. */
+.ig-like.is-liked { animation: neo-like-pop .3s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .scrim, .modal, .emoji-pop,
+  .ig-feed, .ig-profile, .ig-explore, .ig-activity, .ig-review, .ig-setup,
+  .cal-grid, .cal-day, .admin-wrap > .table-wrap,
+  .panes.reading .convo, .ig-like.is-liked {
+    animation: none !important;
+  }
+  .thread, .ig-person, .contact-row, .find-row, .app-icon, .cal-cell,
+  .menu-item, .btn, .icon-btn, .ig-post-btn, .cal-nav { transition: none !important; }
+}

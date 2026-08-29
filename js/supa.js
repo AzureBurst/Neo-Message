@@ -63,6 +63,7 @@ export async function requireProfile() {
 }
 
 export async function signOut() {
+  try { sessionStorage.removeItem('neo.deep'); } catch {}
   await supa.auth.signOut();
   location.replace('index.html');
 }

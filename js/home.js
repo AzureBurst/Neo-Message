@@ -108,7 +108,6 @@ if (me.is_admin) {
 /* ------------------------------------------------------------------ */
 
 const lock = $('#lockScreen');
-const UNLOCK_KEY = 'neo.unlocked';
 
 function paintLock() {
   const d = storyNow();
@@ -124,18 +123,17 @@ function setupLock() {
   onClockChange?.(paintLock);
 
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let startY = null, moved = 0, dragging = false;
+  let startY = null, startT = 0, moved = 0, dragging = false;
 
   const done = () => {
     clearInterval(tick);
-    sessionStorage.setItem(UNLOCK_KEY, '1');
     lock.classList.add('unlocking');
     if (reduce) lock.remove();
     else lock.addEventListener('transitionend', () => lock.remove(), { once: true });
   };
 
   lock.addEventListener('pointerdown', (e) => {
-    dragging = true; startY = e.clientY; moved = 0;
+    dragging = true; startY = e.clientY; startT = performance.now(); moved = 0;
     lock.style.transition = 'none';
     lock.setPointerCapture?.(e.pointerId);
   });
@@ -144,7 +142,6 @@ function setupLock() {
     if (!dragging) return;
     const dy = e.clientY - startY;
     moved = dy;
-    // Follow the finger upward only; a little resistance downward.
     lock.style.transform = `translateY(${dy < 0 ? dy : dy * 0.2}px)`;
   });
 
@@ -152,25 +149,36 @@ function setupLock() {
     if (!dragging) return;
     dragging = false;
     lock.style.transition = '';
-    // Unlock if swiped up past a threshold; otherwise snap back.
-    if (moved < -90) done();
+    const dt = performance.now() - startT;
+    const velocity = moved / Math.max(dt, 1);        // px per ms, negative = up
+    // Easy to unlock: a short drag up, OR a quick flick in any upward amount.
+    if (moved < -48 || (moved < -10 && velocity < -0.45)) done();
     else lock.style.transform = '';
   };
   lock.addEventListener('pointerup', release);
   lock.addEventListener('pointercancel', release);
 
-  // Tap without a real drag, or keyboard, also unlocks.
+  // Tap without a drag, or keyboard, also unlocks.
   lock.addEventListener('click', () => { if (Math.abs(moved) < 6) done(); });
   lock.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); done(); }
   });
 }
 
-if (sessionStorage.getItem(UNLOCK_KEY) === '1') {
-  lock.remove();          // already unlocked this session
-} else {
-  setupLock();
-}
+/* When to lock:
+   - on a refresh of the home screen, and
+   - on arriving fresh (a login).
+   NOT when coming back from one of the apps — that is normal in-phone
+   navigation and re-locking each time would be maddening. Each app page
+   sets 'neo.deep' on load; if it is set, we came from inside and skip. */
+const navType = (performance.getEntriesByType?.('navigation')[0] || {}).type;
+const cameFromApp = sessionStorage.getItem('neo.deep') === '1';
+sessionStorage.removeItem('neo.deep');           // consume it
+
+const shouldLock = navType === 'reload' ? true : !cameFromApp;
+
+if (shouldLock) setupLock();
+else lock.remove();
 
 /* ------------------------------------------------------------------ */
 /*  opening an app                                                    */

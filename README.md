@@ -953,3 +953,22 @@ It shows once per browser session, so hopping between an app and the home
 screen doesn't make you unlock every time. Opening the site fresh, or in
 a new tab, locks again — like waking a phone. The clock on it is the
 story clock, so it reads whatever date your table is set to.
+
+## Polish — motion and a friendlier lock
+
+**Motion.** Menus, modals and sheets now rise into place, app views slide
+up as you switch between them, opening a conversation on a phone slides
+the thread in from the side, and buttons and list rows dip slightly when
+pressed. The like heart pops when you tap it. All of it is subtle and all
+of it switches off automatically for anyone whose device is set to reduce
+motion.
+
+**Lock screen, easier.** Unlocking now takes a short swipe up or a quick
+flick — you no longer have to drag the whole way. A tap or Enter / ↑ still
+works too.
+
+**Lock screen, smarter about when it shows.** It appears when you sign in
+and when you refresh the home screen — the moments that feel like waking
+the phone — but not when you come back to the home screen from inside an
+app. Wandering between Messages, Instagrat and the calendar no longer
+makes you unlock each time.

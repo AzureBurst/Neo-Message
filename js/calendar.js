@@ -26,6 +26,10 @@ ungate();
 mountCarrier($('#carrier'));
 startPresence();
 
+/* Mark that we went into an app, so returning to the home screen does
+   not re-trigger the lock. Cleared by the home screen when consumed. */
+try { sessionStorage.setItem('neo.deep', '1'); } catch {}
+
 const main = $('#calMain');
 
 /* The month currently shown, and the day currently selected. Both start
