@@ -8,7 +8,7 @@
 import {
   supa, requireProfile, signOut, ungate, mountCarrier, setClockSource, startPresence, $
 } from './supa.js';
-import { loadClock, storyNow } from './clock.js';
+import { loadClock, storyNow, onClockChange } from './clock.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -36,6 +36,23 @@ function tryIcon(glyphEl, file) {
 }
 tryIcon(document.querySelector('[data-icon="message"]'), 'assets/apps/message.png');
 tryIcon(document.querySelector('[data-icon="instagrat"]'), 'assets/apps/instagrat.png');
+
+/* The calendar tile shows the current story date, like a real phone's
+   calendar icon. Painted from storyNow() so it reflects the GM's clock,
+   and repainted if the clock changes while the home screen is open. */
+const DOW = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+function paintCalIcon() {
+  const g = document.getElementById('calGlyph');
+  if (!g) return;
+  const d = storyNow();
+  g.innerHTML = `
+    <span class="cal-glyph-top">${DOW[d.getDay()]}</span>
+    <span class="cal-glyph-day">${d.getDate()}</span>`;
+}
+paintCalIcon();
+// If the GM changes the clock elsewhere, keep the icon honest.
+onClockChange?.(paintCalIcon);
+setInterval(paintCalIcon, 60_000);
 
 /* ------------------------------------------------------------------ */
 /*  badges                                                            */

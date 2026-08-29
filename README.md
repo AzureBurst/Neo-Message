@@ -758,3 +758,187 @@ stops casual passers-by, not a motivated snoop — right for a private
 table, but don't use a code you rely on elsewhere. For a harder lock you
 would move the check to a server, which this project deliberately does
 not run.
+
+---
+
+# Discord notifications
+
+Players can be DM'd on Discord when they get a message in Neo Message.
+Because a bot has to run somewhere and hold a secret token — which a
+static site cannot do — the actual DMing happens in a small serverless
+function on Supabase. Nothing needs to run on your own machine.
+
+This is more setup than the rest of the app: about half an hour, most of
+it clicking through the Discord and Supabase dashboards once. If nobody
+fills in a Discord ID, none of it does anything, so it is entirely
+optional.
+
+## What the pieces are
+
+1. A **Discord bot** you create, that can send DMs.
+2. An **Edge Function** (`notify-discord`) that receives new messages and
+   tells the bot who to DM.
+3. A **database webhook** that calls the function whenever a message is
+   sent.
+4. A **Discord ID** each player pastes into their profile.
+
+## Step 1 — make the bot
+
+1. Go to https://discord.com/developers/applications → **New
+   Application**. Name it whatever you like.
+2. Open the **Bot** tab → **Add Bot**. Under **Token**, click **Reset
+   Token** and copy it somewhere safe. This is the secret that lets the
+   function send DMs — treat it like a password, never put it in the
+   repo.
+3. Invite the bot to a Discord server you share with your players.
+   Under **OAuth2 → URL Generator**, tick **bot**, then open the
+   generated URL and add it to your server. The bot needs no special
+   permissions to DM.
+
+**Important Discord quirk:** a bot can only DM someone who shares a
+server with it *and* allows DMs from server members. Have your players
+join that server, and make sure their **Server Settings → Privacy →
+Direct Messages** is on for it.
+
+## Step 2 — run the SQL
+
+Run `sql/discord.sql` in the SQL Editor. It adds the `discord_id` field
+and the throttle table.
+
+## Step 3 — deploy the function
+
+Easiest is the dashboard: **Edge Functions** → **Create a function** →
+name it exactly `notify-discord`, paste the contents of
+`supabase/functions/notify-discord/index.ts`, and deploy. Then turn
+**off** "Verify JWT" for this function — the webhook authenticates with
+our own shared secret instead.
+
+(If you use the Supabase CLI, `supabase functions deploy notify-discord
+--no-verify-jwt` does the same.)
+
+Then add the function's **secrets** (Edge Functions → Manage secrets):
+
+- `DISCORD_BOT_TOKEN` — the token from step 1
+- `NEO_WEBHOOK_SECRET` — any long random string you invent
+- `NEO_APP_URL` — your site's address, e.g.
+  `https://yourname.github.io/neo-message/` (optional; it becomes a link
+  in the DM)
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are already there — you do
+not add those.
+
+## Step 4 — fire it on new messages
+
+**Database** → **Webhooks** → **Create a new hook**:
+
+- Table: `messages`, event: **Insert**
+- Type: **HTTP Request**, method **POST**
+- URL: your function's URL (shown on its page, ends in
+  `/functions/v1/notify-discord`)
+- Add an HTTP header **`x-neo-secret`** set to the exact same string you
+  used for `NEO_WEBHOOK_SECRET`.
+
+That header is what stops anyone else from poking the function.
+
+## Step 5 — players link themselves
+
+Each player opens their profile (their name in the sidebar) and pastes
+their **Discord user ID** into the Discord field. To find it: Discord →
+**Settings → Advanced → Developer Mode** on, then right-click their own
+name → **Copy User ID**. Blank turns notifications back off.
+
+## What a notification says
+
+"📱 New message from **Jax** in Neo Message" plus your site link — never
+the message text, since threads can be private. If you would rather
+include a preview, there is one clearly marked line in the function to
+change.
+
+To keep a lively back-and-forth from becoming a stream of pings, each
+person gets at most one DM per thread every couple of minutes. That
+interval is one constant at the top of the function.
+
+## Limits worth knowing
+
+- The bot can only reach players who share its server and allow DMs.
+  Someone who never gets notified almost always has DMs closed for that
+  server.
+- This covers Neo Message texts. Instagrat could be wired the same way
+  later — a webhook on `ig_posts` or `ig_comments` into a similar
+  function — but that is not built yet.
+
+## A note on privacy of the Discord ID
+
+Profiles are readable by anyone signed in — that is what lets players
+look each other up by name and number — so in principle another player
+could read your stored Discord ID through the API. A Discord user ID is
+not especially sensitive (it does not let anyone DM you unless they share
+a server and you allow it), and for a private table this is usually fine.
+
+If you would rather it never be visible to other players, the tidy fix is
+to move `discord_id` into its own table that only each owner and the
+service role can read. Say the word and I will write that migration; I
+kept it on the profile here to keep the setup to a single simple column.
+
+## Not pinging people who are already on the site
+
+Run `sql/presence.sql` once in the SQL Editor (after `discord.sql`), and
+redeploy the `notify-discord` function with the updated code.
+
+While a player has the app open and in the foreground, it quietly checks
+in about once a minute. The notifier then skips anyone seen in the last
+two minutes — no point buzzing a phone about a message on the screen in
+front of them.
+
+It is best-effort on purpose. A locked phone or a tab pushed to the
+background stops checking in, so within a couple of minutes that person
+counts as away and can be pinged again — which is the behaviour you want.
+
+This sits on top of the existing per-thread throttle: active players are
+skipped by presence, and even away players never get more than one DM per
+thread every couple of minutes. Both windows are single constants at the
+top of the function (`ACTIVE_MS`, `THROTTLE_MS`) if you want to tune them.
+
+---
+
+# Calendar
+
+A third app, keyed to your story. "Today" is whatever the GM's story
+clock says — freeze the clock to Oct 20 and the calendar opens on
+October with the 20th marked. The home-screen icon shows that same story
+date, like a real phone's calendar.
+
+## Setup
+
+Run `sql/calendar.sql` once in the SQL Editor, after `schema.sql`. It
+creates the events table and its rules. The app shares the existing keys.
+
+## What players can do
+
+- Add **events** and **reminders** to their own calendar. These are
+  private — only the person who made one can see it.
+- Each entry has a title, a date, optional time (or all-day), optional
+  notes, and can span several days.
+- Reminders show with a 🔔 and are otherwise the same as events.
+
+## What the GM can do
+
+- Everything a player can, plus a **GM event** — tick "everyone can see
+  this" when adding one. GM events appear on every player's calendar in
+  the network's amber, tagged **GM**, so they stand apart from personal
+  entries (which are blue).
+- Edit or delete anyone's entry.
+
+Only an admin can make an event public; the database enforces it, so a
+player cannot post a table-wide event even by going around the app.
+
+## Using it
+
+The month view keys to the story date. Move between months with the
+arrows, jump back with **Today**, tap a day to see and add its entries,
+tap ＋ or **Add** for a new one. GM events appear the moment they are
+posted, no reload needed, and if you move the story clock the calendar
+follows.
+
+Dates are ordinary dates you pick — the story framing is just that
+"today" points at your story's date rather than the real one.

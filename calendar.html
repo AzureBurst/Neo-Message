@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calendar</title>
+<meta name="theme-color" content="#08080A">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/neo.css">
+</head>
+<body class="gated">
+  <div id="gateNote" class="gate-note">
+    <span>Checking your session…</span>
+    <a href="index.html" class="gate-escape">Go to sign in</a>
+  </div>
+
+  <div id="carrier"></div>
+
+  <header class="cal-top">
+    <a class="ig-home" href="home.html" title="Home">⌂</a>
+    <div class="cal-title">
+      <button class="cal-nav" id="calPrev" title="Previous month">‹</button>
+      <span id="calMonth">—</span>
+      <button class="cal-nav" id="calNext" title="Next month">›</button>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="calToday">Today</button>
+    <button class="ig-post-btn" id="calAdd" title="New entry">＋</button>
+  </header>
+
+  <main class="cal-main" id="calMain">
+    <div class="ig-loading">Loading…</div>
+  </main>
+
+  <div id="modalRoot"></div>
+
+<script type="module" src="js/calendar.js"></script>
+</body>
+</html>
