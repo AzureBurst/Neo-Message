@@ -1,150 +1,142 @@
 // =====================================================================
-//  NEO MESSAGE — sign in / sign up
+//  NEO MESSAGE — story clock
+//
+//  The GM can pin the app to a date and time of their choosing. Every
+//  player sees it, and it stops moving, so the carrier bar reads as
+//  whatever night the scene is set on rather than whatever night it
+//  actually is.
+//
+//  Leave it unfrozen and everything falls back to real time.
 // =====================================================================
 
-import { supa, usernameToEmail, mountCarrier, $, esc, formatNumber } from './supa.js';
+import { supa, esc, toast, $ } from './supa.js';
 
-mountCarrier($('#carrier'));
+let setting = { frozen: false, at: null };
+const watchers = new Set();
 
-// Already signed in? Go straight through.
-const { data: { session } } = await supa.auth.getSession();
-if (session) location.replace('app.html');
-
-const tabIn  = $('#tabIn');
-const tabUp  = $('#tabUp');
-const formIn = $('#formIn');
-const formUp = $('#formUp');
-const alertBox = $('#alert');
-
-function say(msg, kind = 'error') {
-  alertBox.innerHTML = msg
-    ? `<div class="notice notice-${kind}">${esc(msg)}</div>`
-    : '';
+/** The moment the app should believe it is. */
+export function storyNow() {
+  return setting.frozen && setting.at ? new Date(setting.at) : new Date();
 }
 
-function showTab(which) {
-  const signup = which === 'up';
-  tabUp.classList.toggle('active', signup);
-  tabIn.classList.toggle('active', !signup);
-  tabUp.setAttribute('aria-selected', String(signup));
-  tabIn.setAttribute('aria-selected', String(!signup));
-  formUp.classList.toggle('hidden', !signup);
-  formIn.classList.toggle('hidden', signup);
-  say('');
+export const isFrozen = () => !!(setting.frozen && setting.at);
+export const frozenAt = () => (setting.at ? new Date(setting.at) : null);
+
+export function onClockChange(fn) {
+  watchers.add(fn);
+  return () => watchers.delete(fn);
 }
 
-tabIn.addEventListener('click', () => showTab('in'));
-tabUp.addEventListener('click', () => showTab('up'));
+function announce() {
+  watchers.forEach(fn => { try { fn(); } catch { /* keep going */ } });
+}
 
+/** Reads the shared setting, then listens for the GM changing it. */
+export async function loadClock() {
+  const { data } = await supa
+    .from('app_settings').select('value').eq('key', 'story_clock').maybeSingle();
 
-/* ---------- number field: roll one, and tidy as you type ---------- */
+  if (data?.value) setting = data.value;
 
-const numField = $('#upNum');
+  supa.channel('story-clock')
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'app_settings',
+          filter: 'key=eq.story_clock' },
+        (payload) => {
+          setting = payload.new?.value ?? setting;
+          announce();
+        })
+    .subscribe();
 
-$('#rollNum').addEventListener('click', () => {
-  const line = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-  const mid  = String(Math.floor(Math.random() * 900) + 100);
-  numField.value = `(555) ${mid}-${line}`;
-});
+  return setting;
+}
 
-numField.addEventListener('input', () => {
-  const d = numField.value.replace(/\D/g, '').slice(0, 10);
-  if (d.length === 10) numField.value = formatNumber(d);
-});
+/* ------------------------------------------------------------------ */
+/*  formatting                                                         */
+/* ------------------------------------------------------------------ */
 
+export function storyTime() {
+  return storyNow().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
 
-/* ---------- sign in ---------- */
+export function storyDate() {
+  return storyNow().toLocaleDateString([], {
+    weekday: 'short', month: 'short', day: 'numeric'
+  });
+}
 
-formIn.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = $('#btnIn');
-  btn.disabled = true;
-  btn.textContent = 'Signing in…';
-  say('');
+/* ------------------------------------------------------------------ */
+/*  the admin control                                                  */
+/* ------------------------------------------------------------------ */
 
-  const { error } = await supa.auth.signInWithPassword({
-    email: usernameToEmail($('#inUser').value),
-    password: $('#inPass').value
+/** Turns a Date into the value an <input type="datetime-local"> wants. */
+function toLocalInput(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+         `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function openClockModal(modal) {
+  const current = frozenAt() ?? new Date();
+
+  const { root, close } = modal({
+    title: 'Story clock',
+    body: `
+      <p class="muted small" style="margin-top:0">
+        Pin the app to a moment in your story. Every player's status bar
+        shows it, and it stops advancing until you change it.
+      </p>
+
+      <div class="field">
+        <label for="clockAt">Date and time</label>
+        <input type="datetime-local" id="clockAt" class="mono"
+               value="${toLocalInput(current)}">
+      </div>
+
+      <label class="check">
+        <input type="checkbox" id="clockFreeze" ${isFrozen() ? 'checked' : ''}>
+        <span>Freeze the app to this moment</span>
+      </label>
+
+      <p class="muted small">
+        Unticked, the app follows real time and the field above is ignored.
+      </p>`,
+    footer: `
+      <button class="btn btn-ghost" id="clockNow">Use right now</button>
+      <button class="btn btn-primary" id="clockSave">Apply</button>`
   });
 
-  if (error) {
-    say(/invalid/i.test(error.message)
-      ? 'That username and password do not match an account.'
-      : error.message);
-    btn.disabled = false;
-    btn.textContent = 'Sign in';
-    return;
-  }
-  location.replace('app.html');
-});
-
-
-/* ---------- sign up ---------- */
-
-formUp.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = $('#btnUp');
-  const username = $('#upUser').value.trim();
-  const number   = numField.value.trim();
-  const password = $('#upPass').value;
-
-  if (!/^[A-Za-z0-9_.-]{2,24}$/.test(username)) {
-    return say('Usernames can use letters, numbers, dots, dashes and underscores, 2–24 characters.');
-  }
-  const digits = number.replace(/\D/g, '');
-  if (digits.length < 7) {
-    return say('Give your number at least 7 digits.');
-  }
-
-  btn.disabled = true;
-  btn.textContent = 'Creating…';
-  say('');
-
-  // Check both fields up front so people get a clear message instead of
-  // a database constraint error.
-  const { data: taken } = await supa
-    .from('profiles').select('username, phone_number')
-    .or(`username.eq.${username},phone_number.eq.${formatNumber(digits)}`);
-
-  if (taken?.length) {
-    const clash = taken[0];
-    say(clash.username?.toLowerCase() === username.toLowerCase()
-      ? 'That username is taken.'
-      : 'Someone at the table already has that number. Try another.');
-    btn.disabled = false;
-    btn.textContent = 'Create account';
-    return;
-  }
-
-  const { error } = await supa.auth.signUp({
-    email: usernameToEmail(username),
-    password,
-    options: { data: { username, phone_number: formatNumber(digits) } }
+  $('#clockNow', root).addEventListener('click', () => {
+    $('#clockAt', root).value = toLocalInput(new Date());
   });
 
-  if (error) {
-    say(/already registered/i.test(error.message)
-      ? 'That username is taken.'
-      : error.message);
-    btn.disabled = false;
-    btn.textContent = 'Create account';
-    return;
-  }
+  $('#clockSave', root).addEventListener('click', async (e) => {
+    const frozen = $('#clockFreeze', root).checked;
+    const raw    = $('#clockAt', root).value;
 
-  // With email confirmation switched off, signUp signs you in as well.
-  const { data: { session: fresh } } = await supa.auth.getSession();
-  if (fresh) {
-    location.replace('app.html');
-  } else {
-    say('Account created. Sign in to continue.', 'ok');
-    showTab('in');
-    $('#inUser').value = username;
-    btn.disabled = false;
-    btn.textContent = 'Create account';
-  }
-});
+    if (frozen && !raw) return toast('Pick a date and time first.', 'error');
 
-// Show the logo image only if the file actually loads, so a missing
-// placeholder never leaves a broken icon on the page.
-const logo = $('#brandLogo');
-logo.addEventListener('load', () => logo.classList.remove('hidden'));
+    e.target.disabled = true;
+    e.target.textContent = 'Applying…';
+
+    const { error } = await supa.rpc('set_story_clock', {
+      at: frozen ? new Date(raw).toISOString() : null,
+      frozen
+    });
+
+    if (error) {
+      toast(error.message, 'error');
+      e.target.disabled = false;
+      e.target.textContent = 'Apply';
+      return;
+    }
+
+    setting = { frozen, at: frozen ? new Date(raw).toISOString() : null };
+    announce();
+    toast(frozen ? `Clock pinned to ${storyDate()}, ${storyTime()}.`
+                 : 'Clock following real time again.', 'ok');
+    close();
+  });
+
+  return close;
+}

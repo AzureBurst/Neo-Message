@@ -1,81 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Neo Message</title>
-<meta name="theme-color" content="#0B0E14">
-<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="css/neo.css">
-</head>
-<body>
+# Your graphics go here
 
-<main class="auth-wrap">
-  <div class="device">
-    <div id="carrier"></div>
+The two files in this folder are placeholders. Replace them with your own
+and the app picks them up — no code changes needed, as long as you keep
+the filenames.
 
-    <div class="device-body">
-      <!-- Swap this img for your own logo, or delete it and keep the text -->
-      <img src="assets/logo.svg" alt="" class="hidden" id="brandLogo" style="height:44px;margin-bottom:10px">
-      <h1 class="wordmark">Neo<span>Message</span></h1>
-      <p class="tagline">Sign in to reach your contacts.</p>
+| File | Where it shows | Recommended size |
+|---|---|---|
+| `favicon.svg` | Browser tab, phone home screen | Square, 64×64 or any square SVG |
+| `logo.svg` | Top of the sign-in screen | About 260×48, transparent background |
 
-      <div class="tabs" role="tablist">
-        <button id="tabIn" class="active" role="tab" aria-selected="true">Sign in</button>
-        <button id="tabUp" role="tab" aria-selected="false">Create account</button>
-      </div>
+PNG works too. If you swap to PNG, update the two references:
 
-      <div id="alert"></div>
+- `index.html` — the `<link rel="icon">` line and the `#brandLogo` image
+- `app.html` and `admin.html` — the `<link rel="icon">` line
 
-      <!-- ---------- sign in ---------- -->
-      <form id="formIn">
-        <div class="field">
-          <label for="inUser">Username</label>
-          <input id="inUser" type="text" autocomplete="username" required
-                 placeholder="jax_rivera" maxlength="24">
-        </div>
-        <div class="field">
-          <label for="inPass">Password</label>
-          <input id="inPass" type="password" autocomplete="current-password" required>
-        </div>
-        <button class="btn btn-block" type="submit" id="btnIn">Sign in</button>
-      </form>
+The logo on the sign-in screen only appears once the file loads, so a
+missing file leaves the text wordmark in place rather than a broken icon.
 
-      <!-- ---------- sign up ---------- -->
-      <form id="formUp" class="hidden">
-        <div class="field">
-          <label for="upUser">Username</label>
-          <input id="upUser" type="text" autocomplete="username" required
-                 placeholder="jax_rivera" maxlength="24">
-          <div class="hint">Letters, numbers, dots, dashes and underscores.</div>
-        </div>
-        <div class="field">
-          <label for="upNum">Your number</label>
-          <input id="upNum" type="text" class="mono" required
-                 placeholder="(555) 014-2288" maxlength="18" inputmode="numeric">
-          <div class="hint">
-            Made up, and how friends will add you.
-            <button type="button" id="rollNum" class="btn btn-ghost btn-sm" style="margin-left:6px">Roll one</button>
-          </div>
-        </div>
-        <div class="field">
-          <label for="upPass">Password</label>
-          <input id="upPass" type="password" autocomplete="new-password" required minlength="6">
-          <div class="hint">At least 6 characters. Pick something you don't use anywhere else.</div>
-        </div>
-        <button class="btn btn-block" type="submit" id="btnUp">Create account</button>
-      </form>
+## Changing the colors
 
-      <div class="disclosure">
-        <strong style="color:var(--signal)">Table rules.</strong>
-        This is a prop for a tabletop game. Your GM can read every message
-        sent here and export the full transcript. Nothing you type is private
-        — treat it as in-character.
-      </div>
-    </div>
-  </div>
-</main>
+Every color lives at the top of `css/neo.css` under `:root`. The two that
+matter most:
 
-<script type="module" src="js/auth.js"></script>
-</body>
-</html>
+```css
+--signal: #FF7A3D;   /* the network: status bar, admin chrome, accents */
+--sent:   #2F6BFF;   /* you: your own message bubbles, primary buttons */
+```
+
+Change those two and the whole app shifts with them.
+
+## Changing the carrier name
+
+`js/config.js`, the `CARRIER_NAME` value. It's the text next to the signal
+bars at the top of every screen. Anything short works — a corp name, a
+faction, whatever fits the setting.
+
+## Adding a carrier logo to the status bar
+
+If you want a small graphic next to the signal bars instead of text, drop
+your file here as `carrier.svg` and edit `mountCarrier()` in `js/supa.js` —
+swap the `<span class="carrier-name">` line for:
+
+```js
+`<img src="assets/carrier.svg" alt="" class="carrier-logo">`
+```
