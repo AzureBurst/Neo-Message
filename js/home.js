@@ -6,7 +6,7 @@
 // =====================================================================
 
 import {
-  supa, requireProfile, signOut, ungate, mountCarrier, setClockSource, $
+  supa, requireProfile, signOut, ungate, mountCarrier, setClockSource, startPresence, $
 } from './supa.js';
 import { loadClock, storyNow } from './clock.js';
 
@@ -17,6 +17,7 @@ await loadClock();
 setClockSource(storyNow);
 ungate();
 mountCarrier($('#carrier'));
+startPresence();
 
 $('#homeHi').textContent = `Hi, ${me.username}`;
 $('#signOutBtn').addEventListener('click', signOut);

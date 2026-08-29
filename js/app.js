@@ -3,7 +3,7 @@
 // =====================================================================
 
 import {
-  supa, requireProfile, ungate, signOut, mountCarrier, paintAvatar, setClockSource,
+  supa, requireProfile, ungate, signOut, mountCarrier, paintAvatar, setClockSource, startPresence,
   formatNumber, shortTime, dayLabel, isJumboEmoji, esc, toast,
   lightbox, uploadFile, shrinkImage, $, $$
 } from './supa.js';
@@ -19,6 +19,7 @@ ungate();
 await loadClock();
 setClockSource(storyNow);
 mountCarrier($('#carrier'));
+startPresence();
 onClockChange(() => $('#carrier').repaint?.());
 
 /* ------------------------------------------------------------------ */

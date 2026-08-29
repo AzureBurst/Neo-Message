@@ -67,6 +67,38 @@ export async function signOut() {
   location.replace('index.html');
 }
 
+/* ------------------------------------------------------------------ */
+/*  presence                                                          */
+/*                                                                    */
+/*  Marks the player active while a tab is open and visible, so the    */
+/*  Discord notifier can skip anyone already looking at the app. Best  */
+/*  effort by design: a locked phone or a backgrounded tab stops       */
+/*  reporting within a couple of minutes, at which point the person    */
+/*  counts as away and can be pinged again — which is what we want.    */
+/* ------------------------------------------------------------------ */
+
+export function startPresence() {
+  let timer = null;
+
+  const beat = () => {
+    if (document.visibilityState === 'visible') {
+      supa.rpc('touch_last_seen').then(() => {}, () => {});   // fire and forget
+    }
+  };
+
+  const run = () => {
+    beat();
+    clearInterval(timer);
+    timer = setInterval(beat, 60_000);   // once a minute while visible
+  };
+
+  run();
+  // Beat immediately when the tab comes back to the foreground.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') run();
+  });
+}
+
 
 /* ------------------------------------------------------------------ */
 /*  formatting                                                        */

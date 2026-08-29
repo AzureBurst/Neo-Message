@@ -14,7 +14,7 @@
 
 import {
   supa, requireProfile, ungate, mountCarrier, setClockSource,
-  paintAvatar, uploadFile, shrinkImage, lightbox, esc, toast,
+  paintAvatar, uploadFile, shrinkImage, lightbox, esc, toast, startPresence,
   shortTime, fullStamp, $, $$
 } from './supa.js';
 import { loadClock, storyNow } from './clock.js';
@@ -27,6 +27,7 @@ await loadClock();
 setClockSource(storyNow);
 ungate();
 mountCarrier($('#carrier'));
+startPresence();
 
 if (me.is_admin) $('.ig-admin-tab').hidden = false;
 
