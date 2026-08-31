@@ -146,6 +146,7 @@ export function mountShade() {
   el.id = 'shade';
   el.className = 'shade';
   el.innerHTML = `
+    <div class="shade-scrim"></div>
     <div class="shade-panel">
       <div class="shade-head">
         <span id="shadeCount">—</span>
@@ -153,8 +154,7 @@ export function mountShade() {
       </div>
       <div class="shade-body" id="shadeBody"></div>
       <div class="shade-grip"></div>
-    </div>
-    <div class="shade-scrim"></div>`;
+    </div>`;
   document.body.appendChild(el);
 
   // A slim pull tab at the very top, plus tapping the carrier bar.
