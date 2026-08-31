@@ -28,6 +28,22 @@ export function unreadCounts() {
   return by;
 }
 
+/* Mark read every unread notification about a particular thing — a
+   conversation, a post, a profile. Called when you open that thing, so
+   its badge clears the way a phone's does. Safe to call even before the
+   shade has mounted. */
+export async function clearNotificationsFor(refId) {
+  if (!refId) return;
+  await supa.from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('ref_id', refId).is('read_at', null);
+  // The realtime subscription will refresh; if it is not mounted yet,
+  // update our local copy so counts are right immediately.
+  items = items.map(n => n.ref_id === refId && !n.read_at
+    ? { ...n, read_at: new Date().toISOString() } : n);
+  announce();
+}
+
 async function load() {
   const { data, error } = await supa.from('notifications')
     .select('*').order('created_at', { ascending: false }).limit(60);
@@ -84,13 +100,17 @@ function rowHtml(n) {
   const label = n.count > 1 && n.kind === 'message'
     ? `${n.count} new messages`
     : (n.body || '');
+  const av = n.actor_avatar
+    ? `<span class="notif-ic has-av" style="background-image:url('${esc(n.actor_avatar)}')"></span>`
+    : `<span class="notif-ic">${ICON[n.app] || '•'}</span>`;
   return `
     <button class="notif ${n.read_at ? 'read' : ''}" data-id="${esc(n.id)}" data-link="${esc(n.link || '')}">
-      <span class="notif-ic">${ICON[n.app] || '•'}</span>
+      ${av}
       <span class="notif-main">
         <span class="notif-title">${esc(n.title)}${n.count > 1 && n.kind !== 'message' ? ` <span class="notif-x">×${n.count}</span>` : ''}</span>
         <span class="notif-body">${esc(label)}</span>
       </span>
+      <span class="notif-app-ic">${ICON[n.app] || ''}</span>
       <span class="notif-time">${timeAgo(n.created_at)}</span>
     </button>`;
 }

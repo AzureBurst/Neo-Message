@@ -1023,3 +1023,21 @@ no reload.
 - This is separate from the Discord DMs. A player can have either, both,
   or neither — the in-app shade needs no setup beyond the SQL, while
   Discord needs the bot. They do not know about each other.
+
+## Notifications, phone-style
+
+Run `sql/notifications-v2.sql` once, after `notifications.sql`, to enable
+these. Safe to re-run.
+
+- **Sender avatars.** A notification now shows the icon of whoever caused
+  it — the person who messaged you, liked your post, and so on — falling
+  back to the app's glyph when there is no avatar.
+- **Tap to jump to the source.** A notification opens the exact thing it
+  is about: the specific conversation, the specific post or profile, or
+  the calendar on the event's date — not just the app's front page.
+- **Opening clears it.** Opening a conversation clears that thread's
+  message notification and its badge, the way a phone marks a chat read
+  when you look at it. The same happens when you open a post, profile or
+  event a notification pointed you to.
+
+Re-upload the app's JavaScript and CSS alongside running the SQL.

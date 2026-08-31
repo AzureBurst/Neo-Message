@@ -17,7 +17,7 @@ import {
   paintAvatar, uploadFile, shrinkImage, lightbox, esc, toast, startPresence,
   shortTime, fullStamp, $, $$
 } from './supa.js';
-import { mountShade } from './shade.js';
+import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow } from './clock.js';
 import { attachEmoji } from './emoji.js';
 
@@ -1316,5 +1316,14 @@ supa.channel('ig-live')
 paintReqBadge();
 paintQueueBadge();
 
-// First paint.
-show(ig ? 'feed' : 'setup');
+// First paint — a notification deep link wins over the default feed.
+const igParams = new URLSearchParams(location.search);
+if (ig && igParams.get('post')) {
+  show('post', igParams.get('post'));
+  clearNotificationsFor(igParams.get('post'));
+} else if (ig && igParams.get('user')) {
+  show('profile', igParams.get('user'));
+  clearNotificationsFor(igParams.get('user'));
+} else {
+  show(ig ? 'feed' : 'setup');
+}
