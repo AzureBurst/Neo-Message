@@ -120,7 +120,7 @@ function paintShade() {
   if (!body) return;
   const unread = unreadCounts().total;
   $('#shadeCount').textContent = unread ? `${unread} new` : 'All caught up';
-  $('#shadeClear').style.visibility = items.some(n => !n.read_at) ? 'visible' : 'hidden';
+  $('#shadeClear').style.visibility = items.length ? 'visible' : 'hidden';
 
   body.innerHTML = items.length
     ? items.map(rowHtml).join('')
@@ -128,10 +128,15 @@ function paintShade() {
 
   $$('.notif', body).forEach(el => el.addEventListener('click', async () => {
     const id = el.dataset.id, link = el.dataset.link;
-    await supa.from('notifications').update({ read_at: new Date().toISOString() })
-      .eq('id', id).is('read_at', null);
+    const { error } = await supa.from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', id).is('read_at', null).select('id');
+    if (error) console.warn('[shade] mark-read failed:', error.message);
+    // Reflect it locally right away.
+    const now = new Date().toISOString();
+    items = items.map(n => n.id === id ? { ...n, read_at: now } : n);
+    announce(); paintShade();
     if (link) location.href = link;
-    else { load(); }
   }));
 }
 
@@ -173,9 +178,13 @@ export function mountShade() {
   tab.addEventListener('click', toggle);
   el.querySelector('.shade-scrim').addEventListener('click', close);
   $('#shadeClear').addEventListener('click', async () => {
-    await supa.from('notifications').update({ read_at: new Date().toISOString() })
-      .is('read_at', null);
-    load();
+    // "Clear" on a phone removes them, so delete rather than just mark read.
+    const { data: { user } } = await supa.auth.getUser();
+    const { error } = await supa.from('notifications').delete()
+      .eq('user_id', user?.id);
+    if (error) { console.warn('[shade] clear failed:', error.message); return; }
+    items = [];
+    announce(); paintShade();
   });
 
   // Tapping the carrier bar also opens it, like a status bar.
