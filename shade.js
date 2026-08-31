@@ -29,11 +29,39 @@ export function unreadCounts() {
 }
 
 async function load() {
-  const { data } = await supa.from('notifications')
+  const { data, error } = await supa.from('notifications')
     .select('*').order('created_at', { ascending: false }).limit(60);
-  items = data || [];
+  if (error) {
+    console.warn('[shade] could not load notifications:', error.message,
+      '\nMost likely sql/notifications.sql has not been run yet.');
+    items = [];
+  } else {
+    items = data || [];
+  }
   announce();
   paintShade();
+}
+
+/* A console helper to check the shade pipeline from the browser:
+   window.neoTestNotify() reports whether the notifications table is
+   reachable and how many rows you have. It does NOT try to insert —
+   only the database triggers may create notifications, so a client
+   insert is correctly refused and would be a misleading test. To create
+   a real one, use the SQL snippet in the README, or trigger an event
+   (send yourself a message from another account). */
+if (typeof window !== 'undefined') {
+  window.neoTestNotify = async () => {
+    const { data, error } = await supa.from('notifications')
+      .select('id', { count: 'exact', head: false }).limit(1);
+    if (error) {
+      console.warn('[shade] table not reachable:', error.message,
+        '\n→ Run sql/notifications.sql in the Supabase SQL Editor.');
+    } else {
+      console.log(`[shade] table OK. You have ${data?.length ? 'at least one' : 'no'} notification(s). ` +
+        'Open the shade with the tab at the top, tapping the carrier bar, or:',
+        "document.getElementById('shade').classList.add('open')");
+    }
+  };
 }
 
 /* ------------------------------------------------------------------ */

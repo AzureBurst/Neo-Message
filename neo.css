@@ -2088,19 +2088,19 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   position: fixed;
   top: 0; left: 50%;
   transform: translateX(-50%);
-  z-index: 70;
-  width: 120px; height: 22px;
+  z-index: 125;
+  width: 140px; height: 26px;
   border: 0; background: none; cursor: pointer;
   display: grid; place-items: center;
 }
 .shade-tab-pill {
-  width: 40px; height: 4px; border-radius: 2px;
-  background: rgba(255,255,255,.28);
+  width: 46px; height: 5px; border-radius: 3px;
+  background: rgba(255,255,255,.4);
   transition: background .15s ease, width .15s ease;
 }
-.shade-tab:hover .shade-tab-pill { background: rgba(255,255,255,.5); width: 52px; }
+.shade-tab:hover .shade-tab-pill { background: rgba(255,255,255,.7); width: 58px; }
 .shade-tab-dot {
-  position: absolute; top: 4px; right: 30px;
+  position: absolute; top: 5px; right: 34px;
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--danger);
 }
