@@ -7,6 +7,10 @@ import { SIGNUP_CODE } from './config.js';
 
 mountCarrier($('#carrier'));
 
+// Landing on the sign-in page means any "inside the phone" state is over,
+// so the next arrival at home should show the lock.
+try { sessionStorage.removeItem('neo.deep'); } catch {}
+
 // Already signed in? Go straight through.
 const { data: { session } } = await supa.auth.getSession();
 if (session) location.replace('home.html');

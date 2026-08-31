@@ -9,6 +9,7 @@ import {
   supa, requireProfile, signOut, ungate, mountCarrier, setClockSource, startPresence, $
 } from './supa.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
+import { mountShade, onNotifications, unreadCounts } from './shade.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -59,38 +60,22 @@ setInterval(paintCalIcon, 60_000);
 /* ------------------------------------------------------------------ */
 
 function badge(el, n) {
+  if (!el) return;
   if (!n) { el.hidden = true; return; }
   el.hidden = false;
   el.textContent = n > 99 ? '99+' : String(n);
 }
 
-// Instagrat: an accepted-follower count of pending things worth a look.
-// For a player that is incoming follow requests; for an admin it also
-// includes posts waiting in the moderation queue.
-async function paintGratBadge() {
-  let n = 0;
-
-  const { count: reqs } = await supa
-    .from('ig_follows')
-    .select('*', { count: 'exact', head: true })
-    .eq('followee_id', me.id)
-    .eq('accepted', false);
-  n += reqs ?? 0;
-
-  if (me.is_admin) {
-    const { count: pending } = await supa
-      .from('ig_posts')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending');
-    n += pending ?? 0;
-  }
-
-  badge($('#gratBadge'), n);
+/* Badges now come straight from unread notifications, grouped by app, so
+   every icon shows a real count that clears as you read things. */
+function paintBadges(counts) {
+  badge($('#msgBadge'),  counts.messages);
+  badge($('#gratBadge'), counts.instagrat);
+  badge($('#calBadge'),  counts.calendar);
 }
 
-// The message badge would need per-user read tracking, which the app
-// does not have yet, so it stays hidden for now rather than lie.
-paintGratBadge().catch(() => {});
+mountShade();
+onNotifications(() => paintBadges(unreadCounts()));
 
 if (me.is_admin) {
   const hint = $('#adminHint');
@@ -99,59 +84,156 @@ if (me.is_admin) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  opening an app                                                    */
+/*  lock screen                                                        */
 /*                                                                    */
-/*  Instead of a hard jump, the tapped icon grows out to fill the      */
-/*  screen the way a phone opens an app. The overlay starts as a copy  */
-/*  of the icon sitting exactly over it, then scales up; navigation    */
-/*  happens as it finishes. Anyone who prefers reduced motion, or a    */
-/*  browser that cannot animate, just gets the plain jump.            */
+/*  A phone-style lock over the home screen. Swipe up (or click, or    */
+/*  press a key) to unlock. Shown once per browser session so bouncing */
+/*  between an app and home does not re-lock every time; a fresh visit  */
+/*  or a new tab locks again, like waking a phone.                    */
+/* ------------------------------------------------------------------ */
+
+const lock = $('#lockScreen');
+
+function paintLock() {
+  const d = storyNow();
+  $('#lockTime').textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  $('#lockDate').textContent = d.toLocaleDateString([], {
+    weekday: 'long', month: 'long', day: 'numeric'
+  });
+}
+
+function setupLock() {
+  paintLock();
+  const tick = setInterval(paintLock, 15_000);
+  onClockChange?.(paintLock);
+
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  let unlocked = false;
+
+  const done = () => {
+    if (unlocked) return;
+    unlocked = true;
+    clearInterval(tick);
+    // The swipe-up animation still plays — the lock slides off the top —
+    // it just triggers on a tap now instead of a drag.
+    lock.classList.add('unlocking');
+    if (reduce) lock.remove();
+    else lock.addEventListener('transitionend', () => lock.remove(), { once: true });
+  };
+
+  lock.addEventListener('click', done);
+  lock.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); done(); }
+  });
+}
+
+/* When to lock:
+   - on a refresh of the home screen, and
+   - on arriving fresh (a login).
+   NOT when coming back from one of the apps — that is normal in-phone
+   navigation and re-locking each time would be maddening. Each app page
+   sets 'neo.deep' on load; if it is set, we came from inside and skip. */
+const navType = (performance.getEntriesByType?.('navigation')[0] || {}).type;
+const cameFromApp = sessionStorage.getItem('neo.deep') === '1';
+const lastApp = sessionStorage.getItem('neo.lastApp');
+sessionStorage.removeItem('neo.deep');           // consume it
+sessionStorage.removeItem('neo.lastApp');
+
+const shouldLock = navType === 'reload' ? true : !cameFromApp;
+
+if (shouldLock) setupLock();
+else lock.remove();
+
+/* ------------------------------------------------------------------ */
+/*  app open / close animations                                       */
+/*                                                                    */
+/*  Opening: the tapped icon grows out to fill the screen, then the    */
+/*  app loads. Closing: coming back from an app, that app shrinks back  */
+/*  down into its icon — the same motion in reverse, which closes the   */
+/*  loop and makes the home button feel like a real one. Reduced       */
+/*  motion, or a modifier-click, skips both.                          */
 /* ------------------------------------------------------------------ */
 
 const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-function openApp(tile, href) {
-  const glyph = tile.querySelector('.app-glyph');
-  const rect  = glyph.getBoundingClientRect();
+const TILE_FOR = { app: '#tileMessage', instagrat: '#tileGrat', calendar: '#tileCal' };
 
+/** Builds an overlay sitting exactly over an app's icon, styled like it. */
+function makeOverlay(glyph, rect) {
   const overlay = document.createElement('div');
-  overlay.className = 'app-open';
-  // Start life exactly where the icon is.
+  overlay.className = 'app-open ' + glyph.className.replace('app-glyph', '').trim();
   overlay.style.left   = rect.left + 'px';
   overlay.style.top    = rect.top + 'px';
   overlay.style.width  = rect.width + 'px';
   overlay.style.height = rect.height + 'px';
 
-  // Carry the icon's look into the zoom so it feels like the same object.
-  const art = getComputedStyle(glyph).backgroundImage;
-  if (art && art !== 'none') {
-    overlay.style.backgroundImage = art;
+  const cs = getComputedStyle(glyph);
+  if (cs.backgroundImage && cs.backgroundImage !== 'none') {
+    overlay.style.backgroundImage = cs.backgroundImage;
     overlay.style.backgroundSize = 'cover';
     overlay.style.backgroundPosition = 'center';
-  } else {
-    overlay.textContent = glyph.textContent;
   }
-  document.body.appendChild(overlay);
+  overlay.style.backgroundColor = cs.backgroundColor;
+  // Carry the icon's contents (glyph char, or the calendar date markup).
+  overlay.innerHTML = glyph.innerHTML || '';
+  if (!overlay.innerHTML) overlay.textContent = glyph.textContent;
+  return overlay;
+}
 
-  // Compute the scale needed to cover the viewport from the icon's size.
+function coverTransform(rect) {
   const scale = Math.ceil(Math.max(
     window.innerWidth  / rect.width,
     window.innerHeight / rect.height) * 1.4);
   const cx = window.innerWidth / 2  - (rect.left + rect.width / 2);
   const cy = window.innerHeight / 2 - (rect.top + rect.height / 2);
+  return `translate(${cx}px, ${cy}px) scale(${scale})`;
+}
+
+function openApp(tile, href) {
+  const glyph = tile.querySelector('.app-glyph');
+  const rect  = glyph.getBoundingClientRect();
+  const overlay = makeOverlay(glyph, rect);
+  document.body.appendChild(overlay);
 
   requestAnimationFrame(() => {
-    overlay.style.transform = `translate(${cx}px, ${cy}px) scale(${scale})`;
+    overlay.style.transform = coverTransform(rect);
     overlay.style.opacity = '1';
   });
 
-  // Navigate as the growth finishes; the fallback timer covers browsers
-  // that never fire transitionend.
   let went = false;
   const go = () => { if (!went) { went = true; location.href = href; } };
   overlay.addEventListener('transitionend', go, { once: true });
   setTimeout(go, 520);
 }
+
+/** The reverse: a full-screen overlay collapses into an app's icon. */
+function shrinkInto(appName) {
+  const sel = TILE_FOR[appName];
+  const tile = sel && document.querySelector(sel);
+  const glyph = tile && tile.querySelector('.app-glyph');
+  if (!glyph) return;
+
+  const rect = glyph.getBoundingClientRect();
+  const overlay = makeOverlay(glyph, rect);
+  overlay.style.transition = 'none';
+  overlay.style.transform = coverTransform(rect);   // start covering the screen
+  overlay.style.opacity = '1';
+  document.body.appendChild(overlay);
+
+  // Two frames: let the "covering" state paint, then enable the
+  // transition and fall back to the icon's own spot, fading out.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    overlay.style.transition = '';
+    overlay.style.transform = 'translate(0,0) scale(1)';
+    overlay.style.opacity = '0';
+  }));
+
+  overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+  setTimeout(() => overlay.remove(), 700);
+}
+
+// Play the shrink if we just came back from an app.
+if (cameFromApp && lastApp && !reduceMotion) shrinkInto(lastApp);
 
 document.querySelectorAll('.app-icon').forEach(tile => {
   tile.addEventListener('click', (e) => {

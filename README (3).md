@@ -1,19 +1,16 @@
-# Chat font
+# Send sound
 
-The message stream is set in **Inpin HongMengTi** (印品鸿蒙体).
+By default the outgoing-message tone is generated in the browser, so
+there is no file here and nothing to download.
 
-Font files are not included here — licensing varies, so download it
-yourself and drop it in this folder named exactly:
+To use your own instead, drop files in this folder named exactly:
 
-    InpinHongMengTi.woff2     (preferred)
-    InpinHongMengTi.woff      (optional fallback)
-    InpinHongMengTi.ttf       (optional fallback)
+    sent.mp3       plays when you send
+    received.mp3   plays when a message arrives
 
-Any one of the three is enough. If you only have a `.ttf` or `.otf`,
-convert it at a tool like transfonter.org or cloudconvert — woff2 is
-roughly a third of the size, which matters on a phone at the table.
+Either one takes over on its own; you do not need both. Keep it short — under half a second — and
+quiet. You will hear it several hundred times in a session, so anything
+with a tail or a sharp attack gets old fast.
 
-Until a file is present the app falls back through HarmonyOS Sans SC,
-Noto Sans SC, PingFang SC and Microsoft YaHei, so it stays readable
-either way. Change the order in the `--font-chat` variable at the top
-of `css/neo.css`.
+Players can silence it with the 🔊 button in the sidebar. That setting
+is per browser, so muting on your laptop does not mute anyone else.

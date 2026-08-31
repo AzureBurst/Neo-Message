@@ -1,13 +1,19 @@
-# App icons
+# Chat font
 
-Drop square PNGs here and the home screen uses them in place of the
-built-in glyphs:
+The message stream is set in **Inpin HongMengTi** (印品鸿蒙体).
 
-    message.png     the Neo Message tile
-    instagrat.png   the Instagrat tile
+Font files are not included here — licensing varies, so download it
+yourself and drop it in this folder named exactly:
 
-Recommended 240×240 or larger, square. Rounded corners are applied for
-you, so supply a full square and let the mask do the work.
+    InpinHongMengTi.woff2     (preferred)
+    InpinHongMengTi.woff      (optional fallback)
+    InpinHongMengTi.ttf       (optional fallback)
 
-No file needed — until one is present each tile shows a simple glyph, so
-the home screen works out of the box.
+Any one of the three is enough. If you only have a `.ttf` or `.otf`,
+convert it at a tool like transfonter.org or cloudconvert — woff2 is
+roughly a third of the size, which matters on a phone at the table.
+
+Until a file is present the app falls back through HarmonyOS Sans SC,
+Noto Sans SC, PingFang SC and Microsoft YaHei, so it stays readable
+either way. Change the order in the `--font-chat` variable at the top
+of `css/neo.css`.

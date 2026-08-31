@@ -17,6 +17,7 @@ import {
   paintAvatar, uploadFile, shrinkImage, lightbox, esc, toast, startPresence,
   shortTime, fullStamp, $, $$
 } from './supa.js';
+import { mountShade } from './shade.js';
 import { loadClock, storyNow } from './clock.js';
 import { attachEmoji } from './emoji.js';
 
@@ -28,6 +29,11 @@ setClockSource(storyNow);
 ungate();
 mountCarrier($('#carrier'));
 startPresence();
+mountShade();
+
+/* Mark that we went into an app, so returning to the home screen does
+   not re-trigger the lock. Cleared by the home screen when consumed. */
+try { sessionStorage.setItem('neo.deep', '1'); sessionStorage.setItem('neo.lastApp', 'instagrat'); } catch {}
 
 if (me.is_admin) $('.ig-admin-tab').hidden = false;
 
