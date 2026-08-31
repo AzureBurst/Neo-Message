@@ -15,6 +15,7 @@ import {
   supa, requireProfile, ungate, mountCarrier, setClockSource,
   startPresence, esc, toast, $, $$
 } from './supa.js';
+import { mountShade } from './shade.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
 
 const me = await requireProfile();
@@ -25,6 +26,7 @@ setClockSource(storyNow);
 ungate();
 mountCarrier($('#carrier'));
 startPresence();
+mountShade();
 
 /* Mark that we went into an app, so returning to the home screen does
    not re-trigger the lock. Cleared by the home screen when consumed. */

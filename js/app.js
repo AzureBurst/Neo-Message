@@ -8,6 +8,7 @@ import {
   lightbox, uploadFile, shrinkImage, $, $$
 } from './supa.js';
 import { mountPuppetBar, openNpcModal, hasHome } from './npc.js';
+import { mountShade } from './shade.js';
 import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
 import { playSent, playReceived, isMuted, toggleMute } from './sfx.js';
 import { EMOJI } from './emoji.js';
@@ -20,6 +21,7 @@ await loadClock();
 setClockSource(storyNow);
 mountCarrier($('#carrier'));
 startPresence();
+mountShade();
 
 /* Mark that we went into an app, so returning to the home screen does
    not re-trigger the lock. Cleared by the home screen when consumed. */

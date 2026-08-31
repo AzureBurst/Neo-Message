@@ -9,6 +9,7 @@ import {
   supa, requireProfile, signOut, ungate, mountCarrier, setClockSource, startPresence, $
 } from './supa.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
+import { mountShade, onNotifications, unreadCounts } from './shade.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -59,38 +60,22 @@ setInterval(paintCalIcon, 60_000);
 /* ------------------------------------------------------------------ */
 
 function badge(el, n) {
+  if (!el) return;
   if (!n) { el.hidden = true; return; }
   el.hidden = false;
   el.textContent = n > 99 ? '99+' : String(n);
 }
 
-// Instagrat: an accepted-follower count of pending things worth a look.
-// For a player that is incoming follow requests; for an admin it also
-// includes posts waiting in the moderation queue.
-async function paintGratBadge() {
-  let n = 0;
-
-  const { count: reqs } = await supa
-    .from('ig_follows')
-    .select('*', { count: 'exact', head: true })
-    .eq('followee_id', me.id)
-    .eq('accepted', false);
-  n += reqs ?? 0;
-
-  if (me.is_admin) {
-    const { count: pending } = await supa
-      .from('ig_posts')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending');
-    n += pending ?? 0;
-  }
-
-  badge($('#gratBadge'), n);
+/* Badges now come straight from unread notifications, grouped by app, so
+   every icon shows a real count that clears as you read things. */
+function paintBadges(counts) {
+  badge($('#msgBadge'),  counts.messages);
+  badge($('#gratBadge'), counts.instagrat);
+  badge($('#calBadge'),  counts.calendar);
 }
 
-// The message badge would need per-user read tracking, which the app
-// does not have yet, so it stays hidden for now rather than lie.
-paintGratBadge().catch(() => {});
+mountShade();
+onNotifications(() => paintBadges(unreadCounts()));
 
 if (me.is_admin) {
   const hint = $('#adminHint');
