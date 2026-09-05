@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Neomail</title>
+<meta name="theme-color" content="#08080A">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/neo.css">
+</head>
+<body class="gated">
+  <div id="gateNote" class="gate-note">
+    <span>Checking your session…</span>
+    <a href="index.html" class="gate-escape">Go to sign in</a>
+  </div>
+
+  <div id="carrier"></div>
+
+  <header class="mail-top">
+    <a class="ig-home" href="home.html" title="Home">⌂</a>
+    <span class="mail-word">Neomail</span>
+    <nav class="mail-tabs" id="mailTabs">
+      <button class="mail-tab is-on" data-box="inbox">Inbox</button>
+      <button class="mail-tab" data-box="starred">Starred</button>
+      <button class="mail-tab" data-box="archived">Archive</button>
+      <button class="mail-tab mail-admin-tab" data-box="sent" hidden>Sent</button>
+    </nav>
+    <button class="ig-post-btn mail-admin-tab" id="mailCompose" title="Compose" hidden>✎</button>
+    <button class="icon-btn mail-admin-tab" id="mailTags" title="Account tags" hidden>#</button>
+  </header>
+
+  <main class="mail-main" id="mailMain">
+    <div class="ig-loading">Loading…</div>
+  </main>
+
+  <div id="modalRoot"></div>
+
+<script type="module" src="js/mail.js"></script>
+</body>
+</html>

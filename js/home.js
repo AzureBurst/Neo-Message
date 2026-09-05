@@ -37,6 +37,7 @@ function tryIcon(glyphEl, file) {
 }
 tryIcon(document.querySelector('[data-icon="message"]'), 'assets/apps/message.png');
 tryIcon(document.querySelector('[data-icon="instagrat"]'), 'assets/apps/instagrat.png');
+tryIcon(document.querySelector('[data-icon="mail"]'), 'assets/apps/mail.png');
 
 /* The calendar tile shows the current story date, like a real phone's
    calendar icon. Painted from storyNow() so it reflects the GM's clock,
@@ -72,6 +73,7 @@ function paintBadges(counts) {
   badge($('#msgBadge'),  counts.messages);
   badge($('#gratBadge'), counts.instagrat);
   badge($('#calBadge'),  counts.calendar);
+  badge($('#mailBadge'), counts.mail);
 }
 
 mountShade();

@@ -2178,3 +2178,98 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 @media (prefers-reduced-motion: reduce) {
   .shade-panel, .shade-scrim { transition: none; }
 }
+
+/* =====================================================================
+   NEOMAIL
+   ===================================================================== */
+
+.mail-top {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--edge);
+  max-width: 820px; margin: 0 auto;
+}
+.mail-word { font: 700 17px var(--font-ui); }
+.mail-tabs { display: flex; gap: 2px; margin-left: 8px; }
+.mail-tab {
+  border: 0; background: none; color: var(--muted);
+  font: 600 13px var(--font-ui); padding: 6px 10px; border-radius: 8px; cursor: pointer;
+}
+.mail-tab.is-on { background: var(--panel-3); color: var(--text); }
+#mailCompose { margin-left: auto; }
+
+.mail-main { max-width: 820px; margin: 0 auto; padding: 12px; padding-bottom: 60px; }
+
+/* list */
+.mail-row {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 11px 10px; border: 0; border-bottom: 1px solid var(--edge);
+  background: none; color: var(--text); text-align: left; cursor: pointer;
+}
+.mail-row:hover { background: var(--panel-2); }
+.mail-row.unread .mail-from,
+.mail-row.unread .mail-subject { font-weight: 700; color: var(--text); }
+.mail-row.unread { background: rgba(47,107,255,.05); }
+
+.mail-star { font-size: 16px; color: var(--dim); flex: 0 0 auto; }
+.mail-star.on { color: #f5c451; }
+.mail-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mail-row-top { display: flex; justify-content: space-between; gap: 8px; }
+.mail-from { font: 600 14px var(--font-ui); }
+.mail-time { color: var(--dim); font: 500 11px var(--font-mono); flex: 0 0 auto; }
+.mail-subject { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-snippet { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* thread */
+.mail-thread-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.mail-thread-actions { display: flex; gap: 4px; }
+.mail-thread-subject { font: 700 20px var(--font-ui); margin: 4px 4px 16px; }
+.mail-msgs { display: flex; flex-direction: column; gap: 12px; }
+.mail-msg {
+  border: 1px solid var(--edge); border-radius: 12px;
+  background: var(--panel); padding: 12px 14px;
+}
+.mail-msg.from-me-side { background: var(--panel-2); border-color: var(--dim); }
+.mail-msg-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.mail-msg-head strong { font: 600 14px var(--font-ui); }
+.mail-addr { font-size: 12px; color: var(--muted); }
+.mail-msg-time { margin-left: auto; font-size: 11px; color: var(--dim); }
+.mail-msg-body { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+
+.mail-reply { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.mail-reply textarea {
+  width: 100%; padding: 11px; border-radius: 10px;
+  background: var(--ink); border: 1px solid var(--edge); color: var(--text);
+  font: inherit; resize: vertical;
+}
+.mail-reply .btn { align-self: flex-end; }
+
+/* compose */
+.modal-wide { width: min(640px, 96vw); }
+.mail-from-row { display: flex; gap: 8px; }
+.mail-from-row input { flex: 1; }
+.mail-picklist {
+  max-height: 200px; overflow-y: auto;
+  border: 1px solid var(--edge); border-radius: 10px; padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.mail-pick { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; font-size: 14px; }
+.mail-pick:hover { background: var(--panel-2); }
+
+/* tag manager */
+.tag-manage { display: flex; flex-direction: column; gap: 10px; }
+.tag-user {
+  border: 1px solid var(--edge); border-radius: 10px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.tag-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--panel-3); border-radius: 999px; padding: 3px 10px; font-size: 12px;
+}
+.tag-chip button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 12px; }
+.tag-add { display: flex; gap: 6px; }
+.tag-add input { flex: 1; }
+
+.mail-admin-tab#mailTags { font-family: var(--font-mono); font-size: 16px; }
