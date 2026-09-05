@@ -215,16 +215,12 @@ export function paintAvatar(el, url, name) {
 
 export function toast(msg, kind = 'info') {
   const t = document.createElement('div');
+  t.className = `neo-toast ${kind}`;
   t.textContent = msg;
-  t.style.cssText =
-    'position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:500;' +
-    'padding:11px 18px;border-radius:10px;font:500 13.5px Inter,system-ui;' +
-    'box-shadow:0 12px 40px rgba(0,0,0,.5);max-width:88vw;text-align:center;' +
-    (kind === 'error'
-      ? 'background:#3A1A1F;color:#FFB3BB;border:1px solid #7A2B36'
-      : 'background:#1D2532;color:#E6EAF2;border:1px solid #2A3444');
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3200);
+  // Let it settle in, then fade out and remove.
+  requestAnimationFrame(() => t.classList.add('in'));
+  setTimeout(() => { t.classList.remove('in'); setTimeout(() => t.remove(), 260); }, 3000);
 }
 
 /** Click-to-zoom for any image. */

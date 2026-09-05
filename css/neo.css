@@ -77,6 +77,8 @@ body {
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 h1, h2, h3, h4, button, label, th {
@@ -2273,3 +2275,90 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .tag-add input { flex: 1; }
 
 .mail-admin-tab#mailTags { font-family: var(--font-mono); font-size: 16px; }
+
+/* =====================================================================
+   PREMIUM POLISH
+   Small, systemic upgrades: quieter scrollbars, deeper icons, a proper
+   spinner, a frosted toast, and images that fade in instead of popping.
+   ===================================================================== */
+
+/* Thin, unobtrusive scrollbars. */
+* { scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: var(--edge); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--dim); background-clip: content-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* App icons: iOS-ish squircle, soft depth, a faint top highlight. */
+.app-glyph {
+  border-radius: 22%;
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .10);
+  position: relative;
+}
+.app-glyph::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255,255,255,.12), transparent 42%);
+  pointer-events: none;
+}
+.app-glyph.has-art::after { background: linear-gradient(180deg, rgba(255,255,255,.06), transparent 40%); }
+
+/* Badges get a subtle ring and a pop when they appear. */
+.app-badge {
+  box-shadow: 0 0 0 2px var(--ink), 0 2px 6px rgba(0,0,0,.4);
+  animation: badge-pop .28s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes badge-pop { from { transform: translateX(34px) scale(0); } to { transform: translateX(34px) scale(1); } }
+
+/* A real spinner in place of bare "Loading…" text. */
+.ig-loading, .mail-main > .ig-loading, .cal-main > .ig-loading {
+  color: var(--dim);
+  font-size: 0;                       /* hide the literal word */
+}
+.ig-loading::before {
+  content: '';
+  display: inline-block;
+  width: 26px; height: 26px;
+  border: 3px solid var(--edge);
+  border-top-color: var(--sent);
+  border-radius: 50%;
+  animation: neo-spin .7s linear infinite;
+}
+@keyframes neo-spin { to { transform: rotate(360deg); } }
+
+/* Images ease in once loaded rather than snapping. */
+.ig-card-media img, .mail-msg img, .bubble img {
+  transition: opacity .3s ease;
+}
+
+/* Frosted toast with a soft rise. */
+.neo-toast {
+  position: fixed; left: 50%; bottom: 30px;
+  transform: translate(-50%, 12px);
+  z-index: 500; max-width: 88vw; text-align: center;
+  padding: 12px 20px; border-radius: 13px;
+  font: 500 13.5px var(--font-body);
+  background: rgba(28, 28, 31, .72);
+  border: 1px solid rgba(255, 255, 255, .09);
+  color: var(--text);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .55);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  opacity: 0;
+  transition: opacity .24s ease, transform .24s cubic-bezier(.4,0,.2,1);
+}
+.neo-toast.in { opacity: 1; transform: translate(-50%, 0); }
+.neo-toast.error { background: rgba(58, 26, 31, .78); border-color: rgba(122, 43, 54, .8); color: #ffc4cb; }
+.neo-toast.ok    { border-color: rgba(55, 211, 153, .4); }
+
+/* Keyboard focus that looks intentional, not the default halo. */
+:focus-visible { outline: 2px solid var(--sent); outline-offset: 2px; border-radius: 4px; }
+button:focus:not(:focus-visible) { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-badge, .neo-toast { animation: none; transition: none; }
+  .ig-loading::before { animation-duration: 1.4s; }
+}
