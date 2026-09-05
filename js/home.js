@@ -10,6 +10,7 @@ import {
 } from './supa.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
 import { mountShade, onNotifications, unreadCounts } from './shade.js';
+import { playSound } from './sfx.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -118,6 +119,7 @@ function setupLock() {
     clearInterval(tick);
     // The swipe-up animation still plays — the lock slides off the top —
     // it just triggers on a tap now instead of a drag.
+    playSound('unlock');
     lock.classList.add('unlocking');
     if (reduce) lock.remove();
     else lock.addEventListener('transitionend', () => lock.remove(), { once: true });
@@ -192,6 +194,7 @@ function coverTransform(rect) {
 }
 
 function openApp(tile, href) {
+  playSound('open');
   const glyph = tile.querySelector('.app-glyph');
   const rect  = glyph.getBoundingClientRect();
   const overlay = makeOverlay(glyph, rect);

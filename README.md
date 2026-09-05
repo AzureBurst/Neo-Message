@@ -1041,3 +1041,89 @@ these. Safe to re-run.
   event a notification pointed you to.
 
 Re-upload the app's JavaScript and CSS alongside running the SQL.
+
+---
+
+# Neomail
+
+A dummy email app. The GM writes mail to players — everyone, a tagged
+group, or picked accounts — and players read and reply. Each recipient
+gets a private thread, so one player's reply is never seen by another.
+
+## Setup
+
+Run `sql/mail.sql` once in the SQL Editor, after `schema.sql` (and after
+`notifications.sql` if you use notifications, so mail can raise them).
+Set `MAIL_DOMAIN` in `js/config.js` if you want addresses to read as
+something other than `name@neo.mail`.
+
+## Addresses
+
+Everyone has an address built from their username — `azure@neo.mail`.
+Nothing is ever really sent anywhere; the address is set dressing.
+
+## What the GM can do
+
+- **Compose** (✎). Choose the sender name and address — your own, or any
+  made-up NPC ("Unknown", "recruiter@blacksite.mail", whatever). Pick the
+  audience: everyone, a tag, or specific accounts. Write a subject and
+  body and send.
+- **Tags** (#). Label accounts (e.g. `rebels`, `staff`, `suspects`), then
+  mail a whole tag at once. Add and remove tags per account here.
+- **Sent** tab. Every thread you sent, with players' replies. Open one to
+  read and reply — your reply keeps the same sender identity.
+
+## What players do
+
+Read mail in the **Inbox**, **star** to keep, **archive** or **delete**
+to tidy (delete only removes it from their own mailbox), and **reply**.
+Replies go privately back to the GM. Players do not compose brand-new
+mail in this version.
+
+## Ties into the phone
+
+New mail and replies raise a notification (with sender), bump the Neomail
+badge on the home screen, and appear in the pull-down shade. Opening a
+mail clears its notification. All of it updates live.
+
+## Deliberate choices
+
+- **Private replies.** A broadcast makes one thread per recipient rather
+  than a shared mailing list, so replies stay between each player and the
+  GM — usually what you want for secrets at the table. A shared
+  mailing-list mode could be added later.
+- **GM-originated only.** Players reply but do not start new mail. Letting
+  players email each other is a natural future addition.
+
+## Premium polish
+
+A pass of small, systemic upgrades to make it feel less like a web page:
+
+- **App icons** now have an iOS-style squircle shape, soft depth, and a
+  faint top gloss. Badges sit in a ring and pop when they appear.
+- **Loading** shows a real spinner instead of the word "Loading".
+- **Toasts** are frosted glass that rise in and fade out.
+- **Scrollbars** are thin and quiet.
+- **Focus rings** are clean and only show for keyboard users.
+- Text is smoothed, images ease rather than snap.
+- The **Neomail icon** is now the custom artwork at
+  `assets/apps/mail.png`. Drop your own square PNGs at
+  `assets/apps/message.png`, `instagrat.png`, `calendar.png` to give the
+  other apps matching custom icons.
+
+All of it respects reduce-motion.
+
+## Sound design
+
+The phone now has a small sound palette, all generated in the browser
+(nothing to host):
+
+- **sent** — your message or mail goes out (two notes rising)
+- **received** — a message arrives (two notes falling)
+- **unlock** — unlocking the phone (a soft ascending triad)
+- **open** — opening an app (a quick upward sweep)
+- **notify** — a notification lands (a gentle bell), which chimes only
+  for genuinely new arrivals, never on page load
+
+All of it obeys the 🔊 mute button in the messenger sidebar, and any
+sound can be replaced with your own file — see `assets/sfx/README.md`.

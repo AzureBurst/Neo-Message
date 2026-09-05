@@ -15,6 +15,7 @@ import {
   startPresence, paintAvatar, esc, toast, fullStamp, shortTime, $, $$
 } from './supa.js';
 import { MAIL_DOMAIN } from './config.js';
+import { playSound } from './sfx.js';
 import { loadClock, storyNow } from './clock.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 
@@ -192,6 +193,7 @@ async function openThread(id) {
     e.target.disabled = true;
     const { error } = await supa.rpc('mail_reply', { p_thread: id, p_body: body });
     if (error) { toast(error.message, 'error'); e.target.disabled = false; return; }
+    playSound('sent');
     openThread(id);
   });
 }
@@ -315,6 +317,7 @@ async function openCompose() {
     });
     if (error) { msg(error.message); e.target.disabled = false; return; }
     close();
+    playSound('sent');
     toast(`Sent to ${data} recipient${data === 1 ? '' : 's'}.`, 'ok');
     if (box === 'sent') loadBox();
   });

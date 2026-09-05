@@ -11,9 +11,11 @@
 // =====================================================================
 
 import { supa, esc, $, $$ } from './supa.js';
+import { playSound } from './sfx.js';
 
 let items = [];
 const listeners = new Set();
+let seenIds = null;   // null until the first load, so we don't chime on arrival
 
 export function onNotifications(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function announce() { listeners.forEach(fn => { try { fn(items); } catch {} }); }
@@ -54,6 +56,16 @@ async function load() {
   } else {
     items = data || [];
   }
+
+  // Chime once for genuinely new, unread notifications — but never on the
+  // very first load of the page (seenIds starts null).
+  const currentUnread = items.filter(n => !n.read_at).map(n => n.id);
+  if (seenIds !== null) {
+    const isNew = currentUnread.some(id => !seenIds.has(id));
+    if (isNew) playSound('notify');
+  }
+  seenIds = new Set(currentUnread);
+
   announce();
   paintShade();
 }
