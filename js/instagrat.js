@@ -735,20 +735,35 @@ function openTagger({ imageUrl, postId = null, existing = [], onSave }) {
 
   $('#tagSave', root).addEventListener('click', async (e) => {
     e.target.disabled = true;
-    await onSave(tags);
-    close();
+    e.target.textContent = 'Saving…';
+    try {
+      await onSave(tags);
+      close();
+    } catch (err) {
+      // Never leave the sheet stuck: re-enable and say what went wrong.
+      toast(err.message || 'Could not save tags.', 'error');
+      console.warn('[tags] save failed:', err);
+      e.target.disabled = false;
+      e.target.textContent = 'Save tags';
+    }
   });
 
   drawMarkers(); renderList();
 }
 
 /** Writes the tag set for a post: clears what was there, inserts anew. */
+/** Writes the tag set for a post: clears what was there, inserts anew.
+    Throws on failure so the caller can show it rather than hang. */
 async function saveTags(postId, tags) {
-  await supa.from('ig_post_tags').delete().eq('post_id', postId);
+  const del = await supa.from('ig_post_tags').delete().eq('post_id', postId);
+  if (del.error) throw new Error(del.error.message);
+
   if (tags.length) {
-    const rows = tags.map(t => ({ post_id: postId, tagged_id: t.tagged_id, x: t.x, y: t.y }));
-    const { error } = await supa.from('ig_post_tags').insert(rows);
-    if (error) toast(error.message, 'error');
+    const rows = tags.map(t => ({
+      post_id: postId, tagged_id: t.tagged_id, x: t.x, y: t.y
+    }));
+    const ins = await supa.from('ig_post_tags').insert(rows);
+    if (ins.error) throw new Error(ins.error.message);
   }
 }
 
