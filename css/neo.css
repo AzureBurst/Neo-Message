@@ -2362,3 +2362,7 @@ button:focus:not(:focus-visible) { outline: none; }
   .app-badge, .neo-toast { animation: none; transition: none; }
   .ig-loading::before { animation-duration: 1.4s; }
 }
+
+/* The tagger opens above an already-open sheet (the post composer), so
+   it needs to sit on a higher layer than the standard scrim. */
+.scrim-top { z-index: 140; }

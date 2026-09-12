@@ -651,20 +651,42 @@ async function loadTags(postId, root) {
 function openTagger({ imageUrl, postId = null, existing = [], onSave }) {
   let tags = existing.slice();   // { tagged_id, screen_name, x, y }
 
-  const { root, close } = sheet({
-    title: 'Tag people',
-    body: `
-      <p class="muted small">Tap the photo where someone is, then pick who.</p>
-      <div class="tagger" id="tagWrap">
-        <img src="${esc(imageUrl)}" alt="">
-        <div class="tagger-layer" id="tagLayer"></div>
+  /* The tagger gets its own layer rather than reusing #modalRoot. The
+     composer lives in #modalRoot, and wiping it mid-compose would throw
+     away the half-written post (and every element the composer's own
+     handlers still point at). */
+  const host = document.createElement('div');
+  host.id = 'taggerRoot';
+  document.body.appendChild(host);
+
+  host.innerHTML = `
+    <div class="scrim scrim-top">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head"><h3>Tag people</h3>
+          <button class="icon-btn" data-close>✕</button></div>
+        <div class="modal-body">
+          <p class="muted small">Tap the photo where someone is, then pick who.</p>
+          <div class="tagger" id="tagWrap">
+            <img src="${esc(imageUrl)}" alt="">
+            <div class="tagger-layer" id="tagLayer"></div>
+          </div>
+          <div class="tagger-search" id="tagSearchWrap" hidden>
+            <input id="tagSearch" placeholder="Search screen names" autocomplete="off">
+            <div class="ig-people" id="tagResults"></div>
+          </div>
+          <div id="tagList" class="tagger-list"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-primary" id="tagSave">Save tags</button>
+        </div>
       </div>
-      <div class="tagger-search" id="tagSearchWrap" hidden>
-        <input id="tagSearch" placeholder="Search screen names" autocomplete="off">
-        <div class="ig-people" id="tagResults"></div>
-      </div>
-      <div id="tagList" class="tagger-list"></div>`,
-    footer: `<button class="btn btn-primary" id="tagSave">Save tags</button>`
+    </div>`;
+
+  const root = host;
+  const close = () => host.remove();
+  $$('[data-close]', root).forEach(b => b.addEventListener('click', close));
+  $('.scrim', root).addEventListener('click', e => {
+    if (e.target.classList.contains('scrim')) close();
   });
 
   const wrap = $('#tagWrap', root);
@@ -1173,8 +1195,11 @@ function openComposer() {
       existing: pendingTags,
       onSave: (tags) => {
         pendingTags = tags;
-        $('#igTagList').textContent = tags.length
-          ? 'Tagged: ' + tags.map(t => '@' + t.screen_name).join(', ') : '';
+        const listEl = $('#igTagList');
+        if (listEl) {
+          listEl.textContent = tags.length
+            ? 'Tagged: ' + tags.map(t => '@' + t.screen_name).join(', ') : '';
+        }
       }
     });
   });
