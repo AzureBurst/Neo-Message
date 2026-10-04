@@ -1,16 +1,15 @@
-# Send sound
+# Sounds
 
-By default the outgoing-message tone is generated in the browser, so
-there is no file here and nothing to download.
+All interface sounds are generated in the browser, so this folder can be
+empty and everything still works. To use your own instead, drop a file
+here named exactly for the sound you want to replace:
 
-To use your own instead, drop files in this folder named exactly:
+    sent.mp3       your message / mail goes out
+    received.mp3   a message arrives
+    unlock.mp3     the phone unlocks
+    open.mp3       an app opens
+    notify.mp3     a notification lands
 
-    sent.mp3       plays when you send
-    received.mp3   plays when a message arrives
-
-Either one takes over on its own; you do not need both. Keep it short — under half a second — and
-quiet. You will hear it several hundred times in a session, so anything
-with a tail or a sharp attack gets old fast.
-
-Players can silence it with the 🔊 button in the sidebar. That setting
-is per browser, so muting on your laptop does not mute anyone else.
+Any one takes over on its own; you never need all of them. Keep them
+short and quiet — they play often. Players can silence everything with
+the 🔊 button in the messenger sidebar; that setting is per browser.

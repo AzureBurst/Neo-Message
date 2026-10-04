@@ -15,7 +15,7 @@ import {
   supa, requireProfile, ungate, mountCarrier, setClockSource,
   startPresence, esc, toast, $, $$
 } from './supa.js';
-import { mountShade } from './shade.js';
+import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
 
 const me = await requireProfile();
@@ -353,4 +353,18 @@ supa.channel('cal-live')
 
 onClockChange(() => render());
 
-loadMonth();
+// A notification deep link opens the calendar on that event's date.
+const wantEvent = new URLSearchParams(location.search).get('event');
+if (wantEvent) {
+  supa.from('calendar_events').select('start_date').eq('id', wantEvent).maybeSingle()
+    .then(({ data }) => {
+      if (data?.start_date) {
+        view = startOfMonth(parseYmd(data.start_date));
+        selected = data.start_date;
+      }
+      clearNotificationsFor(wantEvent);
+      loadMonth();
+    });
+} else {
+  loadMonth();
+}

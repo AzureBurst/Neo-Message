@@ -8,7 +8,7 @@ import {
   lightbox, uploadFile, shrinkImage, $, $$
 } from './supa.js';
 import { mountPuppetBar, openNpcModal, hasHome } from './npc.js';
-import { mountShade } from './shade.js';
+import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
 import { playSent, playReceived, isMuted, toggleMute } from './sfx.js';
 import { EMOJI } from './emoji.js';
@@ -224,6 +224,9 @@ async function openThread(id) {
   state.openId = id;
   const t = state.threads.find(x => x.id === id);
   if (!t) return;
+
+  // Opening a thread clears its message notification, like a phone.
+  clearNotificationsFor(id);
 
   $('#panes').classList.add('reading');
   $('#convoName').textContent = t.name;
@@ -1001,3 +1004,9 @@ supa.channel('neo-messages')
 /* ------------------------------------------------------------------ */
 
 await loadThreads();
+
+// Deep link from a notification: open the specified conversation.
+const wantConvo = new URLSearchParams(location.search).get('c');
+if (wantConvo && state.threads.some(t => t.id === wantConvo)) {
+  openThread(wantConvo);
+}

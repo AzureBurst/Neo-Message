@@ -11,21 +11,39 @@
 // =====================================================================
 
 import { supa, esc, $, $$ } from './supa.js';
+import { playSound } from './sfx.js';
 
 let items = [];
 const listeners = new Set();
+let seenIds = null;   // null until the first load, so we don't chime on arrival
 
 export function onNotifications(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function announce() { listeners.forEach(fn => { try { fn(items); } catch {} }); }
 
 export function unreadCounts() {
-  const by = { messages: 0, instagrat: 0, calendar: 0, total: 0 };
+  const by = { messages: 0, instagrat: 0, calendar: 0, mail: 0, flight: 0, total: 0 };
   for (const n of items) {
     if (n.read_at) continue;
     by[n.app] = (by[n.app] || 0) + 1;
     by.total += 1;
   }
   return by;
+}
+
+/* Mark read every unread notification about a particular thing — a
+   conversation, a post, a profile. Called when you open that thing, so
+   its badge clears the way a phone's does. Safe to call even before the
+   shade has mounted. */
+export async function clearNotificationsFor(refId) {
+  if (!refId) return;
+  await supa.from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('ref_id', refId).is('read_at', null);
+  // The realtime subscription will refresh; if it is not mounted yet,
+  // update our local copy so counts are right immediately.
+  items = items.map(n => n.ref_id === refId && !n.read_at
+    ? { ...n, read_at: new Date().toISOString() } : n);
+  announce();
 }
 
 async function load() {
@@ -38,6 +56,16 @@ async function load() {
   } else {
     items = data || [];
   }
+
+  // Chime once for genuinely new, unread notifications — but never on the
+  // very first load of the page (seenIds starts null).
+  const currentUnread = items.filter(n => !n.read_at).map(n => n.id);
+  if (seenIds !== null) {
+    const isNew = currentUnread.some(id => !seenIds.has(id));
+    if (isNew) playSound('notify');
+  }
+  seenIds = new Set(currentUnread);
+
   announce();
   paintShade();
 }
@@ -69,7 +97,7 @@ if (typeof window !== 'undefined') {
 /* ------------------------------------------------------------------ */
 
 const ICON = {
-  messages: '✉', instagrat: '◎', calendar: '📅'
+  messages: '✉', instagrat: '◎', calendar: '📅', mail: '📧', flight: '✈'
 };
 
 function timeAgo(iso) {
@@ -84,13 +112,17 @@ function rowHtml(n) {
   const label = n.count > 1 && n.kind === 'message'
     ? `${n.count} new messages`
     : (n.body || '');
+  const av = n.actor_avatar
+    ? `<span class="notif-ic has-av" style="background-image:url('${esc(n.actor_avatar)}')"></span>`
+    : `<span class="notif-ic">${ICON[n.app] || '•'}</span>`;
   return `
     <button class="notif ${n.read_at ? 'read' : ''}" data-id="${esc(n.id)}" data-link="${esc(n.link || '')}">
-      <span class="notif-ic">${ICON[n.app] || '•'}</span>
+      ${av}
       <span class="notif-main">
         <span class="notif-title">${esc(n.title)}${n.count > 1 && n.kind !== 'message' ? ` <span class="notif-x">×${n.count}</span>` : ''}</span>
         <span class="notif-body">${esc(label)}</span>
       </span>
+      <span class="notif-app-ic">${ICON[n.app] || ''}</span>
       <span class="notif-time">${timeAgo(n.created_at)}</span>
     </button>`;
 }
@@ -100,7 +132,7 @@ function paintShade() {
   if (!body) return;
   const unread = unreadCounts().total;
   $('#shadeCount').textContent = unread ? `${unread} new` : 'All caught up';
-  $('#shadeClear').style.visibility = items.some(n => !n.read_at) ? 'visible' : 'hidden';
+  $('#shadeClear').style.visibility = items.length ? 'visible' : 'hidden';
 
   body.innerHTML = items.length
     ? items.map(rowHtml).join('')
@@ -108,10 +140,15 @@ function paintShade() {
 
   $$('.notif', body).forEach(el => el.addEventListener('click', async () => {
     const id = el.dataset.id, link = el.dataset.link;
-    await supa.from('notifications').update({ read_at: new Date().toISOString() })
-      .eq('id', id).is('read_at', null);
+    const { error } = await supa.from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', id).is('read_at', null).select('id');
+    if (error) console.warn('[shade] mark-read failed:', error.message);
+    // Reflect it locally right away.
+    const now = new Date().toISOString();
+    items = items.map(n => n.id === id ? { ...n, read_at: now } : n);
+    announce(); paintShade();
     if (link) location.href = link;
-    else { load(); }
   }));
 }
 
@@ -126,6 +163,7 @@ export function mountShade() {
   el.id = 'shade';
   el.className = 'shade';
   el.innerHTML = `
+    <div class="shade-scrim"></div>
     <div class="shade-panel">
       <div class="shade-head">
         <span id="shadeCount">—</span>
@@ -133,8 +171,7 @@ export function mountShade() {
       </div>
       <div class="shade-body" id="shadeBody"></div>
       <div class="shade-grip"></div>
-    </div>
-    <div class="shade-scrim"></div>`;
+    </div>`;
   document.body.appendChild(el);
 
   // A slim pull tab at the very top, plus tapping the carrier bar.
@@ -153,9 +190,13 @@ export function mountShade() {
   tab.addEventListener('click', toggle);
   el.querySelector('.shade-scrim').addEventListener('click', close);
   $('#shadeClear').addEventListener('click', async () => {
-    await supa.from('notifications').update({ read_at: new Date().toISOString() })
-      .is('read_at', null);
-    load();
+    // "Clear" on a phone removes them, so delete rather than just mark read.
+    const { data: { user } } = await supa.auth.getUser();
+    const { error } = await supa.from('notifications').delete()
+      .eq('user_id', user?.id);
+    if (error) { console.warn('[shade] clear failed:', error.message); return; }
+    items = [];
+    announce(); paintShade();
   });
 
   // Tapping the carrier bar also opens it, like a status bar.

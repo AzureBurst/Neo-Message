@@ -10,6 +10,7 @@ import {
 } from './supa.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
 import { mountShade, onNotifications, unreadCounts } from './shade.js';
+import { playSound } from './sfx.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -37,6 +38,8 @@ function tryIcon(glyphEl, file) {
 }
 tryIcon(document.querySelector('[data-icon="message"]'), 'assets/apps/message.png');
 tryIcon(document.querySelector('[data-icon="instagrat"]'), 'assets/apps/instagrat.png');
+tryIcon(document.querySelector('[data-icon="mail"]'), 'assets/apps/mail.png');
+tryIcon(document.querySelector('[data-icon="flight"]'), 'assets/apps/flight.png');
 
 /* The calendar tile shows the current story date, like a real phone's
    calendar icon. Painted from storyNow() so it reflects the GM's clock,
@@ -72,6 +75,8 @@ function paintBadges(counts) {
   badge($('#msgBadge'),  counts.messages);
   badge($('#gratBadge'), counts.instagrat);
   badge($('#calBadge'),  counts.calendar);
+  badge($('#mailBadge'), counts.mail);
+  badge($('#flightBadge'), counts.flight);
 }
 
 mountShade();
@@ -80,7 +85,7 @@ onNotifications(() => paintBadges(unreadCounts()));
 if (me.is_admin) {
   const hint = $('#adminHint');
   hint.hidden = false;
-  hint.textContent = 'You are the GM. Both apps have extra controls for you inside.';
+  hint.textContent = 'You are the GM. Each app has extra controls for you inside.';
 }
 
 /* ------------------------------------------------------------------ */
@@ -116,6 +121,7 @@ function setupLock() {
     clearInterval(tick);
     // The swipe-up animation still plays — the lock slides off the top —
     // it just triggers on a tap now instead of a drag.
+    playSound('unlock');
     lock.classList.add('unlocking');
     if (reduce) lock.remove();
     else lock.addEventListener('transitionend', () => lock.remove(), { once: true });
@@ -156,7 +162,8 @@ else lock.remove();
 
 const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-const TILE_FOR = { app: '#tileMessage', instagrat: '#tileGrat', calendar: '#tileCal' };
+const TILE_FOR = { app: '#tileMessage', instagrat: '#tileGrat', calendar: '#tileCal',
+                   mail: '#tileMail', flight: '#tileFlight' };
 
 /** Builds an overlay sitting exactly over an app's icon, styled like it. */
 function makeOverlay(glyph, rect) {
@@ -190,6 +197,7 @@ function coverTransform(rect) {
 }
 
 function openApp(tile, href) {
+  playSound('open');
   const glyph = tile.querySelector('.app-glyph');
   const rect  = glyph.getBoundingClientRect();
   const overlay = makeOverlay(glyph, rect);

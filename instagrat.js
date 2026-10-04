@@ -17,7 +17,7 @@ import {
   paintAvatar, uploadFile, shrinkImage, lightbox, esc, toast, startPresence,
   shortTime, fullStamp, $, $$
 } from './supa.js';
-import { mountShade } from './shade.js';
+import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow } from './clock.js';
 import { attachEmoji } from './emoji.js';
 
@@ -651,20 +651,42 @@ async function loadTags(postId, root) {
 function openTagger({ imageUrl, postId = null, existing = [], onSave }) {
   let tags = existing.slice();   // { tagged_id, screen_name, x, y }
 
-  const { root, close } = sheet({
-    title: 'Tag people',
-    body: `
-      <p class="muted small">Tap the photo where someone is, then pick who.</p>
-      <div class="tagger" id="tagWrap">
-        <img src="${esc(imageUrl)}" alt="">
-        <div class="tagger-layer" id="tagLayer"></div>
+  /* The tagger gets its own layer rather than reusing #modalRoot. The
+     composer lives in #modalRoot, and wiping it mid-compose would throw
+     away the half-written post (and every element the composer's own
+     handlers still point at). */
+  const host = document.createElement('div');
+  host.id = 'taggerRoot';
+  document.body.appendChild(host);
+
+  host.innerHTML = `
+    <div class="scrim scrim-top">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head"><h3>Tag people</h3>
+          <button class="icon-btn" data-close>✕</button></div>
+        <div class="modal-body">
+          <p class="muted small">Tap the photo where someone is, then pick who.</p>
+          <div class="tagger" id="tagWrap">
+            <img src="${esc(imageUrl)}" alt="">
+            <div class="tagger-layer" id="tagLayer"></div>
+          </div>
+          <div class="tagger-search" id="tagSearchWrap" hidden>
+            <input id="tagSearch" placeholder="Search screen names" autocomplete="off">
+            <div class="ig-people" id="tagResults"></div>
+          </div>
+          <div id="tagList" class="tagger-list"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-primary" id="tagSave">Save tags</button>
+        </div>
       </div>
-      <div class="tagger-search" id="tagSearchWrap" hidden>
-        <input id="tagSearch" placeholder="Search screen names" autocomplete="off">
-        <div class="ig-people" id="tagResults"></div>
-      </div>
-      <div id="tagList" class="tagger-list"></div>`,
-    footer: `<button class="btn btn-primary" id="tagSave">Save tags</button>`
+    </div>`;
+
+  const root = host;
+  const close = () => host.remove();
+  $$('[data-close]', root).forEach(b => b.addEventListener('click', close));
+  $('.scrim', root).addEventListener('click', e => {
+    if (e.target.classList.contains('scrim')) close();
   });
 
   const wrap = $('#tagWrap', root);
@@ -735,20 +757,35 @@ function openTagger({ imageUrl, postId = null, existing = [], onSave }) {
 
   $('#tagSave', root).addEventListener('click', async (e) => {
     e.target.disabled = true;
-    await onSave(tags);
-    close();
+    e.target.textContent = 'Saving…';
+    try {
+      await onSave(tags);
+      close();
+    } catch (err) {
+      // Never leave the sheet stuck: re-enable and say what went wrong.
+      toast(err.message || 'Could not save tags.', 'error');
+      console.warn('[tags] save failed:', err);
+      e.target.disabled = false;
+      e.target.textContent = 'Save tags';
+    }
   });
 
   drawMarkers(); renderList();
 }
 
 /** Writes the tag set for a post: clears what was there, inserts anew. */
+/** Writes the tag set for a post: clears what was there, inserts anew.
+    Throws on failure so the caller can show it rather than hang. */
 async function saveTags(postId, tags) {
-  await supa.from('ig_post_tags').delete().eq('post_id', postId);
+  const del = await supa.from('ig_post_tags').delete().eq('post_id', postId);
+  if (del.error) throw new Error(del.error.message);
+
   if (tags.length) {
-    const rows = tags.map(t => ({ post_id: postId, tagged_id: t.tagged_id, x: t.x, y: t.y }));
-    const { error } = await supa.from('ig_post_tags').insert(rows);
-    if (error) toast(error.message, 'error');
+    const rows = tags.map(t => ({
+      post_id: postId, tagged_id: t.tagged_id, x: t.x, y: t.y
+    }));
+    const ins = await supa.from('ig_post_tags').insert(rows);
+    if (ins.error) throw new Error(ins.error.message);
   }
 }
 
@@ -1158,8 +1195,11 @@ function openComposer() {
       existing: pendingTags,
       onSave: (tags) => {
         pendingTags = tags;
-        $('#igTagList').textContent = tags.length
-          ? 'Tagged: ' + tags.map(t => '@' + t.screen_name).join(', ') : '';
+        const listEl = $('#igTagList');
+        if (listEl) {
+          listEl.textContent = tags.length
+            ? 'Tagged: ' + tags.map(t => '@' + t.screen_name).join(', ') : '';
+        }
       }
     });
   });
@@ -1316,5 +1356,14 @@ supa.channel('ig-live')
 paintReqBadge();
 paintQueueBadge();
 
-// First paint.
-show(ig ? 'feed' : 'setup');
+// First paint — a notification deep link wins over the default feed.
+const igParams = new URLSearchParams(location.search);
+if (ig && igParams.get('post')) {
+  show('post', igParams.get('post'));
+  clearNotificationsFor(igParams.get('post'));
+} else if (ig && igParams.get('user')) {
+  show('profile', igParams.get('user'));
+  clearNotificationsFor(igParams.get('user'));
+} else {
+  show(ig ? 'feed' : 'setup');
+}
