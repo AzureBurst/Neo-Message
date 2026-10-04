@@ -39,6 +39,7 @@ function tryIcon(glyphEl, file) {
 tryIcon(document.querySelector('[data-icon="message"]'), 'assets/apps/message.png');
 tryIcon(document.querySelector('[data-icon="instagrat"]'), 'assets/apps/instagrat.png');
 tryIcon(document.querySelector('[data-icon="mail"]'), 'assets/apps/mail.png');
+tryIcon(document.querySelector('[data-icon="flight"]'), 'assets/apps/flight.png');
 
 /* The calendar tile shows the current story date, like a real phone's
    calendar icon. Painted from storyNow() so it reflects the GM's clock,
@@ -75,6 +76,7 @@ function paintBadges(counts) {
   badge($('#gratBadge'), counts.instagrat);
   badge($('#calBadge'),  counts.calendar);
   badge($('#mailBadge'), counts.mail);
+  badge($('#flightBadge'), counts.flight);
 }
 
 mountShade();
@@ -83,7 +85,7 @@ onNotifications(() => paintBadges(unreadCounts()));
 if (me.is_admin) {
   const hint = $('#adminHint');
   hint.hidden = false;
-  hint.textContent = 'You are the GM. Both apps have extra controls for you inside.';
+  hint.textContent = 'You are the GM. Each app has extra controls for you inside.';
 }
 
 /* ------------------------------------------------------------------ */
@@ -160,7 +162,8 @@ else lock.remove();
 
 const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-const TILE_FOR = { app: '#tileMessage', instagrat: '#tileGrat', calendar: '#tileCal' };
+const TILE_FOR = { app: '#tileMessage', instagrat: '#tileGrat', calendar: '#tileCal',
+                   mail: '#tileMail', flight: '#tileFlight' };
 
 /** Builds an overlay sitting exactly over an app's icon, styled like it. */
 function makeOverlay(glyph, rect) {

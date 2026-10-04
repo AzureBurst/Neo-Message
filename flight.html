@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flight Portal</title>
+<meta name="theme-color" content="#08080A">
+<link rel="icon" href="assets/apps/flight.png" type="image/png">
+<link rel="stylesheet" href="css/neo.css">
+</head>
+<body class="gated">
+  <div id="gateNote" class="gate-note">
+    <span>Checking your session…</span>
+    <a href="index.html" class="gate-escape">Go to sign in</a>
+  </div>
+
+  <div id="carrier"></div>
+
+  <header class="fl-top">
+    <a class="ig-home" href="home.html" title="Home">⌂</a>
+    <img class="fl-logo" src="assets/apps/flight.png" alt="">
+    <span class="fl-word">Flight<span>Portal</span></span>
+    <nav class="fl-tabs" id="flTabs">
+      <button class="fl-tab is-on" data-view="dash">Home</button>
+      <button class="fl-tab" data-view="courses">Courses</button>
+      <button class="fl-tab" data-view="tasks">Assignments</button>
+      <button class="fl-tab" data-view="account">Account</button>
+      <button class="fl-tab fl-admin-tab" data-view="admin" hidden>Admin</button>
+    </nav>
+  </header>
+
+  <main class="fl-main" id="flMain">
+    <div class="ig-loading">Loading…</div>
+  </main>
+
+  <div id="modalRoot"></div>
+
+<script type="module" src="js/flight.js"></script>
+</body>
+</html>
