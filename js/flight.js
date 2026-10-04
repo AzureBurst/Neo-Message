@@ -18,7 +18,7 @@ import {
 import { loadClock, storyNow, onClockChange } from './clock.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { playSound } from './sfx.js';
-import { courseGrade, letterFor, gpa, dueLabel } from './flight-grades.js';
+import { courseGrade, letterFor, gpa, dueLabel, parseMeetings, fmtClock } from './flight-grades.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -117,6 +117,7 @@ async function go(name, arg = null) {
       await loadStudent();
       if (name === 'dash') viewDash();
       else if (name === 'courses') viewCourses();
+      else if (name === 'schedule') viewSchedule();
       else if (name === 'course') viewCourse(arg);
       else if (name === 'tasks') viewTasks(arg || 'upcoming');
       else if (name === 'account') viewAccount();
@@ -142,6 +143,7 @@ function idCard() {
         <strong>${esc(me.username)}</strong>
         <span>${esc([r.major, r.year].filter(Boolean).join(' · ') || 'Undeclared')}</span>
         <span class="mono">ID ${esc(r.student_id || defaultStudentId(me.id))}</span>
+        ${r.coordinator ? `<span class="fl-idcard-coord">Heroics coordinator · ${esc(r.coordinator)}</span>` : ''}
       </div>
     </div>`;
 }
@@ -227,6 +229,8 @@ function viewDash() {
         <div class="fl-stat"><span>Due this week</span><strong>${week}</strong></div>
         <div class="fl-stat ${overdue ? 'warn' : ''}"><span>Overdue</span><strong>${overdue}</strong></div>
       </div>
+
+      ${todayStrip()}
 
       <section class="fl-section">
         <div class="fl-section-head"><h3>Due soon</h3>
@@ -387,6 +391,7 @@ function viewAccount() {
           <div><span>Major</span>${esc(r.major || 'Undeclared')}</div>
           ${r.minor ? `<div><span>Minor</span>${esc(r.minor)}</div>` : ''}
           <div><span>Class</span>${esc(r.year || '—')}</div>
+          <div><span>Heroics coordinator</span>${esc(r.coordinator || '—')}</div>
           <div><span>Advisor</span>${esc(r.advisor || '—')}</div>
           <div><span>Standing</span>${esc(r.standing || 'Good standing')}</div>
           <div><span>Email</span><span class="mono">${esc(me.username.toLowerCase())}@juniversity.edu</span></div>
@@ -414,6 +419,86 @@ function viewAccount() {
         </table>
       </section>
     </div>`;
+}
+
+/* ---- timetable ---- */
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+/* Every class meeting for the student's courses, from each course's
+   "Meets" text. */
+function meetings() {
+  return D.courses.flatMap(c => parseMeetings(c.schedule).map(m => ({ ...m, c })));
+}
+
+function viewSchedule() {
+  const all = meetings().filter(m => m.day <= 5);
+  if (!all.length) {
+    main.innerHTML = '<div class="ig-empty">No meeting times are set for your courses yet.</div>';
+    return;
+  }
+  // Frame the grid on whole hours around the earliest and latest class.
+  const first = Math.min(9 * 60, ...all.map(m => Math.floor(m.start / 60) * 60));
+  const last  = Math.max(16 * 60, ...all.map(m => Math.ceil(m.end / 60) * 60));
+  const PX = 1.1;                                   // pixels per minute
+  const today = storyNow().getDay();                // 0 Sun .. 6 Sat
+  const hours = [];
+  for (let t = first; t <= last; t += 60) hours.push(t);
+
+  const credits = D.courses.reduce((n, c) => n + (Number(c.credits) || 0), 0);
+
+  main.innerHTML = `
+    <div class="fl-sched-wrap">
+      <div class="fl-section-head"><h3>Weekly schedule</h3>
+        <span class="muted small">${D.courses.length} courses · ${credits} credit hours</span></div>
+      <div class="fl-sched" style="--rows:${(last - first) * PX}px">
+        <div class="fl-sched-times">
+          <span class="fl-sched-corner"></span>
+          ${hours.map(t => `<span style="top:${(t - first) * PX}px">${fmtClock(t).replace(':00', '')}</span>`).join('')}
+        </div>
+        ${WEEKDAYS.map((d, i) => `
+          <div class="fl-sched-day ${today === i + 1 ? 'is-today' : ''}">
+            <div class="fl-sched-head">${d}</div>
+            <div class="fl-sched-col">
+              ${hours.map(t => `<i class="fl-sched-line" style="top:${(t - first) * PX}px"></i>`).join('')}
+              ${all.filter(m => m.day === i + 1).map(m => `
+                <button class="fl-block" data-course="${esc(m.c.id)}"
+                  style="--c:${colorOf(m.c.color)};top:${(m.start - first) * PX}px;height:${(m.end - m.start) * PX}px">
+                  <strong>${esc(m.c.code)}</strong>
+                  <span>${esc(m.c.title)}</span>
+                  <small>${fmtClock(m.start)}–${fmtClock(m.end)}${m.c.room ? ' · ' + esc(m.c.room) : ''}</small>
+                </button>`).join('')}
+            </div>
+          </div>`).join('')}
+      </div>
+      ${D.courses.some(c => !parseMeetings(c.schedule).length)
+        ? `<p class="muted small">Not on the grid (no meeting time set): ${
+            D.courses.filter(c => !parseMeetings(c.schedule).length).map(c => esc(c.code)).join(', ')}</p>` : ''}
+    </div>`;
+
+  $$('[data-course]', main).forEach(b => b.addEventListener('click', () => go('course', b.dataset.course)));
+}
+
+/* "Today" follows the story clock, so a frozen Tuesday shows Tuesday. */
+function todayStrip() {
+  const now = storyNow();
+  const day = now.getDay() === 0 ? 7 : now.getDay();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const list = meetings().filter(m => m.day === day).sort((a, b) => a.start - b.start);
+  if (!D.courses.length) return '';
+  return `
+    <section class="fl-section">
+      <div class="fl-section-head"><h3>Today's classes</h3>
+        <button class="btn btn-ghost btn-sm" data-goto="schedule">Full schedule</button></div>
+      ${list.length ? `<div class="fl-today">${list.map(m => {
+        const state = mins >= m.end ? 'past' : mins >= m.start ? 'now' : 'next';
+        return `<button class="fl-today-item ${state}" data-course="${esc(m.c.id)}" style="--c:${colorOf(m.c.color)}">
+          <span class="fl-today-time">${fmtClock(m.start)}</span>
+          <strong>${esc(m.c.code)}</strong><span>${esc(m.c.title)}</span>
+          ${state === 'now' ? '<em>In session</em>' : ''}
+        </button>`;
+      }).join('')}</div>` : '<div class="fl-empty">No classes today.</div>'}
+    </section>`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -865,14 +950,19 @@ function openAnnouncementEditor(courseId) {
 
 async function openStudentRecords() {
   const [{ data: people }, { data: recs }] = await Promise.all([
-    supa.from('profiles').select('id, username').order('username'),
+    supa.from('profiles').select('id, username, is_admin').order('username'),
     supa.from('flight_students').select('*')
   ]);
   const byId = new Map((recs || []).map(r => [r.user_id, r]));
 
   const { root } = sheet({
     title: 'Student records', wide: true,
-    body: `<p class="muted small">Pick a student to edit their record.</p>
+    body: `<div class="fl-bulk">
+        <label for="bulkCoord">Heroics coordinator for every student</label>
+        <div class="inline-row"><input id="bulkCoord" value="Kaori Hamasaki">
+          <button class="btn btn-sm btn-primary" id="bulkCoordGo">Set for all</button></div>
+      </div>
+      <p class="muted small">Pick a student to edit their record.</p>
       <div class="fl-roster">${(people || []).map(p => {
         const r = byId.get(p.id) || {};
         return `<button class="fl-admin-row" data-rec="${esc(p.id)}">
@@ -880,6 +970,20 @@ async function openStudentRecords() {
             <span class="muted">${esc([r.major, r.year].filter(Boolean).join(' · ') || 'No record yet')}</span></span>
           ${r.holds ? '<span class="fl-chip" style="--c:#F0484F">Hold</span>' : ''} ›</button>`;
       }).join('')}</div>`
+  });
+
+  $('#bulkCoordGo', root).addEventListener('click', async (e) => {
+    const who = $('#bulkCoord', root).value.trim() || null;
+    const students = (people || []).filter(p => !p.is_admin);
+    if (!confirm(`Set ${who || 'no coordinator'} for all ${students.length} student accounts?`)) return;
+    e.target.disabled = true;
+    const rows = students.map(p => ({ user_id: p.id, coordinator: who }));
+    const { error } = await supa.from('flight_students').upsert(rows, { onConflict: 'user_id' });
+    e.target.disabled = false;
+    if (error) return toast(/coordinator/i.test(error.message)
+      ? 'Run sql/flight-heroics.sql first — it adds the coordinator field.' : error.message, 'error');
+    rows.forEach(r => byId.set(r.user_id, { ...(byId.get(r.user_id) || {}), coordinator: who }));
+    toast(`Coordinator set for ${rows.length} students.`, 'ok');
   });
 
   $$('[data-rec]', root).forEach(b => b.addEventListener('click', () => {
@@ -896,6 +1000,7 @@ async function openStudentRecords() {
           ${f('major', 'Major', 'Criminal Justice')}
           ${f('minor', 'Minor')}
           ${f('year', 'Class', 'Junior')}
+          ${f('coordinator', 'Heroics coordinator', 'Kaori Hamasaki')}
           ${f('advisor', 'Advisor', 'Dr. Ames')}
           ${f('standing', 'Standing', 'Good standing')}
           ${f('balance', 'Balance owed ($)', '0', 'number')}
@@ -911,6 +1016,7 @@ async function openStudentRecords() {
         user_id: uid, student_id: val('student_id') || null, major: val('major') || null,
         minor: val('minor') || null, year: val('year') || null, advisor: val('advisor') || null,
         standing: val('standing') || 'Good standing', holds: val('holds') || null,
+        coordinator: val('coordinator') || null,
         balance: Number(val('balance')) || 0,
         gpa_override: val('gpa_override') === '' ? null : Number(val('gpa_override'))
       };

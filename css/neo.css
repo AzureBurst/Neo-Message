@@ -2827,3 +2827,73 @@ body.flight-page::before {
   .fl-tabs::-webkit-scrollbar { display: none; }
   .fl-tab { flex: 0 0 auto; }
 }
+
+/* =====================================================================
+   FLIGHT PORTAL — timetable, today strip, coordinator
+   ===================================================================== */
+
+.fl-idcard-coord {
+  margin-top: 4px; font-weight: 700 !important; font-size: 12px !important;
+  background: rgba(0,0,0,.22); padding: 2px 9px; border-radius: 999px; width: max-content;
+}
+.fl-bulk {
+  padding: 12px; margin-bottom: 14px; border-radius: 14px;
+  background: #141414; border: 2px solid #2C2C2C;
+}
+.fl-bulk label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
+
+.fl-sched-wrap { animation: neo-view-in .24s ease both; }
+.fl-sched {
+  display: grid; grid-template-columns: 56px repeat(5, minmax(0, 1fr)); gap: 6px;
+  padding: 10px; border-radius: var(--r);
+  background: rgba(20,20,20,.88);
+  border: 3px solid var(--outline); box-shadow: 0 0 0 1px #3C3C3C, 0 10px 26px rgba(0,0,0,.45);
+}
+.fl-sched-times { position: relative; padding-top: 34px; height: calc(var(--rows) + 34px); }
+.fl-sched-times span {
+  position: absolute; right: 6px; transform: translateY(calc(34px - 50%));
+  font: 700 11px var(--font-mono); color: var(--dim); white-space: nowrap;
+}
+.fl-sched-head {
+  height: 28px; margin-bottom: 6px; display: grid; place-items: center;
+  font: 800 13px var(--font-ui); border-radius: 999px; background: #222; color: var(--muted);
+}
+.fl-sched-day.is-today .fl-sched-head { background: var(--sent); color: var(--on-sent); }
+.fl-sched-col { position: relative; height: var(--rows); border-radius: 10px; background: #161616; }
+.fl-sched-day.is-today .fl-sched-col { background: #1B1F10; }
+.fl-sched-line { position: absolute; left: 0; right: 0; border-top: 1px dashed #2A2A2A; }
+.fl-block {
+  position: absolute; left: 3px; right: 3px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; text-align: left; cursor: pointer;
+  border-radius: 10px; border: 2.5px solid var(--outline);
+  background: color-mix(in srgb, var(--c) 28%, #1d1d1d);
+  box-shadow: inset 4px 0 0 var(--c);
+  color: var(--text); font: inherit;
+  transition: transform .1s ease, filter .1s ease;
+}
+.fl-block:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.fl-block strong { font: 800 12.5px var(--font-ui); color: color-mix(in srgb, var(--c) 55%, white); }
+.fl-block span { font: 600 11.5px/1.25 var(--font-ui); }
+.fl-block small { font: 600 10.5px var(--font-mono); color: var(--muted); margin-top: auto; }
+@media (max-width: 640px) {
+  .fl-sched { grid-template-columns: 38px repeat(5, minmax(0, 1fr)); gap: 3px; padding: 6px; }
+  .fl-block { padding: 4px 4px; left: 1px; right: 1px; }
+  .fl-block span, .fl-block small { display: none; }
+  .fl-block strong { font-size: 10px; }
+  .fl-sched-times span { font-size: 9px; }
+}
+
+.fl-today { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.fl-today-item {
+  display: flex; flex-direction: column; gap: 1px; text-align: left; cursor: pointer;
+  padding: 11px 13px; border-radius: 14px; color: var(--text); font: inherit;
+  background: #222; border: 3px solid var(--outline);
+  box-shadow: inset 0 4px 0 var(--c), 0 0 0 1px #3C3C3C;
+}
+.fl-today-item strong { font: 800 13px var(--font-mono); color: color-mix(in srgb, var(--c) 60%, white); }
+.fl-today-item span { font-size: 13px; font-weight: 600; }
+.fl-today-time { font: 700 12px var(--font-mono) !important; color: var(--muted); }
+.fl-today-item.past { opacity: .45; }
+.fl-today-item.now { box-shadow: inset 0 4px 0 var(--c), 0 0 0 2px var(--sent); }
+.fl-today-item em { font-style: normal; font: 800 11px var(--font-ui); color: var(--sent); }
+.fl-block span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

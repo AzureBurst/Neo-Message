@@ -81,3 +81,51 @@ export function dueLabel(dueIso, now, done = false) {
     tone: 'later'
   };
 }
+
+/* ------------------------------------------------------------------ */
+/*  meeting times                                                     */
+/*  Reads the free-text "Meets" field of a course, e.g.               */
+/*    "Mon/Wed/Fri 9:00–10:00 AM"                                     */
+/*    "Tue/Thu 1:00–2:30 PM; Fri 9:30 AM–12:00 PM"                    */
+/*  into [{ day: 1..7 (Mon..Sun), start: minutes, end: minutes }].    */
+/*  Anything it cannot read is skipped rather than guessed at.        */
+/* ------------------------------------------------------------------ */
+
+const DAY_INDEX = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 7 };
+
+function clock(h, m, mer) {
+  h = Number(h); m = Number(m || 0);
+  if (mer === 'pm' && h < 12) h += 12;
+  if (mer === 'am' && h === 12) h = 0;
+  return h * 60 + m;
+}
+
+export function parseMeetings(text) {
+  const out = [];
+  for (const seg of String(text || '').split(';')) {
+    const days = [...seg.toLowerCase().matchAll(/\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*/g)]
+      .map(m => DAY_INDEX[m[1]]);
+    const t = seg.toLowerCase().match(
+      /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+    if (!days.length || !t) continue;
+    let [, sh, sm, smer, eh, em, emer] = t;
+    // A bare start borrows the end's AM/PM, unless that would put it
+    // after the end ("11:30–12:30 PM" means 11:30 AM).
+    if (!smer && emer) {
+      smer = emer;
+      if (clock(sh, sm, smer) > clock(eh, em, emer)) smer = 'am';
+    }
+    // No AM/PM anywhere: hours 1–7 are afternoon classes.
+    const guess = h => (Number(h) >= 1 && Number(h) <= 7 ? 'pm' : null);
+    const start = clock(sh, sm, smer || guess(sh));
+    const end   = clock(eh, em, emer || guess(eh));
+    if (end <= start) continue;
+    for (const day of new Set(days)) out.push({ day, start, end });
+  }
+  return out;
+}
+
+export function fmtClock(min) {
+  const h = Math.floor(min / 60), m = min % 60;
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}

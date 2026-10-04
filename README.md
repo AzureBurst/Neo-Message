@@ -61,17 +61,22 @@ re-colour every accent at once.
 
 ## B.S. in Field Heroics
 
-Run `sql/flight-heroics.sql` once, after `flight.sql`. It adds the five
+Run `sql/flight-heroics.sql` once, after `flight.sql`. It adds the six
 core courses, enrols every student in them, and records everyone as a
 B.S. in Field Heroics major:
 
-| Code | Course | Credits |
-|---|---|---|
-| HERO 101 | Hero History | 3 |
-| COMM 101 | Communications 101 | 3 |
-| ETHL 110 | Intro to Heroic Ethics and Laws | 3 |
-| RESC 101 | Rescue Training 101 | 3 |
-| SPE 120 | Specialized Physical Education | 2 |
+| Code | Course | Credits | Meets |
+|---|---|---|---|
+| HERO 101 | Hero History | 3 | Mon/Wed/Fri 9:00–10:00 AM |
+| MATH 101 | Intro to Math | 3 | Mon/Wed/Fri 10:15–11:15 AM |
+| ETHL 110 | Intro to Heroic Ethics and Laws | 3 | Mon/Wed/Fri 11:30 AM–12:30 PM |
+| COMM 101 | Communications 101 | 1 | Fri 1:30–2:30 PM |
+| RESC 101 | Rescue Training 101 | 3 | Tue/Thu 9:30–11:00 AM |
+| SPE 120 | Specialized Physical Education | 2 | Tue/Thu 1:00–2:30 PM |
+
+Term: Fall 2160. 15 credit hours. Lectures are 60 minutes, the two
+practical courses 90. Every student's Heroics coordinator is Kaori
+Hamasaki.
 
 These are **required** courses: anyone who signs up later is enrolled in
 all of them, and gets a student record with the major filled in, the
@@ -84,3 +89,18 @@ on any other course to make it mandatory the same way.
 
 Re-running the file never duplicates a course or an enrolment, and never
 overwrites a course you've edited.
+
+### Schedule tab
+
+Students get a Mon–Fri timetable built from each course's **Meets**
+field, and the portal home shows *Today's classes* for the story date,
+marking the one in session. Write meeting times like
+`Mon/Wed/Fri 9:00–10:00 AM` or `Tue/Thu 1:00–2:30 PM`; separate
+different patterns with a semicolon (`Mon 9:00–10:00 AM; Fri 1:00–3:00 PM`).
+Change a course's meeting time and the timetable follows.
+
+### Heroics coordinator
+
+Shown on each student's ID card and record. Set it for everyone at once
+from Admin → Student records → *Set for all*, or per student in their
+record.
