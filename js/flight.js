@@ -389,7 +389,7 @@ function viewAccount() {
           <div><span>Class</span>${esc(r.year || '—')}</div>
           <div><span>Advisor</span>${esc(r.advisor || '—')}</div>
           <div><span>Standing</span>${esc(r.standing || 'Good standing')}</div>
-          <div><span>Email</span><span class="mono">${esc(me.username.toLowerCase())}@flight.edu</span></div>
+          <div><span>Email</span><span class="mono">${esc(me.username.toLowerCase())}@juniversity.edu</span></div>
         </div>
       </section>
 
@@ -442,7 +442,7 @@ function openEmailProfessor(c) {
     title: `Email ${c.professor_name}`,
     body: `
       <div class="field"><label>To</label>
-        <input value="${esc(c.professor_name)} <${esc(c.professor_addr || 'professor@flight.edu')}>" disabled></div>
+        <input value="${esc(c.professor_name)} <${esc(c.professor_addr || 'professor@juniversity.edu')}>" disabled></div>
       <div class="field"><label for="eSubj">Subject</label>
         <input id="eSubj" maxlength="140" value="${esc(c.code)}: "></div>
       <div class="field"><label for="eBody">Message</label>
@@ -556,7 +556,7 @@ function openCourseEditor(c) {
         <div class="field"><label>Code</label><input id="cfCode" value="${esc(v.code)}" placeholder="CRIM 210"></div>
         <div class="field"><label>Title</label><input id="cfTitle" value="${esc(v.title)}" placeholder="Criminal Procedure"></div>
         <div class="field"><label>Professor</label><input id="cfProf" value="${esc(v.professor_name)}" placeholder="Prof. Hale"></div>
-        <div class="field"><label>Professor email</label><input id="cfAddr" class="mono" value="${esc(v.professor_addr || '')}" placeholder="hale@flight.edu"></div>
+        <div class="field"><label>Professor email</label><input id="cfAddr" class="mono" value="${esc(v.professor_addr || '')}" placeholder="hale@juniversity.edu"></div>
         <div class="field"><label>Meets</label><input id="cfSched" value="${esc(v.schedule || '')}" placeholder="Mon/Wed 10:00–11:15"></div>
         <div class="field"><label>Room</label><input id="cfRoom" value="${esc(v.room || '')}" placeholder="Harlow Hall 204"></div>
         <div class="field"><label>Office hours</label><input id="cfOH" value="${esc(v.office_hours || '')}" placeholder="Thu 2–4pm"></div>

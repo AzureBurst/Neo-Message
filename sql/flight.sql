@@ -215,7 +215,7 @@ begin
   values (owner, auth.uid(),
           coalesce(nullif(trim(p_subject), ''), c.code || ' question'),
           c.professor_name,
-          coalesce(c.professor_addr, 'professor@flight.edu'),
+          coalesce(c.professor_addr, 'professor@juniversity.edu'),
           now(), left(p_body, 140), true)
   returning id into t;
 
