@@ -532,7 +532,7 @@ async function viewAdmin() {
         ${(courses || []).map(c => `
           <button class="fl-admin-row" data-acourse="${esc(c.id)}" style="--c:${colorOf(c.color)}">
             <span class="fl-chip" style="--c:${colorOf(c.color)}">${esc(c.code)}</span>
-            <span class="fl-admin-row-main"><strong>${esc(c.title)}</strong>
+            <span class="fl-admin-row-main"><strong>${esc(c.title)}${c.auto_enroll ? ' <span class="fl-chip fl-chip-portal">Required</span>' : ''}</strong>
               <span class="muted">${esc(c.professor_name)}${c.term ? ' · ' + esc(c.term) : ''}</span></span>
             <span class="muted">${counts.get(c.id) || 0} enrolled ›</span>
           </button>`).join('') || '<div class="fl-empty">No courses yet. Make one to get started.</div>'}
@@ -567,6 +567,10 @@ function openCourseEditor(c) {
             style="--tint:${col};--tint-d:${col}" aria-pressed="${colorOf(v.color) === col}"></button>`).join('')}</div></div>
       </div>
       <div class="field"><label>Description</label><textarea id="cfDesc" rows="3">${esc(v.description || '')}</textarea></div>
+      <label class="check">
+        <input type="checkbox" id="cfReq" ${v.auto_enroll ? 'checked' : ''}>
+        <span>Required course — every student is enrolled automatically, including new sign-ups</span>
+      </label>
       <div id="cfMsg"></div>`,
     footer: `${c ? '<button class="btn btn-danger" id="cfDel">Delete course</button>' : ''}
              <button class="btn btn-primary" id="cfSave">${c ? 'Save' : 'Create'}</button>`
@@ -588,6 +592,10 @@ function openCourseEditor(c) {
       credits: Number($('#cfCred', root).value) || 0,
       description: $('#cfDesc', root).value.trim() || null, color
     };
+    // Only send the flag when it is in use, so the editor still works on a
+    // database where sql/flight-heroics.sql has not been run.
+    const req = $('#cfReq', root).checked;
+    if (req || 'auto_enroll' in v) row.auto_enroll = req;
     if (!row.code || !row.title) {
       $('#cfMsg', root).innerHTML = '<div class="notice notice-error">A code and a title are needed.</div>'; return;
     }

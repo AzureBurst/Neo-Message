@@ -58,3 +58,29 @@ get the "[Notice] Title / snippet" look.
 It all lives in one block at the bottom of `css/neo.css` (search for
 KNOT THEME) plus the colour variables at the top. Change `--sent` to
 re-colour every accent at once.
+
+## B.S. in Field Heroics
+
+Run `sql/flight-heroics.sql` once, after `flight.sql`. It adds the five
+core courses, enrols every student in them, and records everyone as a
+B.S. in Field Heroics major:
+
+| Code | Course | Credits |
+|---|---|---|
+| HERO 101 | Hero History | 3 |
+| COMM 101 | Communications 101 | 3 |
+| ETHL 110 | Intro to Heroic Ethics and Laws | 3 |
+| RESC 101 | Rescue Training 101 | 3 |
+| SPE 120 | Specialized Physical Education | 2 |
+
+These are **required** courses: anyone who signs up later is enrolled in
+all of them, and gets a student record with the major filled in, the
+moment their account is created. Admin accounts are left out so the GM
+isn't on the rosters.
+
+Professors start as "Staff" and meeting times and rooms are blank — fill
+them in from Admin → the course → Edit course. Tick **Required course**
+on any other course to make it mandatory the same way.
+
+Re-running the file never duplicates a course or an enrolment, and never
+overwrites a course you've edited.
