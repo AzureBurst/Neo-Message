@@ -208,7 +208,7 @@ $$;
 
 do $$
 begin
-  if to_regproc('public.push_notification(uuid,text,text,text,text,text,uuid,text)') is not null then
+  if to_regprocedure('public.push_notification(uuid,text,text,text,text,text,uuid,text)') is not null then
 
     create or replace function public.notif_on_mail()
     returns trigger language plpgsql security definer

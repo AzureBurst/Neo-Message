@@ -126,5 +126,5 @@ The player's tab updates live and they get a notification.
 
 **Indexed pages** (☷) are articles you write ahead of time with keywords.
 They show up instantly in any matching search for every player, are
-offered as one-tap answers in your inbox, and power "I'm Feeling Lucky"
-and the search suggestions.
+offered as one-tap answers in your inbox, and feed the search
+suggestions.

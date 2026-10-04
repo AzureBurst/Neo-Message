@@ -114,7 +114,7 @@ begin
   update public.qr_searches set status = 'answered', answered_at = now()
    where id = new.search_id and status <> 'answered';
   select * into s from public.qr_searches where id = new.search_id;
-  if to_regproc('public.push_notification(uuid,text,text,text,text,text,uuid,text)') is not null then
+  if to_regprocedure('public.push_notification(uuid,text,text,text,text,text,uuid,text)') is not null then
     perform public.push_notification(s.user_id, 'queree', 'queree_answer',
       'Queree', 'Results for "' || left(s.query, 60) || '"',
       'queree.html?s=' || s.id, s.id, null);
@@ -131,7 +131,7 @@ returns trigger language plpgsql security definer
 set search_path = public as $$
 declare a record; who text;
 begin
-  if to_regproc('public.push_notification(uuid,text,text,text,text,text,uuid,text)') is null then
+  if to_regprocedure('public.push_notification(uuid,text,text,text,text,text,uuid,text)') is null then
     return new;
   end if;
   select username into who from public.profiles where id = new.user_id;

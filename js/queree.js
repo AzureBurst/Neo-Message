@@ -176,12 +176,6 @@ function wireSearchBox() {
   input.addEventListener('blur', () => setTimeout(() => { sug.hidden = true; }, 120));
 }
 
-function feelingLucky() {
-  if (!pages.length) return toast('Nothing indexed yet.', 'error');
-  const p = pages[Math.floor(Math.random() * pages.length)];
-  go('result', { source: 'page', id: p.id });
-}
-
 /* ------------------------------------------------------------------ */
 /*  views: home, results, history                                     */
 /* ------------------------------------------------------------------ */
@@ -194,7 +188,6 @@ function viewHome() {
       ${searchBox({ big: true })}
       <div class="qr-home-actions">
         <button class="btn btn-ghost" id="qrGo">Queree Search</button>
-        <button class="btn btn-ghost" id="qrLucky">I'm Feeling Lucky</button>
       </div>
       ${recent.length ? `<div class="qr-recent">
         <span class="muted small">Recent</span>
@@ -204,7 +197,6 @@ function viewHome() {
   wireSearchBox();
   $('#qrInput').focus();
   $('#qrGo').addEventListener('click', () => runSearch($('#qrInput').value));
-  $('#qrLucky').addEventListener('click', feelingLucky);
   $$('[data-q]', main).forEach(b => b.addEventListener('click', () => runSearch(b.dataset.q)));
 }
 
@@ -254,8 +246,7 @@ async function viewSearch(id) {
       ${s.status === 'pending' ? `
         <div class="qr-crawling">
           <span class="qr-dots"><i></i><i></i><i></i><i></i></span>
-          <div><strong>Crawling the network…</strong>
-          <span>Queree is still pulling together results for this one. You'll get a notification when they arrive — keep searching in the meantime.</span></div>
+          <div><strong>Queree is loading…</strong></div>
         </div>` : ''}
 
       ${(results || []).map(r => resultCard(r, 'result')).join('')}
@@ -499,7 +490,7 @@ async function viewIndex() {
     <div class="qr-history">
       <div class="fl-section-head"><h3>Indexed pages · ${pages.length}</h3></div>
       <p class="muted small">Pages here show up instantly for any search that matches their title or keywords,
-        for every player — good for lore you've written ahead of time. "I'm Feeling Lucky" picks one at random.</p>
+        for every player — good for lore you've written ahead of time.</p>
       <div class="qr-kinds">
         ${Object.entries(KINDS).map(([k, v]) => `<button class="qr-kind" data-kind="${k}"><span>${v.icon}</span>New ${v.label.toLowerCase()}</button>`).join('')}
       </div>
@@ -600,7 +591,12 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
       image: { image_url: v('#cImg'), caption: v('#cCaption') }
     }[kind];
     const title = v('#cTitle') || null;
-    const msg = t => { $('#cMsg', root).innerHTML = `<div class="notice notice-error">${esc(t)}</div>`; };
+    const msg = t => {
+      const box = $('#cMsg', root);
+      box.innerHTML = `<div class="notice notice-error">${esc(t)}</div>`;
+      box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      toast(t, 'error');
+    };
     if (kind === 'wiki' && !title) return msg('A wiki article needs a title.');
     if ((kind === 'wiki' || kind === 'text') && !body.text) return msg('Write something first.');
     if (kind === 'forum' && !parseForum(body.posts).length) return msg('Write at least one post.');
@@ -608,8 +604,10 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
     if (target === 'page' && !title) return msg('Indexed pages need a title so searches can find them.');
 
     const row = { kind, title, source: v('#cSource') || null, body };
-    ev.target.disabled = true;
+    const btn = ev.currentTarget, label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Sending…';
     let error;
+    try {
     if (target === 'page') {
       row.keywords = v('#cKeys') || null;
       ({ error } = existing ? await supa.from('qr_pages').update(row).eq('id', existing.id)
@@ -618,7 +616,12 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
       ({ error } = existing ? await supa.from('qr_results').update(row).eq('id', existing.id)
                             : await supa.from('qr_results').insert({ ...row, search_id: searchId }));
     }
-    if (error) { ev.target.disabled = false; return msg(error.message); }
+    } catch (err) { error = err; }
+    if (error) {
+      console.error('[queree] save failed', error);
+      btn.disabled = false; btn.textContent = label;
+      return msg(error.message || String(error));
+    }
     close();
     playSound('sent');
     toast(target === 'page' ? 'Page saved to the index.' : existing ? 'Saved.' : 'Sent — the player has been notified.', 'ok');
