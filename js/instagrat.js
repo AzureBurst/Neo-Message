@@ -209,8 +209,47 @@ async function viewFeed() {
   }
 
   await Promise.all([...new Set(posts.map(p => p.author_id))].map(getIg));
-  main.innerHTML = `<div class="ig-feed">${posts.map(cardHtml).join('')}</div>`;
-  await hydrateCards(main);
+
+  // Like and comment totals for the whole wall in two queries.
+  const ids = posts.map(p => p.id);
+  const [{ data: likes }, { data: comments }] = await Promise.all([
+    supa.from('ig_likes').select('post_id').in('post_id', ids),
+    supa.from('ig_comments').select('post_id').in('post_id', ids)
+  ]);
+  const tally = (rows) => (rows || []).reduce((m, r) => m.set(r.post_id, (m.get(r.post_id) || 0) + 1), new Map());
+  const likeN = tally(likes), commentN = tally(comments);
+
+  main.innerHTML = `<div class="knot-wall">${posts.map(p => wallCard(p,
+    (likeN.get(p.id) || 0) + (Number(p.fake_likes) || 0), commentN.get(p.id) || 0)).join('')}</div>`;
+
+  $$('.knot-card', main).forEach(card => {
+    const a = igCache.get(card.dataset.author);
+    paintAvatar(card.querySelector('[data-av]'), a?.avatar_url, name(a));
+    card.addEventListener('click', () => show('post', card.dataset.post));
+  });
+}
+
+/* One tile on the feed wall: picture, a stat badge, the poster's avatar
+   overlapping the seam, their handle, and the caption in bold. Tap to
+   open the full post with likes, tags and comments. */
+function wallCard(post, likes, comments) {
+  const a = igCache.get(post.author_id);
+  const cap = (post.caption || '').trim();
+  const [headline, ...rest] = cap.split('\n');
+  return `
+    <button class="knot-card" data-post="${esc(post.id)}" data-author="${esc(post.author_id)}">
+      <div class="knot-card-media">
+        <img src="${esc(post.image_url)}" alt="" loading="lazy">
+        <span class="knot-badge">♥ ${fmt(likes)}${comments ? ` &nbsp;💬 ${fmt(comments)}` : ''}</span>
+      </div>
+      <div class="knot-card-body">
+        <span class="avatar knot-card-av" data-av></span>
+        <span class="knot-card-handle">${esc(handle(a))}</span>
+        ${headline ? `<span class="knot-card-title">${esc(headline)}</span>` : ''}
+        ${rest.join(' ').trim() ? `<span class="knot-card-snip">${esc(rest.join(' ').trim())}</span>` : ''}
+        <span class="knot-card-date">${esc(storyDateOf(post))}</span>
+      </div>
+    </button>`;
 }
 
 /* ---- explore: find people ---- */

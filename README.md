@@ -44,3 +44,17 @@ swap the `<span class="carrier-name">` line for:
 ```js
 `<img src="assets/carrier.svg" alt="" class="carrier-logo">`
 ```
+
+## Look: the Knot theme
+
+The whole phone now uses a street-forum look: chunky rounded cards with
+a thick black outline, heavy rounded Rubik type, lime accents on black,
+pill-shaped tabs and buttons, and a halftone texture behind everything.
+Instagrat's feed is a card wall: each post a tile with its picture, a
+like count, the poster's avatar on the seam, and the caption in bold.
+Put a headline on the first line of a caption and the rest underneath to
+get the "[Notice] Title / snippet" look.
+
+It all lives in one block at the bottom of `css/neo.css` (search for
+KNOT THEME) plus the colour variables at the top. Change `--sent` to
+re-colour every accent at once.
