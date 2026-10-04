@@ -49,9 +49,13 @@ function paintCalIcon() {
   const g = document.getElementById('calGlyph');
   if (!g) return;
   const d = storyNow();
+  // Split-flap readout: the weekday on an amber LED strip between two
+  // rivets, the date on two flip tiles (always two, so the 7th is 07).
+  const dd = String(d.getDate()).padStart(2, '0');
   g.innerHTML = `
-    <span class="cal-glyph-top">${DOW[d.getDay()]}</span>
-    <span class="cal-glyph-day">${d.getDate()}</span>`;
+    <span class="cal-r-led"><i></i><b>${DOW[d.getDay()]}</b><i></i></span>
+    <span class="cal-r-flaps"><span class="cal-r-flap">${dd[0]}</span><span class="cal-r-flap">${dd[1]}</span></span>
+    <span class="cal-r-grille"></span>`;
 }
 paintCalIcon();
 // If the GM changes the clock elsewhere, keep the icon honest.

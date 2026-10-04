@@ -2897,3 +2897,68 @@ body.flight-page::before {
 .fl-today-item.now { box-shadow: inset 0 4px 0 var(--c), 0 0 0 2px var(--sent); }
 .fl-today-item em { font-style: normal; font: 800 11px var(--font-ui); color: var(--sent); }
 .fl-block span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* =====================================================================
+   CALENDAR ICON — retrofuturist split-flap
+   A chrome bezel around a black display: the weekday glows on an amber
+   LED strip between two rivets, the date sits on two flip tiles with a
+   seam through the middle, and a speaker grille finishes the bottom.
+   Overrides the plain white page above. Live: it always shows the story
+   date.
+   ===================================================================== */
+
+.app-glyph.cal-glyph {
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px;
+  padding: 5px 5px 4px;
+  background:
+    linear-gradient(160deg, #F2F2F2 0%, #9DA1A8 22%, #E9EAEC 46%, #6E737B 74%, #C9CCD1 100%);
+  overflow: hidden;
+}
+/* The black display set into the chrome. */
+.cal-glyph::before {
+  content: ''; position: absolute; inset: 4px; border-radius: 15%;
+  background: radial-gradient(120% 90% at 50% 20%, #23201C 0%, #0B0A09 70%);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.9), inset 0 -1px 0 rgba(255,255,255,.08);
+}
+.cal-glyph > span { position: relative; z-index: 1; }
+
+.cal-r-led {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 15px; padding: 0 4px; margin-top: 1px;
+}
+.cal-r-led i {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff, #8A8F96 60%, #3A3D42);
+}
+.cal-r-led b {
+  font: 800 9.5px/1 var(--font-mono); letter-spacing: .22em; margin-right: -.22em;
+  color: #FFB347;
+  text-shadow: 0 0 4px rgba(255,150,40,.9), 0 0 9px rgba(255,120,20,.55);
+}
+
+.cal-r-flaps { flex: 1; display: flex; gap: 2px; padding: 0 3px; }
+.cal-r-flap {
+  position: relative; flex: 1; display: grid; place-items: center;
+  border-radius: 4px; overflow: hidden;
+  background: linear-gradient(180deg, #34312D 0%, #252320 49%, #191816 51%, #22201D 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 1px 2px rgba(0,0,0,.8);
+  font: 800 25px/1 var(--font-ui); color: #F4EDE0;
+  text-shadow: 0 1px 0 #000;
+}
+/* The seam where the flap folds. */
+.cal-r-flap::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 2px;
+  transform: translateY(-50%);
+  background: #050505; box-shadow: 0 1px 0 rgba(255,255,255,.07);
+}
+.cal-r-grille {
+  height: 4px; margin: 1px 10px 0;
+  background: repeating-linear-gradient(90deg, #6B6F76 0 2px, transparent 2px 4px);
+  border-radius: 2px; opacity: .8;
+}
+/* The flat-highlight gloss from the generic icon would wash out the
+   chrome; give it a sharper, narrower glint instead. */
+.app-glyph.cal-glyph::after {
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.18) 38%, transparent 46%);
+  z-index: 2;
+}
