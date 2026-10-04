@@ -104,3 +104,27 @@ Change a course's meeting time and the timetable follows.
 Shown on each student's ID card and record. Set it for everyone at once
 from Admin → Student records → *Set for all*, or per student in their
 record.
+
+## Queree (search engine)
+
+Run `sql/queree.sql` once in the Supabase SQL Editor.
+
+Players type anything into Queree. Each search opens as a tab (close
+them with ✕; History keeps everything) and lands in your **inbox** (✉ in
+the Queree header, admin only) with a notification. Answer with any mix of:
+
+- **Wiki article** — Heropedia look. `## Heading` makes sections (and a
+  contents box), `- ` makes bullets, `**bold**`, `*italic*`, and
+  `[[Some Topic]]` makes a link that runs a new search when tapped. The
+  infobox takes one `Label: Value` per line plus an optional image.
+- **Forum thread** — imageboard look. Separate posts with a line of
+  `---`; start a post with `Name: someone` to sign it; `>` lines go green.
+- **Plain answer** — just you, in a Queree answer card.
+- **Image** — upload or paste an image with a caption.
+
+The player's tab updates live and they get a notification.
+
+**Indexed pages** (☷) are articles you write ahead of time with keywords.
+They show up instantly in any matching search for every player, are
+offered as one-tap answers in your inbox, and power "I'm Feeling Lucky"
+and the search suggestions.

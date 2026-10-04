@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Queree</title>
+<meta name="theme-color" content="#08080A">
+<link rel="icon" href="assets/apps/queree.png" type="image/png">
+<link rel="stylesheet" href="css/neo.css">
+</head>
+<body class="gated qr-page">
+  <div id="gateNote" class="gate-note">
+    <span>Checking your session…</span>
+    <a href="index.html" class="gate-escape">Go to sign in</a>
+  </div>
+
+  <div id="carrier"></div>
+
+  <header class="qr-chrome">
+    <a class="ig-home" href="home.html" title="Home">⌂</a>
+    <div class="qr-tabs" id="qrTabs"></div>
+    <button class="qr-newtab" id="qrNew" title="New search">＋</button>
+    <button class="icon-btn" id="qrHistory" title="History">⟲</button>
+    <button class="icon-btn qr-admin" id="qrInbox" title="Search inbox" hidden>✉<span class="tab-badge" id="qrInboxBadge" hidden></span></button>
+    <button class="icon-btn qr-admin" id="qrIndex" title="Indexed pages" hidden>☷</button>
+  </header>
+
+  <main class="qr-main" id="qrMain">
+    <div class="ig-loading">Loading…</div>
+  </main>
+
+  <div id="modalRoot"></div>
+
+<script type="module" src="js/queree.js"></script>
+</body>
+</html>
