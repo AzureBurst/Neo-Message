@@ -138,7 +138,7 @@ function idCard() {
       <div class="fl-idcard-photo">${me.avatar_url
         ? `<img src="${esc(me.avatar_url)}" alt="">` : esc(me.username.slice(0, 2).toUpperCase())}</div>
       <div class="fl-idcard-text">
-        <span class="fl-idcard-school">Flight University</span>
+        <span class="fl-idcard-school">Justice University</span>
         <strong>${esc(me.username)}</strong>
         <span>${esc([r.major, r.year].filter(Boolean).join(' · ') || 'Undeclared')}</span>
         <span class="mono">ID ${esc(r.student_id || defaultStudentId(me.id))}</span>

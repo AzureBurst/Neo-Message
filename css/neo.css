@@ -2809,3 +2809,21 @@ label, .field label { font-weight: 700 !important; letter-spacing: .06em; }
 .icon-btn, .ig-tab, .ig-home, .ig-post-btn {
   font-family: system-ui, 'Segoe UI Symbol', 'Apple Symbols', 'Noto Sans Symbols 2', sans-serif;
 }
+
+/* Flight Portal swaps the phone's backdrop for the Justice University
+   seal. Same layer and blend as the usual backdrop, so it sits behind
+   everything and never catches a click. */
+body.flight-page::before {
+  background-image: url('../assets/flight-crest.png');
+  background-size: min(70vw, 760px) auto;
+  background-position: center 55%;
+  opacity: .16;
+}
+@media (max-width: 700px) {
+  body.flight-page::before { background-size: 115vw auto; opacity: .12; }
+}
+@media (max-width: 560px) {
+  .fl-tabs { flex-wrap: nowrap; overflow-x: auto; margin-left: 0; width: 100%; scrollbar-width: none; }
+  .fl-tabs::-webkit-scrollbar { display: none; }
+  .fl-tab { flex: 0 0 auto; }
+}
