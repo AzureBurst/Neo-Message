@@ -128,3 +128,14 @@ The player's tab updates live and they get a notification.
 They show up instantly in any matching search for every player, are
 offered as one-tap answers in your inbox, and feed the search
 suggestions.
+
+## Time zone
+
+Every player sees the same times — the story clock, message times, the
+calendar, due dates — no matter where they live. The app runs on US
+Eastern time by default. To use a different zone, add this line to
+`js/config.js` (any IANA zone name, e.g. `America/Chicago` or `UTC`):
+
+```js
+export const STORY_TZ = 'America/Los_Angeles';
+```

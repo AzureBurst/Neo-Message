@@ -247,7 +247,7 @@ begin
       for r in select user_id from public.flight_enrollments where course_id = new.course_id loop
         perform public.push_notification(r.user_id, 'flight', 'flight_assignment',
           coalesce(code, 'Course') || ': new assignment',
-          new.title || coalesce(' — due ' || to_char(new.due_at, 'Mon DD'), ''),
+          new.title || coalesce(' — due ' || to_char(new.due_at at time zone 'America/New_York', 'Mon DD'), ''),
           'flight.html?course=' || new.course_id, new.course_id, null);
       end loop;
       return new;

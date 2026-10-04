@@ -1,7 +1,7 @@
 -- =====================================================================
 --  NOTIFICATION FIX — run once in the Supabase SQL Editor. Safe to re-run.
 --
---  Neomail, Flight Portal (email a professor) and Queree checked for the
+--  Neomail, Flight Portal and Queree checked for the
 --  notification function in a way that always came back "not found", so
 --  those notifications were silently skipped. This re-creates just the
 --  affected functions with the corrected check.
@@ -39,52 +39,78 @@ begin
   end if;
 end $$;
 
--- Flight Portal: emailing a professor
-create or replace function public.flight_email_professor(
-  p_course uuid, p_subject text, p_body text)
-returns uuid language plpgsql security definer
-set search_path = public as $$
-declare
-  c record; nm text; t uuid; owner uuid;
+-- Flight Portal: new assignments, grades and announcements
+do $$
 begin
-  if to_regclass('public.mail_threads') is null then
-    raise exception 'Neomail is not set up yet (run sql/mail.sql)';
+  if to_regprocedure('public.push_notification(uuid,text,text,text,text,text,uuid,text)') is not null then
+
+    create or replace function public.notif_flight_assignment()
+    returns trigger language plpgsql security definer
+    set search_path = public as $fn$
+    declare r record; code text;
+    begin
+      select c.code into code from public.flight_courses c where c.id = new.course_id;
+      for r in select user_id from public.flight_enrollments where course_id = new.course_id loop
+        perform public.push_notification(r.user_id, 'flight', 'flight_assignment',
+          coalesce(code, 'Course') || ': new assignment',
+          new.title || coalesce(' — due ' || to_char(new.due_at at time zone 'America/New_York', 'Mon DD'), ''),
+          'flight.html?course=' || new.course_id, new.course_id, null);
+      end loop;
+      return new;
+    end;
+    $fn$;
+
+    drop trigger if exists trg_notif_flight_asg on public.flight_assignments;
+    create trigger trg_notif_flight_asg after insert on public.flight_assignments
+      for each row execute function public.notif_flight_assignment();
+
+    create or replace function public.notif_flight_grade()
+    returns trigger language plpgsql security definer
+    set search_path = public as $fn$
+    declare a record; code text;
+    begin
+      if new.score is null then return new; end if;
+      if tg_op = 'UPDATE' and old.score is not distinct from new.score then return new; end if;
+      select * into a from public.flight_assignments where id = new.assignment_id;
+      select c.code into code from public.flight_courses c where c.id = a.course_id;
+      perform public.push_notification(new.user_id, 'flight', 'flight_grade',
+        coalesce(code, 'Course') || ': grade posted', a.title,
+        'flight.html?course=' || a.course_id, a.course_id, null);
+      return new;
+    end;
+    $fn$;
+
+    drop trigger if exists trg_notif_flight_grade on public.flight_grades;
+    create trigger trg_notif_flight_grade after insert or update on public.flight_grades
+      for each row execute function public.notif_flight_grade();
+
+    create or replace function public.notif_flight_announce()
+    returns trigger language plpgsql security definer
+    set search_path = public as $fn$
+    declare r record; code text;
+    begin
+      if new.course_id is null then
+        for r in select id as user_id from public.profiles where not is_admin loop
+          perform public.push_notification(r.user_id, 'flight', 'flight_announce',
+            'Flight Portal', new.title, 'flight.html', new.id, null);
+        end loop;
+      else
+        select c.code into code from public.flight_courses c where c.id = new.course_id;
+        for r in select user_id from public.flight_enrollments where course_id = new.course_id loop
+          perform public.push_notification(r.user_id, 'flight', 'flight_announce',
+            coalesce(code, 'Course') || ': announcement', new.title,
+            'flight.html?course=' || new.course_id, new.course_id, null);
+        end loop;
+      end if;
+      return new;
+    end;
+    $fn$;
+
+    drop trigger if exists trg_notif_flight_ann on public.flight_announcements;
+    create trigger trg_notif_flight_ann after insert on public.flight_announcements
+      for each row execute function public.notif_flight_announce();
   end if;
-  if not public.flight_enrolled(p_course) and not public.is_admin() then
-    raise exception 'You are not enrolled in that course';
-  end if;
-  if coalesce(trim(p_body), '') = '' then
-    raise exception 'Write a message first';
-  end if;
-
-  select * into c from public.flight_courses where id = p_course;
-  if not found then raise exception 'No such course'; end if;
-
-  -- The GM who made the course receives it; fall back to any admin.
-  owner := c.created_by;
-  if owner is null or not exists (select 1 from public.profiles where id = owner and is_admin) then
-    select id into owner from public.profiles where is_admin order by created_at limit 1;
-  end if;
-  if owner is null then raise exception 'No admin account exists to receive it'; end if;
-
-  select username into nm from public.profiles where id = auth.uid();
-
-  insert into public.mail_threads
-    (owner_admin_id, recipient_id, subject, sender_name, sender_addr,
-     last_at, last_snippet, last_from_recipient)
-  values (owner, auth.uid(),
-          coalesce(nullif(trim(p_subject), ''), c.code || ' question'),
-          c.professor_name,
-          coalesce(c.professor_addr, 'professor@juniversity.edu'),
-          now(), left(p_body, 140), true)
-  returning id into t;
-
-  insert into public.mail_messages (thread_id, from_recipient, from_name, from_addr, body)
-  values (t, true, coalesce(nm, 'Student'), null, p_body);
-
-  return t;
-end;
-$$;
+end $$;
 
 -- Queree: answers and new searches
 create or replace function public.qr_on_result()

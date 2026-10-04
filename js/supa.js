@@ -2,6 +2,8 @@
 //  NEO MESSAGE — shared client + helpers
 // =====================================================================
 
+// Must be first: makes every date on the page use the story time zone.
+import './tz.js';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import {
   SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_DOMAIN,
