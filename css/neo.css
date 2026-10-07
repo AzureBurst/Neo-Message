@@ -3483,3 +3483,62 @@ body.maint-locked { overflow: hidden; }
 .bulk-bar .btn-ghost { background: rgba(0,0,0,.12); color: var(--on-sent); }
 #threadRows tr.is-picked td { background: rgba(207,242,58,.08); }
 .bulk-bar .grow { flex: 1; }
+
+/* =====================================================================
+   FLIGHT PORTAL — student handbook
+   ===================================================================== */
+.hb { animation: neo-view-in .24s ease both; }
+.hb-cover {
+  display: flex; align-items: center; gap: 18px; padding: 20px 22px; margin-bottom: 16px;
+  border-radius: 18px; border: 3px solid var(--outline);
+  background: linear-gradient(135deg, #1D1D1D, #121212); box-shadow: 0 8px 24px rgba(0,0,0,.45);
+}
+.hb-cover img { width: 84px; height: 84px; flex: none; filter: drop-shadow(0 4px 0 var(--outline)); }
+.hb-cover small { color: var(--sent); font: 800 11px var(--font-ui); text-transform: uppercase; letter-spacing: .12em; }
+.hb-cover h1 { margin: 4px 0 6px; font: 900 24px/1.15 var(--font-ui); }
+.hb-cover p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.hb-layout { display: grid; grid-template-columns: 240px 1fr; gap: 18px; align-items: start; }
+.hb-toc {
+  position: sticky; top: 70px; max-height: calc(100vh - 90px); overflow: auto;
+  padding: 14px; border-radius: 16px; background: var(--panel); border: 3px solid var(--outline);
+}
+.hb-search { width: 100%; margin-bottom: 12px; border-radius: 999px !important; padding: 8px 14px !important; }
+.hb-toc b { display: block; font: 800 11px var(--font-ui); text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin-bottom: 6px; }
+.hb-toc ol { list-style: none; margin: 0; padding: 0; counter-reset: hb; }
+.hb-toc li a {
+  display: flex; gap: 8px; align-items: baseline; padding: 7px 8px; border-radius: 10px;
+  color: var(--muted); font: 600 13px/1.3 var(--font-ui); counter-increment: hb;
+}
+.hb-toc li a::before { content: counter(hb); color: var(--dim); font: 700 11px var(--font-mono); min-width: 14px; }
+.hb-toc li a:hover { background: var(--panel-2); color: var(--text); }
+.hb-toc li a.on { background: var(--sent); color: var(--on-sent); }
+.hb-toc li a.on::before { color: var(--on-sent); }
+.hb-hits { margin-left: auto; padding: 0 7px; border-radius: 999px; background: #F5D810; color: #111; font: 800 11px var(--font-ui); }
+
+/* the pages read like a printed handbook */
+.hb-body {
+  padding: 8px 30px 30px; border-radius: 16px; border: 3px solid var(--outline);
+  background: #FBF8F1; color: #23201C; box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  font: 15px/1.7 Georgia, "Times New Roman", serif;
+}
+.hb-chapter { padding-top: 22px; scroll-margin-top: 80px; }
+.hb-chapter + .hb-chapter { border-top: 2px solid #E3DCCB; margin-top: 10px; }
+.hb-label { font: 800 11px var(--font-ui); text-transform: uppercase; letter-spacing: .12em; color: #A0552E; }
+.hb-chapter h2 { margin: 2px 0 12px; font: 900 22px var(--font-ui); color: #15120F; }
+.hb-chapter h3 { margin: 20px 0 6px; font: 800 16px var(--font-ui); color: #15120F; }
+.hb-chapter p { margin: 0 0 12px; }
+.hb-policy strong { font-family: var(--font-ui); font-weight: 800; color: #15120F; }
+.hb-chapter ul { margin: 0 0 14px; padding-left: 22px; }
+.hb-chapter li { margin-bottom: 6px; }
+.hb-chapter li::marker { color: #A0552E; }
+.hb-body mark { background: #F5D810; color: inherit; padding: 0 2px; border-radius: 3px; }
+
+@media (max-width: 760px) {
+  .hb-layout { grid-template-columns: 1fr; }
+  .hb-toc { position: static; max-height: none; }
+  .hb-toc ol { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .hb-toc li a { white-space: nowrap; background: var(--panel-2); border-radius: 999px; padding: 6px 12px; }
+  .hb-body { padding: 4px 18px 22px; }
+  .hb-cover img { width: 56px; height: 56px; }
+  .hb-cover h1 { font-size: 19px; }
+}

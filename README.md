@@ -184,3 +184,12 @@ next to a player, type the new name and Save. Because players sign in with
 their username, this also moves their sign-in to the new name — they keep
 their password, and everything they've made stays with them. Tell them
 their new name before their next sign-in.
+
+## Student handbook
+
+Flight Portal → **Handbook** shows the Justice University Student
+Handbook with a contents list and search. The text lives in
+`js/flight-handbook.js` — edit it there to add or change policies.
+Link straight to a chapter with `flight.html?handbook=honor` (ids:
+housing, hero, honor, conduct, harassment, academic, health, emergency,
+tech, orgs).

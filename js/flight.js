@@ -19,6 +19,7 @@ import { loadClock, storyNow, onClockChange } from './clock.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { playSound } from './sfx.js';
 import { courseGrade, letterFor, gpa, dueLabel, parseMeetings, fmtClock } from './flight-grades.js';
+import { HANDBOOK, HANDBOOK_TITLE, renderChapter, chapterHits } from './flight-handbook.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -121,6 +122,7 @@ async function go(name, arg = null) {
       else if (name === 'course') viewCourse(arg);
       else if (name === 'tasks') viewTasks(arg || 'upcoming');
       else if (name === 'account') viewAccount();
+      else if (name === 'handbook') viewHandbook(arg);
     }
   } catch (err) {
     main.innerHTML = `<div class="ig-empty">${esc(err.message)}</div>`;
@@ -375,6 +377,59 @@ function viewTasks(filter) {
 
   $$('[data-f]', main).forEach(b => b.addEventListener('click', () => go('tasks', b.dataset.f)));
   wireTasks(main);
+}
+
+/* The student handbook: contents down the side, search across every
+   chapter, and each chapter linkable by its id. */
+function viewHandbook(jumpTo = null) {
+  main.innerHTML = `
+    <div class="hb">
+      <header class="hb-cover">
+        <img src="assets/flight-crest.png" alt="">
+        <div>
+          <small>Office of Student Affairs</small>
+          <h1>${esc(HANDBOOK_TITLE)}</h1>
+          <p>Policies every student is expected to know. Passages ending in “…” continue in the full printed handbook.</p>
+        </div>
+      </header>
+      <div class="hb-layout">
+        <nav class="hb-toc" id="hbToc" aria-label="Contents">
+          <input type="search" class="hb-search" id="hbSearch" placeholder="Search the handbook" aria-label="Search the handbook">
+          <b>Contents</b>
+          <ol id="hbTocList"></ol>
+        </nav>
+        <article class="hb-body" id="hbBody"></article>
+      </div>
+    </div>`;
+
+  const paint = (q = '') => {
+    q = q.trim();
+    const shown = HANDBOOK.map(c => ({ c, n: chapterHits(c, q) })).filter(x => x.n > 0);
+    $('#hbTocList').innerHTML = shown.map(({ c, n }) => `
+      <li><a href="#hb-${esc(c.id)}" data-ch="${esc(c.id)}">${esc(c.title)}${q ? ` <span class="hb-hits">${n}</span>` : ''}</a></li>`).join('')
+      || '<li class="muted small">No matches.</li>';
+    $('#hbBody').innerHTML = shown.map(({ c }) => renderChapter(c, q)).join('')
+      || `<div class="fl-empty">Nothing in the handbook mentions “${esc(q)}”.</div>`;
+    $$('[data-ch]', main).forEach(a => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('hb-' + a.dataset.ch)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+  };
+  paint();
+  let t = null;
+  $('#hbSearch').addEventListener('input', (e) => { clearTimeout(t); t = setTimeout(() => paint(e.target.value), 120); });
+
+  // Highlight the chapter you're reading in the contents.
+  const io = new IntersectionObserver((entries) => {
+    for (const en of entries) if (en.isIntersecting) {
+      $$('[data-ch]', main).forEach(a => a.classList.toggle('on', 'hb-' + a.dataset.ch === en.target.id));
+    }
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  new MutationObserver(() => $$('.hb-chapter', main).forEach(s => io.observe(s)))
+    .observe($('#hbBody'), { childList: true });
+  $$('.hb-chapter', main).forEach(s => io.observe(s));
+
+  if (jumpTo) setTimeout(() => document.getElementById('hb-' + jumpTo)?.scrollIntoView({ block: 'start' }), 50);
 }
 
 function viewAccount() {
@@ -1053,5 +1108,8 @@ function liveRefresh() {
 onClockChange(() => liveRefresh());
 
 // Deep link from a notification.
-const wantCourse = new URLSearchParams(location.search).get('course');
-go(wantCourse ? 'course' : 'dash', wantCourse);
+const startParams = new URLSearchParams(location.search);
+const wantCourse = startParams.get('course');
+// flight.html?handbook  or  ?handbook=honor  opens the handbook (at a chapter)
+if (startParams.has('handbook')) go('handbook', startParams.get('handbook') || null);
+else go(wantCourse ? 'course' : 'dash', wantCourse);
