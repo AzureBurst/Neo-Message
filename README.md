@@ -165,6 +165,13 @@ a notification when someone writes. Open any entry to leave a **GM note**
 — it appears under the entry in yellow and notifies the player. Players
 can't edit your notes, and you can't edit their writing.
 
+Every entry carries the real-world date and time it was **first saved**
+(`created_at`) and **last saved** (`updated_at`). The database sets
+these itself, so they can't be faked or changed from the browser. You
+see them at the bottom of each entry, and in Supabase you can open the
+**journal_log** view for a readable list (player, title, times in US
+Eastern, story time, preview).
+
 ## Queree preview
 
 In the Queree answer form, **Preview** shows exactly what the player will

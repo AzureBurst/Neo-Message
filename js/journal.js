@@ -44,6 +44,12 @@ const toInput = d => {
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
+// The real-world time an entry was saved (set by the database, not the
+// browser), so the GM can tell when something was actually written.
+const realFmt = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+const realStamp = e => `🕓 Saved ${esc(realFmt(e.created_at))}`
+  + (e.updated_at && new Date(e.updated_at) - new Date(e.created_at) > 60000 ? ` · last edited ${esc(realFmt(e.updated_at))}` : '')
+  + ' <span>(real time)</span>';
 const paras = t => String(t || '').split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
 const sortEntries = list => list.sort((a, b) => when(b) - when(a) || new Date(b.created_at) - new Date(a.created_at));
 
@@ -107,6 +113,7 @@ function entryCard(e, { showAuthor = false } = {}) {
       <div class="jr-entry-body">${paras(e.body)}</div>
       ${e.image_url ? `<img class="jr-entry-img" src="${esc(e.image_url)}" alt="" loading="lazy">` : ''}
       ${e.gm_note ? `<div class="jr-gm-note"><b>GM note</b>${paras(e.gm_note)}</div>` : ''}
+      ${me.is_admin ? `<p class="jr-realtime">${realStamp(e)}</p>` : ''}
     </article>`;
 }
 
@@ -228,8 +235,7 @@ async function viewEntry(id) {
         ${e.title ? `<h2>${esc(e.title)}</h2>` : ''}
         <div class="jr-entry-body full">${paras(e.body)}</div>
         ${e.image_url ? `<img class="jr-entry-img" src="${esc(e.image_url)}" alt="">` : ''}
-        ${e.updated_at && new Date(e.updated_at) - new Date(e.created_at) > 60000
-          ? `<p class="muted small">Edited ${esc(new Date(e.updated_at).toLocaleDateString([], { month: 'short', day: 'numeric' }))} (real time)</p>` : ''}
+        <p class="jr-realtime">${realStamp(e)}</p>
         ${own ? `<div class="jr-entry-actions">
             <button class="btn btn-ghost btn-sm" id="jrDel">Delete</button>
             <button class="btn btn-primary btn-sm" id="jrEdit">Edit</button></div>` : ''}

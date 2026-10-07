@@ -47,9 +47,18 @@ create or replace function public.journal_guard()
 returns trigger language plpgsql security definer
 set search_path = public as $$
 begin
+  -- Real-world timestamps are set here by the database clock, so nobody
+  -- can backdate or change them from the browser.
+  --   created_at = when the entry was first saved
+  --   updated_at = when it was last saved (edited)
   if tg_op = 'INSERT' then
     new.gm_note := null; new.gm_note_at := null;
-  elsif (new.gm_note is distinct from old.gm_note or new.gm_note_at is distinct from old.gm_note_at)
+    new.created_at := now(); new.updated_at := now();
+  else
+    new.created_at := old.created_at;
+    new.updated_at := old.updated_at;
+  end if;
+  if tg_op = 'UPDATE' and (new.gm_note is distinct from old.gm_note or new.gm_note_at is distinct from old.gm_note_at)
         and coalesce(current_setting('journal.gm', true), '') <> 'on' then
     new.gm_note := old.gm_note; new.gm_note_at := old.gm_note_at;
   end if;
@@ -63,6 +72,23 @@ $$;
 drop trigger if exists trg_journal_guard on public.journal_entries;
 create trigger trg_journal_guard before insert or update on public.journal_entries
   for each row execute function public.journal_guard();
+
+-- A readable log for the Supabase dashboard: Table Editor → journal_log
+-- (or "select * from journal_log;" in the SQL Editor). Times are US
+-- Eastern, real world. security_invoker keeps the same access rules.
+drop view if exists public.journal_log;
+create view public.journal_log with (security_invoker = true) as
+  select e.id,
+         p.username                                     as player,
+         e.title,
+         (e.created_at at time zone 'America/New_York') as first_saved_eastern,
+         (e.updated_at at time zone 'America/New_York') as last_saved_eastern,
+         (e.story_at   at time zone 'America/New_York') as story_time,
+         left(e.body, 140)                              as preview
+    from public.journal_entries e
+    left join public.profiles p on p.id = e.user_id
+   order by e.created_at desc;
+grant select on public.journal_log to authenticated;
 
 -- The GM's note on an entry. Notifies the player.
 create or replace function public.journal_gm_note(entry uuid, note text)
