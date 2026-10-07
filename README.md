@@ -176,3 +176,11 @@ Eastern, story time, preview).
 
 In the Queree answer form, **Preview** shows exactly what the player will
 get — the result card and the opened page — before you send it.
+
+## Renaming players
+
+Run `sql/admin-rename.sql` once. Then in NeoAdmin → **Accounts**, press ✎
+next to a player, type the new name and Save. Because players sign in with
+their username, this also moves their sign-in to the new name — they keep
+their password, and everything they've made stays with them. Tell them
+their new name before their next sign-in.

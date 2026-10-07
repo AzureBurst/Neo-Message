@@ -3466,3 +3466,7 @@ body.maint-locked { overflow: hidden; }
 .qr-preview .qr-result { cursor: default; max-width: 660px; }
 .jr-realtime { margin: 12px 0 0; font: 600 11.5px var(--font-mono); color: #8A7F75; }
 .jr-realtime span { opacity: .7; }
+
+/* NeoAdmin: rename a player in place */
+.acct-edit { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.acct-edit input { width: 150px; padding: 6px 10px !important; font-size: 14px !important; }

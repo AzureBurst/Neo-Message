@@ -288,15 +288,62 @@ function paintUsers() {
   log.forEach(r => counts.set(r.from, (counts.get(r.from) ?? 0) + 1));
 
   $('#userRows').innerHTML = people.map(p => `
-    <tr>
-      <td class="t-who">${esc(p.username)}</td>
+    <tr data-user="${esc(p.id)}">
+      <td class="t-who"><span class="acct-name">${esc(p.username)}</span></td>
       <td class="t-num">${esc(formatNumber(p.phone_number))}</td>
       <td class="t-time">${new Date(p.created_at).toLocaleDateString()}</td>
       <td class="t-num">${counts.get(p.username) ?? 0}</td>
       <td>${p.is_admin
         ? '<span class="pill admin">admin</span>'
         : '<span class="pill">player</span>'}</td>
+      <td><button class="icon-btn" data-rename="${esc(p.id)}" title="Rename ${esc(p.username)}">✎</button></td>
     </tr>`).join('');
+
+  $$('[data-rename]').forEach(b => b.addEventListener('click', () => startRename(b.dataset.rename)));
+}
+
+/* Rename in place: the name cell becomes a text box. The server checks
+   the name and moves the player's sign-in to it in the same step. */
+function startRename(id) {
+  const p = people.find(x => x.id === id);
+  const row = $(`tr[data-user="${CSS.escape(id)}"]`);
+  if (!p || !row || row.querySelector('.acct-edit')) return;
+  const cell = row.querySelector('.t-who');
+  cell.innerHTML = `
+    <form class="acct-edit">
+      <input type="text" value="${esc(p.username)}" maxlength="24" aria-label="New username" spellcheck="false" autocomplete="off">
+      <button class="btn btn-sm" type="submit">Save</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-cancel>Cancel</button>
+    </form>`;
+  const form = cell.querySelector('form'), input = form.querySelector('input');
+  input.focus(); input.select();
+  const restore = () => { cell.innerHTML = `<span class="acct-name">${esc(p.username)}</span>`; };
+  form.querySelector('[data-cancel]').addEventListener('click', restore);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Escape') restore(); });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (name === p.username) return restore();
+    if (!/^[A-Za-z0-9_.-]{2,24}$/.test(name)) {
+      return toast('Usernames are 2–24 characters: letters, numbers, dot, dash or underscore.', 'error');
+    }
+    const ok = id === me.id
+      ? confirm(`Rename yourself to "${name}"? You'll sign in as "${name}" from now on.`)
+      : confirm(`Rename "${p.username}" to "${name}"?\n\nThey'll sign in as "${name}" (same password) from now on.`);
+    if (!ok) return;
+    $$('button, input', form).forEach(x => x.disabled = true);
+    const { data, error } = await supa.rpc('admin_rename_user', { target: id, new_name: name });
+    if (error) {
+      $$('button, input', form).forEach(x => x.disabled = false);
+      return toast(/admin_rename_user/.test(error.message)
+        ? 'Renaming isn\'t set up yet — run sql/admin-rename.sql in Supabase.' : error.message, 'error');
+    }
+    const old = p.username;
+    p.username = data || name;
+    log.forEach(r => { if (r.from === old) r.from = p.username; });
+    toast(`Renamed ${old} to ${p.username}.`, 'ok');
+    loadAll();
+  });
 }
 
 /* ------------------------------------------------------------------ */
