@@ -65,11 +65,19 @@
   <h2 style="margin:34px 0 12px;font-size:18px">Threads</h2>
   <p class="muted small" style="margin:-6px 0 12px">
     Deleting is permanent. Download a transcript first if the thread matters.
+    Tick several threads to clear or delete them together.
   </p>
+  <div class="bulk-bar" id="bulkBar" hidden>
+    <strong id="bulkCount">0 selected</strong>
+    <span class="grow"></span>
+    <button class="btn btn-ghost btn-sm" id="bulkNone">Unselect all</button>
+    <button class="btn btn-ghost btn-sm" id="bulkClear">Clear messages</button>
+    <button class="btn btn-sm btn-danger" id="bulkDelete">Delete threads</button>
+  </div>
   <div class="table-wrap" style="max-height:none">
     <table>
       <thead>
-        <tr><th>Thread</th><th>People</th><th>Messages</th><th>Last activity</th><th></th></tr>
+        <tr><th style="width:36px"><input type="checkbox" class="bulk-check" id="bulkAll" title="Select all threads" aria-label="Select all threads"></th><th>Thread</th><th>People</th><th>Messages</th><th>Last activity</th><th></th></tr>
       </thead>
       <tbody id="threadRows"></tbody>
     </table>

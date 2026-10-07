@@ -123,12 +123,18 @@ function paintThreads() {
   }).sort((a, b) => new Date(b.last ?? 0) - new Date(a.last ?? 0));
 
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="5" class="empty-cell">No threads yet.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="empty-cell">No threads yet.</td></tr>';
+    paintBulk();
     return;
   }
 
+  // Forget ticks for threads that no longer exist.
+  for (const id of [...picked]) if (!convos.has(id)) picked.delete(id);
+
   body.innerHTML = rows.map(r => `
-    <tr data-conv="${esc(r.id)}">
+    <tr data-conv="${esc(r.id)}" class="${picked.has(r.id) ? 'is-picked' : ''}">
+      <td><input type="checkbox" class="bulk-check" data-pick="${esc(r.id)}" ${picked.has(r.id) ? 'checked' : ''}
+                 aria-label="Select ${esc(r.label)}"></td>
       <td><strong>${esc(r.label)}</strong></td>
       <td class="muted">${esc(r.people || '—')}</td>
       <td class="mono">${r.count}</td>
@@ -172,7 +178,74 @@ function paintThreads() {
       await loadAll();
     });
   });
+  paintBulk();
 }
+
+/* ------------------------------------------------------------------ */
+/*  several threads at once                                           */
+/* ------------------------------------------------------------------ */
+
+const picked = new Set();
+
+function paintBulk() {
+  const n = picked.size;
+  const total = $$('#threadRows [data-pick]').length;
+  $('#bulkBar').hidden = !n;
+  $('#bulkCount').textContent = `${n} thread${n === 1 ? '' : 's'} selected`;
+  const all = $('#bulkAll');
+  all.checked = !!total && n === total;
+  all.indeterminate = n > 0 && n < total;
+  $$('#threadRows tr[data-conv]').forEach(tr => tr.classList.toggle('is-picked', picked.has(tr.dataset.conv)));
+}
+
+$('#threadRows').addEventListener('change', (e) => {
+  const box = e.target.closest('[data-pick]');
+  if (!box) return;
+  box.checked ? picked.add(box.dataset.pick) : picked.delete(box.dataset.pick);
+  paintBulk();
+});
+$('#bulkAll').addEventListener('change', (e) => {
+  $$('#threadRows [data-pick]').forEach(b => {
+    b.checked = e.target.checked;
+    e.target.checked ? picked.add(b.dataset.pick) : picked.delete(b.dataset.pick);
+  });
+  paintBulk();
+});
+$('#bulkNone').addEventListener('click', () => { picked.clear(); $$('#threadRows [data-pick]').forEach(b => b.checked = false); paintBulk(); });
+
+async function bulk(act) {
+  const ids = [...picked];
+  if (!ids.length) return;
+  const names = ids.map(id => convos.get(id)?.label || 'thread');
+  const list = names.slice(0, 8).map(n => `  • ${n}`).join('\n') + (names.length > 8 ? `\n  …and ${names.length - 8} more` : '');
+  const question = act === 'delete'
+    ? `Delete ${ids.length} thread${ids.length === 1 ? '' : 's'} and every message in them?\n\n${list}\n\nThis cannot be undone.`
+    : `Delete every message in ${ids.length} thread${ids.length === 1 ? '' : 's'} but keep the threads?\n\n${list}\n\nThis cannot be undone.`;
+  if (!confirm(question)) return;
+
+  const buttons = $$('#bulkBar button');
+  buttons.forEach(b => b.disabled = true);
+  let done = 0, msgs = 0;
+  const failed = [];
+  for (const id of ids) {
+    $('#bulkCount').textContent = `${act === 'delete' ? 'Deleting' : 'Clearing'} ${done + 1} of ${ids.length}…`;
+    const { data, error } = await supa.rpc(
+      act === 'delete' ? 'admin_delete_conversation' : 'admin_clear_conversation', { conv: id });
+    if (error) failed.push(`${convos.get(id)?.label || id}: ${error.message}`);
+    else { done += 1; msgs += data?.messages ?? 0; picked.delete(id); }
+  }
+  buttons.forEach(b => b.disabled = false);
+
+  $('#adminAlert').innerHTML =
+    `<div class="notice ${failed.length ? 'notice-error' : 'notice-ok'}">${
+      act === 'delete'
+        ? `Deleted ${done} thread${done === 1 ? '' : 's'} and ${msgs} message${msgs === 1 ? '' : 's'}.`
+        : `Cleared ${msgs} message${msgs === 1 ? '' : 's'} from ${done} thread${done === 1 ? '' : 's'}.`
+    }${failed.length ? `<br>Couldn't finish ${failed.length}: ${failed.map(esc).join('; ')}` : ''}</div>`;
+  await loadAll();
+}
+$('#bulkDelete').addEventListener('click', () => bulk('delete'));
+$('#bulkClear').addEventListener('click', () => bulk('clear'));
 
 function buildFilters(convoLabel) {
   const cSel = $('#fConvo');

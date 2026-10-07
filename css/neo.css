@@ -3470,3 +3470,16 @@ body.maint-locked { overflow: hidden; }
 /* NeoAdmin: rename a player in place */
 .acct-edit { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .acct-edit input { width: 150px; padding: 6px 10px !important; font-size: 14px !important; }
+
+/* NeoAdmin: tick several threads */
+.bulk-check { width: 17px; height: 17px; accent-color: var(--sent); cursor: pointer; vertical-align: middle; }
+.bulk-bar {
+  position: sticky; top: 8px; z-index: 5;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 0 0 10px; padding: 10px 14px; border-radius: 14px;
+  background: var(--sent); color: var(--on-sent); border: 3px solid var(--outline);
+  box-shadow: 0 8px 20px rgba(0,0,0,.45);
+}
+.bulk-bar .btn-ghost { background: rgba(0,0,0,.12); color: var(--on-sent); }
+#threadRows tr.is-picked td { background: rgba(207,242,58,.08); }
+.bulk-bar .grow { flex: 1; }
