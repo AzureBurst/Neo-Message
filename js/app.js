@@ -72,6 +72,8 @@ function addGmButton(id, glyph, label, onClick) {
 if (me.is_admin) {
   addGmButton('adminBtn', '◉', 'Admin console', () => location.href = 'admin.html');
   addGmButton('clockBtn', '◔', 'Story clock',   () => openClockModal(modal));
+  addGmButton('maintBtn', '🚧', 'Maintenance mode',
+    async () => (await import('./maintenance.js')).openMaintenanceModal());
 }
 // Puppets stay reachable while you are wearing one, so you can get back.
 if (me.is_admin || hasHome()) {

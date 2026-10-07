@@ -91,7 +91,10 @@ onNotifications(() => paintBadges(unreadCounts()));
 if (me.is_admin) {
   const hint = $('#adminHint');
   hint.hidden = false;
-  hint.textContent = 'You are the GM. Each app has extra controls for you inside.';
+  hint.innerHTML = 'You are the GM. Each app has extra controls for you inside. '
+    + '<button class="home-maint-btn" id="maintBtn">🚧 Maintenance mode</button>';
+  $('#maintBtn').addEventListener('click', async () =>
+    (await import('./maintenance.js')).openMaintenanceModal());
 }
 
 /* ------------------------------------------------------------------ */

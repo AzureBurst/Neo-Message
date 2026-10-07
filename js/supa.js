@@ -61,6 +61,9 @@ export async function requireProfile() {
     bounce('That session is no longer valid. Taking you to the sign-in page…');
     return null;
   }
+  // Maintenance mode: shows the sign (and keeps watching) on every page.
+  import('./maintenance.js').then(m => m.watchMaintenance(data))
+    .catch(err => console.warn('[maintenance]', err));
   return data;
 }
 

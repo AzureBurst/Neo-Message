@@ -3255,3 +3255,47 @@ button.qr-hist-q:hover { background: var(--panel-2); }
   .qr-tabs { order: 9; flex-basis: 100%; }
   .qr-tabs:empty { display: none; }
 }
+
+/* =====================================================================
+   MAINTENANCE MODE — the sign over everything
+   ===================================================================== */
+body.maint-locked { overflow: hidden; }
+.maint-lock {
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-items: center; padding: 18px;
+  background:
+    repeating-linear-gradient(-45deg, rgba(245,216,16,.07) 0 22px, transparent 22px 44px),
+    rgba(6,6,6,.9);
+  backdrop-filter: blur(6px);
+  animation: neo-fade .2s ease both;
+}
+.maint-card {
+  display: grid; justify-items: center; gap: 14px;
+  width: min(440px, 100%); max-height: 100%;
+  animation: maint-drop .45s cubic-bezier(.2,1.4,.4,1) both;
+}
+.maint-card img {
+  width: 100%; max-height: calc(100vh - 170px); object-fit: contain;
+  filter: drop-shadow(0 8px 0 var(--outline)) drop-shadow(0 18px 40px rgba(0,0,0,.6));
+  transform: rotate(-1.5deg);
+}
+@keyframes maint-drop { from { opacity: 0; transform: translateY(-40px) rotate(4deg); } }
+.maint-note {
+  margin: 0; padding: 10px 16px; border-radius: 14px; text-align: center;
+  background: #F5D810; color: #111; font: 800 15px var(--font-ui);
+  border: 3px solid var(--outline);
+}
+.maint-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; }
+.maint-gm { width: 100%; text-align: center; color: var(--muted); font-size: 13px; }
+.maint-pill {
+  position: fixed; left: 12px; bottom: 12px; z-index: 900;
+  display: inline-flex; gap: 6px; align-items: center;
+  padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  background: #F5D810; color: #111; font: 800 12.5px var(--font-ui);
+  border: 3px solid var(--outline); box-shadow: 0 6px 16px rgba(0,0,0,.5);
+}
+.maint-thumb { display: block; width: 120px; margin: 0 auto 12px; transform: rotate(-2deg); }
+.home-maint-btn {
+  display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  background: #F5D810; color: #111; font: 800 12.5px var(--font-ui); border: 2px solid var(--outline);
+}

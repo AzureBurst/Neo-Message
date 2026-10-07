@@ -139,3 +139,13 @@ Eastern time by default. To use a different zone, add this line to
 ```js
 export const STORY_TZ = 'America/Los_Angeles';
 ```
+
+## Maintenance mode
+
+As the GM, tap **🚧 Maintenance mode** on the home screen (or the 🚧
+button in Messages). Turn it on and every player — whoever signs in, and
+anyone already on the site — gets the "Under maintenance" sign over the
+whole site, with an optional message underneath, until you turn it off.
+You still get in: you see the sign once, press Continue, and a yellow
+"Maintenance on" pill stays in the corner as a reminder. No SQL needed.
+To change the sign, replace `assets/maintenance.png`.
