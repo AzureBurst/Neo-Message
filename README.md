@@ -149,3 +149,23 @@ whole site, with an optional message underneath, until you turn it off.
 You still get in: you see the sign once, press Continue, and a yellow
 "Maintenance on" pill stays in the corner as a reminder. No SQL needed.
 To change the sign, replace `assets/maintenance.png`.
+
+## Journal
+
+Run `sql/journal.sql` once in the Supabase SQL Editor.
+
+Players keep a private log of what their character did: a title, the
+story date and time (defaults to the story clock), where it happened, a
+mood, an optional picture and as much text as they like. Drafts save on
+their device as they type. Players only ever see their own journal.
+
+As the GM you get two extra tabs: **Players** (every player's journal,
+with entry counts) and **Recent** (newest entries from everyone). You get
+a notification when someone writes. Open any entry to leave a **GM note**
+— it appears under the entry in yellow and notifies the player. Players
+can't edit your notes, and you can't edit their writing.
+
+## Queree preview
+
+In the Queree answer form, **Preview** shows exactly what the player will
+get — the result card and the opened page — before you send it.

@@ -564,6 +564,7 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
         <div id="cMsg"></div>
       </div>
       <div class="modal-foot">
+        <button class="btn btn-ghost" id="cPreview">Preview</button>
         <button class="btn btn-primary" id="cSave">${target === 'result' ? (existing ? 'Save' : 'Send to player') : 'Save page'}</button>
       </div>
     </div></div>`;
@@ -580,6 +581,48 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
       $('#cImg', root).value = url;
     } catch (err) { toast(err.message || 'Upload failed.', 'error'); }
     btn.disabled = false; btn.textContent = 'Upload';
+  });
+
+  // What the form currently holds, shaped like a stored row.
+  const collect = () => {
+    const v = id => $(id, root)?.value.trim() || '';
+    const body = {
+      wiki:  { text: v('#cText'), infobox: v('#cInfo'), image_url: v('#cImg'), image_caption: v('#cCap') },
+      forum: { board: v('#cBoard'), posts: v('#cPosts'), image_url: v('#cImg') },
+      text:  { text: v('#cText') },
+      image: { image_url: v('#cImg'), caption: v('#cCaption') }
+    }[kind];
+    return { id: e.id || 'preview', kind, title: v('#cTitle') || null, source: v('#cSource') || null, body };
+  };
+
+  // Preview: the page exactly as the player will see it, over the form.
+  $('#cPreview', root).addEventListener('click', () => {
+    const r = collect();
+    const addr = r.source || k.source(r.title || query || 'Page');
+    const layer = document.createElement('div');
+    layer.className = 'qr-preview';
+    layer.innerHTML = `
+      <div class="qr-preview-bar">
+        <span class="qr-preview-tag">Preview</span>
+        <span class="muted small">This is what ${target === 'page' ? 'players' : 'the player'} will see.</span>
+        <span class="jr-spacer"></span>
+        <button class="btn btn-ghost btn-sm" data-back>‹ Keep editing</button>
+        <button class="btn btn-primary btn-sm" data-send>${target === 'result' ? (existing ? 'Save' : 'Send to player') : 'Save page'}</button>
+      </div>
+      <div class="qr-preview-scroll">
+        <div class="qr-preview-label">In the results list</div>
+        <div class="qr-results">${resultCard({ ...r, source: addr }, 'preview')}</div>
+        <div class="qr-preview-label">Opened</div>
+        <div class="qr-page-view">
+          <div class="qr-addressbar"><span class="qr-url">🔒 ${esc(addr)}</span></div>
+          <div class="qr-doc qr-doc-${r.kind}">${renderBody(r)}</div>
+        </div>
+      </div>`;
+    document.body.appendChild(layer);
+    $$('.qr-doc img[data-zoom]', layer).forEach(im => im.addEventListener('click', () => lightbox(im.src)));
+    $$('a.qr-wikilink, .qr-result', layer).forEach(a => a.addEventListener('click', (ev) => ev.preventDefault()));
+    $('[data-back]', layer).addEventListener('click', () => layer.remove());
+    $('[data-send]', layer).addEventListener('click', () => { layer.remove(); $('#cSave', root).click(); });
   });
 
   $('#cSave', root).addEventListener('click', async (ev) => {

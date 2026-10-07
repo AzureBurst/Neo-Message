@@ -21,7 +21,7 @@ export function onNotifications(fn) { listeners.add(fn); return () => listeners.
 function announce() { listeners.forEach(fn => { try { fn(items); } catch {} }); }
 
 export function unreadCounts() {
-  const by = { messages: 0, instagrat: 0, calendar: 0, mail: 0, flight: 0, queree: 0, total: 0 };
+  const by = { messages: 0, instagrat: 0, calendar: 0, mail: 0, flight: 0, queree: 0, journal: 0, total: 0 };
   for (const n of items) {
     if (n.read_at) continue;
     by[n.app] = (by[n.app] || 0) + 1;
@@ -97,7 +97,7 @@ if (typeof window !== 'undefined') {
 /* ------------------------------------------------------------------ */
 
 const ICON = {
-  messages: '✉', instagrat: '◎', calendar: '📅', mail: '📧', flight: '✈', queree: '🔍'
+  messages: '✉', instagrat: '◎', calendar: '📅', mail: '📧', flight: '✈', queree: '🔍', journal: '📓'
 };
 
 function timeAgo(iso) {
