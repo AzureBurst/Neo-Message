@@ -155,8 +155,8 @@ To change the sign, replace `assets/maintenance.png`.
 Run `sql/journal.sql` once in the Supabase SQL Editor.
 
 Players keep a private log of what their character did: a title, the
-story date and time (defaults to the story clock), where it happened, a
-mood, an optional picture and as much text as they like. Drafts save on
+story date and time (defaults to the story clock), where it happened, an
+optional picture and as much text as they like. Drafts save on
 their device as they type. Players only ever see their own journal.
 
 As the GM you get two extra tabs: **Players** (every player's journal,

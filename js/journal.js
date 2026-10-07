@@ -28,7 +28,6 @@ try { sessionStorage.setItem('neo.deep', '1'); sessionStorage.setItem('neo.lastA
 if (me.is_admin) $$('.jr-admin').forEach(b => b.hidden = false);
 
 const main = $('#jrMain');
-const MOODS = ['😀', '🙂', '😐', '🤔', '😟', '😢', '😠', '😱', '😴', '🔥'];
 let view = { name: 'mine' };
 let names = new Map();
 
@@ -107,7 +106,6 @@ function entryCard(e, { showAuthor = false } = {}) {
         ${showAuthor ? `<b class="jr-author">${esc(who?.username || 'someone')}</b>` : ''}
         <span>${showAuthor ? esc(d.toLocaleDateString([], { month: 'short', day: 'numeric' })) + ' · ' : ''}${esc(timeLabel(d))}</span>
         ${e.location ? `<span class="jr-loc">📍 ${esc(e.location)}</span>` : ''}
-        ${e.mood ? `<span class="jr-mood">${esc(e.mood)}</span>` : ''}
       </div>
       ${e.title ? `<h3>${esc(e.title)}</h3>` : ''}
       <div class="jr-entry-body">${paras(e.body)}</div>
@@ -230,8 +228,7 @@ async function viewEntry(id) {
           ${own ? '' : `<b class="jr-author">${esc(names.get(e.user_id)?.username || 'someone')}</b>`}
           <span>${esc(dayLabel(d))} · ${esc(timeLabel(d))}</span>
           ${e.location ? `<span class="jr-loc">📍 ${esc(e.location)}</span>` : ''}
-          ${e.mood ? `<span class="jr-mood">${esc(e.mood)}</span>` : ''}
-        </div>
+          </div>
         ${e.title ? `<h2>${esc(e.title)}</h2>` : ''}
         <div class="jr-entry-body full">${paras(e.body)}</div>
         ${e.image_url ? `<img class="jr-entry-img" src="${esc(e.image_url)}" alt="">` : ''}
@@ -276,7 +273,7 @@ async function viewEntry(id) {
 const draftKey = id => `jr.draft.${me.id}.${id || 'new'}`;
 
 async function viewEdit(id) {
-  let e = { title: '', body: '', story_at: storyNow().toISOString(), location: '', mood: '', image_url: '' };
+  let e = { title: '', body: '', story_at: storyNow().toISOString(), location: '', image_url: '' };
   if (id) {
     const { data } = await supa.from('journal_entries').select('*').eq('id', id).maybeSingle();
     if (!data || data.user_id !== me.id) { main.innerHTML = '<div class="ig-empty">You can only edit your own entries.</div>'; return; }
@@ -296,10 +293,6 @@ async function viewEdit(id) {
           <label>When <input type="datetime-local" id="jeWhen" class="mono" value="${esc(toInput(new Date(e.story_at || storyNow())))}"></label>
           <label>Where <input type="text" id="jeWhere" maxlength="120" placeholder="Optional" value="${esc(e.location || '')}"></label>
         </div>
-        <div class="jr-moods" id="jeMoods">
-          <span class="muted small">Mood</span>
-          ${MOODS.map(m => `<button type="button" class="jr-mood-btn ${e.mood === m ? 'on' : ''}" data-mood="${m}">${m}</button>`).join('')}
-        </div>
         <textarea id="jeBody" class="jr-body-input" placeholder="What happened today?">${esc(e.body || '')}</textarea>
         <div class="jr-edit-img" id="jeImgWrap">
           ${e.image_url ? `<img src="${esc(e.image_url)}" alt=""><button type="button" class="icon-btn" id="jeImgX" title="Remove picture">✕</button>` : ''}
@@ -315,7 +308,6 @@ async function viewEdit(id) {
       </div>
     </div>`;
 
-  let mood = e.mood || '';
   let image = e.image_url || '';
   const body = $('#jeBody');
   const grow = () => { body.style.height = 'auto'; body.style.height = Math.max(260, body.scrollHeight + 4) + 'px'; };
@@ -323,7 +315,7 @@ async function viewEdit(id) {
 
   const snapshot = () => ({
     title: $('#jeTitle').value, body: body.value, location: $('#jeWhere').value,
-    story_at: $('#jeWhen').value ? new Date($('#jeWhen').value).toISOString() : null, mood, image_url: image
+    story_at: $('#jeWhen').value ? new Date($('#jeWhen').value).toISOString() : null, image_url: image
   });
   let saveTimer = null;
   const dirty = () => {
@@ -336,11 +328,6 @@ async function viewEdit(id) {
   ['#jeTitle', '#jeWhen', '#jeWhere'].forEach(s => $(s).addEventListener('input', dirty));
   body.addEventListener('input', () => { grow(); dirty(); });
 
-  $$('[data-mood]', main).forEach(b => b.addEventListener('click', () => {
-    mood = mood === b.dataset.mood ? '' : b.dataset.mood;
-    $$('[data-mood]', main).forEach(x => x.classList.toggle('on', x.dataset.mood === mood));
-    dirty();
-  }));
 
   const paintImg = () => {
     $('#jeImgWrap').innerHTML = image ? `<img src="${esc(image)}" alt=""><button type="button" class="icon-btn" id="jeImgX" title="Remove picture">✕</button>` : '';
@@ -369,7 +356,6 @@ async function viewEdit(id) {
     if (!row.body.trim() && !row.title.trim()) return toast('Write something first.', 'error');
     row.title = row.title.trim() || null;
     row.location = row.location.trim() || null;
-    row.mood = row.mood || null;
     row.image_url = row.image_url || null;
     const btn = ev.currentTarget; btn.disabled = true; btn.textContent = 'Saving…';
     const { data, error } = id
