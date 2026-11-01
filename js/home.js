@@ -216,16 +216,30 @@ function openApp(tile, href) {
   const overlay = makeOverlay(glyph, rect);
   document.body.appendChild(overlay);
 
+  let went = false;
+  const go = () => { if (!went) { went = true; location.href = href; } };
+
+  // Overdrive: the icon grows and dims into the dark background, so the
+  // next page fades in from dark instead of cutting from a bright frame.
+  if (smoothTheme()) {
+    overlay.style.transition = 'none';
+    overlay.animate([
+      { transform: 'translate(0,0) scale(1)', opacity: 1, filter: 'brightness(1)' },
+      { transform: coverTransform(rect), opacity: 1, filter: 'brightness(.12)' }
+    ], { duration: 560, easing: 'cubic-bezier(.65, 0, .35, 1)', fill: 'forwards' }).finished.then(go, go);
+    setTimeout(go, 800);
+    return;
+  }
+
   requestAnimationFrame(() => {
     overlay.style.transform = coverTransform(rect);
     overlay.style.opacity = '1';
   });
-
-  let went = false;
-  const go = () => { if (!went) { went = true; location.href = href; } };
   overlay.addEventListener('transitionend', go, { once: true });
   setTimeout(go, 520);
 }
+
+const smoothTheme = () => document.documentElement.dataset.theme === 'overdrive' && !reduceMotion;
 
 /** The reverse: a full-screen overlay collapses into an app's icon. */
 function shrinkInto(appName) {
@@ -237,6 +251,16 @@ function shrinkInto(appName) {
   const rect = glyph.getBoundingClientRect();
   const overlay = makeOverlay(glyph, rect);
   overlay.style.transition = 'none';
+  if (smoothTheme()) {
+    // Mirror of openApp: start dim and full-screen, brighten as it shrinks home.
+    document.body.appendChild(overlay);
+    overlay.animate([
+      { transform: coverTransform(rect), opacity: 1, filter: 'brightness(.12)' },
+      { transform: 'translate(0,0) scale(1)', opacity: 0, filter: 'brightness(1)' }
+    ], { duration: 620, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'forwards' })
+      .finished.then(() => overlay.remove(), () => overlay.remove());
+    return;
+  }
   overlay.style.transform = coverTransform(rect);   // start covering the screen
   overlay.style.opacity = '1';
   document.body.appendChild(overlay);

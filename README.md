@@ -222,14 +222,17 @@ accounts are NPCs.
 
 ## Overdrive theme
 
-An optional look with more motion and colour: neon haze and a grid floor,
-glitching wordmarks, a moving rainbow rail under each app's header, cards
-with HUD corner brackets that lift on hover, diagonal-wipe page entrances,
-modals that slam in, light bursts on button presses, icons that tilt toward
-the pointer, and glitch transitions between pages (Chrome/Edge).
+An optional look with more colour and smooth motion: neon haze and a grid
+floor, a flowing colour line under each app's header, cards with corner
+brackets that lift on hover, views that rise and fade in, lists that
+cascade, pop-ups that ease in, light bursts on button presses and icons
+that tilt toward the pointer.
 
-Switch it with **◐** on the home screen — it's per device, so each player
-chooses. It lives entirely in `css/edge.css` (+ `js/fx.js`); "reduce motion"
-settings turn the animation off. To make it everyone's default, change
-`=== 'overdrive'` to `!== 'classic'` in the small script at the top of each
-page (or ask).
+Pages stay hidden until they've finished loading (signed in, data fetched,
+fonts and visible pictures ready — never more than 3.5 s), then fade in as
+one piece, so nothing flashes while a page assembles. Opening an app from
+the home screen dims through dark into the app.
+
+Switch it with **◐** on the home screen — it's per device. It lives in
+`css/edge.css`, `js/theme-boot.js` and `js/fx.js`; "reduce motion" settings
+turn the animation off.
