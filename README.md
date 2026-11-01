@@ -219,3 +219,17 @@ saved in a browser show up in Cast with a **Move into Studio** button, and
 left out of Justice U enrolment, "mail everyone" and the journal's player
 list unless you tick "A Justice U student" for them. Players can't see which
 accounts are NPCs.
+
+## Overdrive theme
+
+An optional look with more motion and colour: neon haze and a grid floor,
+glitching wordmarks, a moving rainbow rail under each app's header, cards
+with HUD corner brackets that lift on hover, diagonal-wipe page entrances,
+modals that slam in, light bursts on button presses, icons that tilt toward
+the pointer, and glitch transitions between pages (Chrome/Edge).
+
+Switch it with **◐** on the home screen — it's per device, so each player
+chooses. It lives entirely in `css/edge.css` (+ `js/fx.js`); "reduce motion"
+settings turn the animation off. To make it everyone's default, change
+`=== 'overdrive'` to `!== 'classic'` in the small script at the top of each
+page (or ask).

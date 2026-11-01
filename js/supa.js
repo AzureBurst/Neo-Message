@@ -4,6 +4,8 @@
 
 // Must be first: makes every date on the page use the story time zone.
 import './tz.js';
+// Overdrive theme motion (only loads when the theme is switched on).
+if (document.documentElement.dataset.theme === 'overdrive') import('./fx.js').catch(() => {});
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import {
   SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_DOMAIN,

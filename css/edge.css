@@ -1,0 +1,336 @@
+/* =====================================================================
+   OVERDRIVE — an optional theme layered on top of neo.css
+   Kinetic street-poster energy (chunky outlines, lime, sticker shapes)
+   crossed with neon-noir HUD details (cyan/magenta glow, scanlines,
+   corner brackets, glitch flickers). Nothing here changes layouts.
+
+   Active when <html data-theme="overdrive">. Switch it from the home
+   screen (◐ button). Delete this file to remove the theme completely.
+   Everything that moves is switched off for "reduce motion" users.
+   ===================================================================== */
+
+html[data-theme="overdrive"] {
+  --ink:     #06060A;
+  --panel:   #101017;
+  --panel-2: #181822;
+  --panel-3: #23232F;
+  --edge:    #2C2C3A;
+  --sent:    #D4FF3A;
+  --sent-d:  #B5E01E;
+  --od-cyan:    #22F1FF;
+  --od-magenta: #FF2A7A;
+  --od-yellow:  #FCEE0A;
+  --od-glow-lime: 0 0 0 1px rgba(212,255,58,.55), 0 0 18px rgba(212,255,58,.35);
+  --od-glow-cyan: 0 0 0 1px rgba(34,241,255,.6), 0 0 22px rgba(34,241,255,.35);
+  --od-ease: cubic-bezier(.2, .9, .2, 1.15);
+  --od-snap: cubic-bezier(.7, 0, .2, 1);
+
+  background:
+    radial-gradient(circle, rgba(255,255,255,.045) 1.1px, transparent 1.5px) 0 0 / 14px 14px,
+    linear-gradient(165deg, #040407 0%, #0B0B12 45%, #14101C 100%) fixed;
+  scrollbar-color: var(--sent) #0B0B10;
+}
+html[data-theme="overdrive"] ::selection { background: var(--od-magenta); color: #fff; }
+
+/* Drifting neon haze behind everything + a perspective grid floor. */
+html[data-theme="overdrive"]::before {
+  content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(38% 30% at 18% 22%, rgba(34,241,255,.24), transparent 70%),
+    radial-gradient(34% 28% at 82% 30%, rgba(255,42,122,.22), transparent 70%),
+    radial-gradient(40% 30% at 55% 88%, rgba(212,255,58,.14), transparent 70%);
+  animation: od-haze 26s ease-in-out infinite alternate;
+}
+/* Scanlines + a slow sweep, over the top but never in the way. */
+html[data-theme="overdrive"]::after {
+  content: ""; position: fixed; inset: 0; z-index: 2147483000; pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(34,241,255,.05) 50%, transparent 100%) 0 -30vh / 100% 30vh no-repeat,
+    repeating-linear-gradient(180deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay; opacity: .55;
+  animation: od-sweep 7s linear infinite;
+}
+@keyframes od-haze {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50%  { transform: translate3d(3%, -2%, 0) rotate(4deg); }
+  100% { transform: translate3d(-3%, 2%, 0) rotate(-3deg); }
+}
+@keyframes od-sweep { to { background-position: 0 130vh, 0 0; } }
+
+/* ---------- type ---------- */
+html[data-theme="overdrive"] .ig-word, html[data-theme="overdrive"] .mail-word,
+html[data-theme="overdrive"] .fl-word, html[data-theme="overdrive"] .jr-word,
+html[data-theme="overdrive"] .ns-word, html[data-theme="overdrive"] .wordmark,
+html[data-theme="overdrive"] .home-hi, html[data-theme="overdrive"] .admin-head h1 {
+  font-style: italic; letter-spacing: -.02em; text-transform: uppercase;
+  text-shadow: 2px 0 0 rgba(255,42,122,.55), -2px 0 0 rgba(34,241,255,.55);
+  animation: od-glitch 6s steps(1) infinite;
+}
+@keyframes od-glitch {
+  0%, 92%, 100% { text-shadow: 2px 0 0 rgba(255,42,122,.55), -2px 0 0 rgba(34,241,255,.55); transform: none; }
+  93% { text-shadow: 5px 0 0 rgba(255,42,122,.9), -5px 0 0 rgba(34,241,255,.9); transform: translateX(-2px) skewX(-8deg); }
+  95% { text-shadow: -4px 0 0 rgba(255,42,122,.9), 4px 0 0 rgba(34,241,255,.9); transform: translateX(2px); }
+  97% { text-shadow: 1px 0 0 rgba(255,42,122,.6), -1px 0 0 rgba(34,241,255,.6); transform: none; }
+}
+
+/* ---------- carrier bar: HUD strip ---------- */
+html[data-theme="overdrive"] .carrier {
+  background: linear-gradient(90deg, rgba(212,255,58,.07), transparent 30%, transparent 70%, rgba(34,241,255,.08));
+  border-bottom: 1px solid rgba(212,255,58,.25);
+  color: #CFCFE0;
+}
+html[data-theme="overdrive"] .carrier .bars i { background: var(--sent); box-shadow: 0 0 6px rgba(212,255,58,.7); }
+
+/* ---------- app headers: a live neon rail along the bottom ---------- */
+html[data-theme="overdrive"] :is(.ig-top, .mail-top, .fl-top, .cal-top, .jr-top, .ns-top, .qr-chrome, .sidebar-head, .admin-head) {
+  background: rgba(8,8,14,.86) !important;
+  border-bottom-color: #000 !important;
+}
+html[data-theme="overdrive"] :is(.ig-top, .mail-top, .fl-top, .cal-top, .jr-top, .ns-top, .qr-chrome, .sidebar-head)::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 3px; pointer-events: none;
+  background: linear-gradient(90deg, var(--sent), var(--od-cyan), var(--od-magenta), var(--sent)) 0 0 / 300% 100%;
+  animation: od-rail 6s linear infinite;
+  box-shadow: 0 0 12px rgba(34,241,255,.45);
+}
+html[data-theme="overdrive"] .sidebar-head { position: relative; }
+@keyframes od-rail { to { background-position: 300% 0; } }
+
+/* ---------- tabs: neon pills that slide in ---------- */
+html[data-theme="overdrive"] :is(.ig-tab, .mail-tab, .fl-tab, .jr-tab, .ns-tab, .qr-tab, .seg button, .tabs button, .shade-tab) {
+  transition: background .25s var(--od-snap), color .2s, box-shadow .25s, transform .2s var(--od-ease) !important;
+}
+html[data-theme="overdrive"] :is(.mail-tab, .fl-tab, .jr-tab, .ns-tab, .qr-tab, .seg button, .tabs button, .ig-tab):hover { transform: translateY(-1px); }
+html[data-theme="overdrive"] :is(.mail-tab.is-on, .fl-tab.is-on, .jr-tab.is-on, .ns-tab.is-on, .qr-tab.is-on, .seg button.on, .tabs button.active, .ig-tab.is-on) {
+  box-shadow: var(--od-glow-lime) !important;
+  animation: od-tab-in .35s var(--od-ease);
+}
+@keyframes od-tab-in { from { transform: scale(.86) skewX(-10deg); } }
+
+/* ---------- buttons: shine sweep, glow, glitch on hover, burst on click ---------- */
+html[data-theme="overdrive"] :is(.btn, .ns-btn, .jr-new, .qr-newtab, .ig-post-btn, .send-btn, .ns-send, .home-maint-btn) {
+  position: relative; overflow: hidden; isolation: isolate;
+  transition: transform .18s var(--od-ease), box-shadow .2s, background-color .2s, filter .2s !important;
+}
+html[data-theme="overdrive"] :is(.btn, .ns-btn, .jr-new, .home-maint-btn)::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.45) 50%, transparent 65%) -150% 0 / 250% 100% no-repeat;
+  transition: background-position .55s var(--od-snap);
+}
+html[data-theme="overdrive"] :is(.btn, .ns-btn, .jr-new, .home-maint-btn):hover:not(:disabled)::before { background-position: 150% 0; }
+html[data-theme="overdrive"] :is(.btn, .ns-btn, .jr-new, .qr-newtab, .ig-post-btn, .home-maint-btn):hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+html[data-theme="overdrive"] :is(.btn-primary, .ns-btn-lime, .jr-new, .ig-post-btn, .send-btn, .ns-send):hover:not(:disabled) {
+  box-shadow: var(--od-glow-lime), 0 4px 0 #000 !important;
+  animation: od-btn-glitch .3s steps(2) 1;
+}
+html[data-theme="overdrive"] :is(.btn-ghost, .ns-btn):hover:not(:disabled) { box-shadow: var(--od-glow-cyan) !important; }
+html[data-theme="overdrive"] :is(.btn, .ns-btn, .jr-new, .ns-send, .send-btn):active:not(:disabled) { transform: translateY(1px) scale(.96) skewX(-4deg); }
+@keyframes od-btn-glitch {
+  0%   { text-shadow: 3px 0 var(--od-magenta), -3px 0 var(--od-cyan); }
+  50%  { text-shadow: -2px 0 var(--od-magenta), 2px 0 var(--od-cyan); }
+  100% { text-shadow: none; }
+}
+.od-burst {
+  position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; pointer-events: none; z-index: 2;
+  background: radial-gradient(circle, rgba(255,255,255,.9), rgba(212,255,58,.5) 40%, transparent 70%);
+  animation: od-burst .5s ease-out forwards;
+}
+@keyframes od-burst { to { transform: scale(26); opacity: 0; } }
+html[data-theme="overdrive"] .icon-btn { transition: transform .18s var(--od-ease), box-shadow .2s, color .2s; }
+html[data-theme="overdrive"] .icon-btn:hover { transform: translateY(-1px) rotate(-4deg); box-shadow: var(--od-glow-cyan); color: var(--od-cyan); }
+
+/* ---------- inputs: cyan focus ---------- */
+html[data-theme="overdrive"] :is(input, textarea, select):focus {
+  border-color: var(--od-cyan) !important;
+  box-shadow: 0 0 0 3px rgba(34,241,255,.18), 0 0 18px rgba(34,241,255,.25) !important;
+}
+html[data-theme="overdrive"] :focus-visible { outline: 2px solid var(--od-cyan); outline-offset: 2px; }
+
+/* ---------- cards: lift, HUD corner brackets, neon edge on hover ---------- */
+html[data-theme="overdrive"] :is(.knot-card, .fl-course, .fl-stat, .fl-task, .fl-mini, .fl-ann, .qr-result,
+  .ns-card, .ns-row, .jr-player, .mail-row, .thread, .cal-event, .stat, .ig-card, .qr-hist-q, .notif) {
+  transition: transform .25s var(--od-ease), box-shadow .25s, border-color .25s, background-color .25s !important;
+}
+html[data-theme="overdrive"] :is(.knot-card, .fl-course, .fl-stat, .fl-task, .fl-mini, .qr-result, .ns-card, .jr-player, .stat) {
+  background-image:
+    linear-gradient(var(--od-c, var(--sent)), var(--od-c, var(--sent))), linear-gradient(var(--od-c, var(--sent)), var(--od-c, var(--sent))),
+    linear-gradient(var(--od-c2, var(--od-cyan)), var(--od-c2, var(--od-cyan))), linear-gradient(var(--od-c2, var(--od-cyan)), var(--od-c2, var(--od-cyan)));
+  background-repeat: no-repeat;
+  background-size: 0 2px, 2px 0, 0 2px, 2px 0;
+  background-position: 6px 6px, 6px 6px, calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) calc(100% - 6px);
+}
+html[data-theme="overdrive"] :is(.knot-card, .fl-course, .fl-stat, .fl-task, .fl-mini, .qr-result, .ns-card, .jr-player, .stat):hover {
+  transform: translateY(-4px) rotate(-.25deg);
+  background-size: 18px 2px, 2px 18px, 18px 2px, 2px 18px;
+  box-shadow: 0 0 0 1px rgba(212,255,58,.5), 0 14px 34px rgba(0,0,0,.55), 0 0 26px rgba(34,241,255,.14) !important;
+}
+html[data-theme="overdrive"] :is(.ns-row, .mail-row, .thread, .notif, .qr-hist-q):hover {
+  box-shadow: inset 3px 0 0 var(--od-cyan), 0 0 18px rgba(34,241,255,.08);
+}
+
+/* ---------- page entrances: a diagonal wipe instead of a fade ---------- */
+html[data-theme="overdrive"] :is(.ig-feed, .ig-profile, .ig-explore, .ig-activity, .ig-review, .ig-setup,
+  .cal-grid, .cal-day, .admin-wrap > .table-wrap, .fl-dash, .fl-courses, .fl-course-page, .fl-admin,
+  .knot-wall, .fl-sched-wrap, .qr-main > *, .jr-list, .hb, .ns-cast, .ns-inbox) {
+  animation: od-wipe .55s var(--od-snap) backwards !important;
+}
+@keyframes od-wipe {
+  0%   { opacity: 0; clip-path: polygon(0 0, 0 0, -12% 100%, -12% 100%); transform: translateX(-14px) skewX(-3deg); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; clip-path: polygon(0 0, 112% 0, 100% 100%, -12% 100%); transform: none; }
+}
+
+/* Lists cascade in. */
+/* (Only views that render once — live lists like threads would replay on every message.) */
+html[data-theme="overdrive"] :is(.knot-wall > *, .fl-courses > *, .ns-grid > *, .qr-results > .qr-result, .jr-list > .jr-entry,
+  .fl-task, .home-grid > .app-icon) {
+  animation: od-rise .5s var(--od-ease) backwards;
+}
+html[data-theme="overdrive"] :is(.knot-wall, .fl-courses, .ns-grid, .qr-results, .jr-list, #nsRows, .thread-list, .home-grid, .shade-body, .mail-list) > :nth-child(1)  { animation-delay: .03s; }
+html[data-theme="overdrive"] :is(.knot-wall, .fl-courses, .ns-grid, .qr-results, .jr-list, #nsRows, .thread-list, .home-grid, .shade-body, .mail-list) > :nth-child(2)  { animation-delay: .07s; }
+html[data-theme="overdrive"] :is(.knot-wall, .fl-courses, .ns-grid, .qr-results, .jr-list, #nsRows, .thread-list, .home-grid, .shade-body, .mail-list) > :nth-child(3)  { animation-delay: .11s; }
+html[data-theme="overdrive"] :is(.knot-wall, .fl-courses, .ns-grid, .qr-results, .jr-list, #nsRows, .thread-list, .home-grid, .shade-body, .mail-list) > :nth-child(4)  { animation-delay: .15s; }
+html[data-theme="overdrive"] :is(.knot-wall, .fl-courses, .ns-grid, .qr-results, .jr-list, #nsRows, .thread-list, .home-grid, .shade-body, .mail-list) > :nth-child(5)  { animation-delay: .19s; }
+html[data-theme="overdrive"] :is(.knot-wall, .fl-courses, .ns-grid, .qr-results, .jr-list, #nsRows, .thread-list, .home-grid, .shade-body, .mail-list) > :nth-child(6)  { animation-delay: .23s; }
+html[data-theme="overdrive"] :is(.knot-wall, .fl-courses, .ns-grid, .qr-results, .jr-list, #nsRows, .thread-list, .home-grid, .shade-body, .mail-list) > :nth-child(7)  { animation-delay: .27s; }
+html[data-theme="overdrive"] :is(.knot-wall, .fl-courses, .ns-grid, .qr-results, .jr-list, #nsRows, .thread-list, .home-grid, .shade-body, .mail-list) > :nth-child(8)  { animation-delay: .31s; }
+html[data-theme="overdrive"] :is(.knot-wall, .fl-courses, .ns-grid, .qr-results, .jr-list, #nsRows, .thread-list, .home-grid, .shade-body, .mail-list) > :nth-child(n+9) { animation-delay: .35s; }
+@keyframes od-rise { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+
+/* ---------- modals slam in; scrims get scanlines ---------- */
+html[data-theme="overdrive"] .modal { animation: od-slam .42s var(--od-ease) backwards !important; box-shadow: 0 0 0 1px rgba(212,255,58,.35), 0 30px 80px rgba(0,0,0,.7), 0 0 40px rgba(34,241,255,.12) !important; }
+html[data-theme="overdrive"] .modal-head { border-bottom: 2px solid transparent !important; border-image: linear-gradient(90deg, var(--sent), var(--od-cyan), transparent) 1 !important; }
+html[data-theme="overdrive"] .scrim, html[data-theme="overdrive"] .shade-scrim {
+  background: repeating-linear-gradient(180deg, rgba(0,0,0,.25) 0 2px, transparent 2px 4px), rgba(4,4,10,.72) !important;
+}
+@keyframes od-slam {
+  0%   { opacity: 0; transform: translateY(30px) scale(.9) skewX(-6deg); }
+  60%  { opacity: 1; transform: translateY(-4px) scale(1.015) skewX(1deg); }
+  100% { transform: none; }
+}
+
+/* ---------- home screen ---------- */
+html[data-theme="overdrive"] .app-icon { perspective: 500px; }
+html[data-theme="overdrive"] .app-glyph {
+  transition: transform .35s var(--od-ease), box-shadow .3s !important;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+}
+html[data-theme="overdrive"] .app-icon:hover .app-glyph {
+  transform: translateY(-6px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(1.06);
+  box-shadow: 0 0 0 2px var(--sent), 0 0 26px rgba(212,255,58,.45), 0 16px 26px rgba(0,0,0,.6) !important;
+}
+html[data-theme="overdrive"] .app-icon:hover .app-name { color: var(--sent); text-shadow: 0 0 10px rgba(212,255,58,.6); }
+html[data-theme="overdrive"] .app-badge { animation: od-ping 2.4s ease-out infinite; }
+@keyframes od-ping {
+  0%   { box-shadow: 0 0 0 0 rgba(255,59,92,.7); }
+  70%  { box-shadow: 0 0 0 10px rgba(255,59,92,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,59,92,0); }
+}
+html[data-theme="overdrive"] .home-hint { border-image: none; box-shadow: 0 0 0 1px rgba(34,241,255,.35), 0 0 24px rgba(34,241,255,.12) !important; }
+html[data-theme="overdrive"] .lock-time {
+  text-shadow: 3px 0 rgba(255,42,122,.6), -3px 0 rgba(34,241,255,.6), 0 0 30px rgba(212,255,58,.25);
+  animation: od-glitch 5s steps(1) infinite;
+}
+html[data-theme="overdrive"] .lock.unlocking { transition: transform .5s var(--od-snap), filter .5s !important; filter: hue-rotate(60deg) saturate(2); }
+
+/* ---------- messages ---------- */
+html[data-theme="overdrive"] .row:last-child .bubble,
+html[data-theme="overdrive"] .ns-msg:last-child .ns-bubble { animation: od-bubble .45s var(--od-ease) backwards; }
+@keyframes od-bubble { from { opacity: 0; transform: translateY(10px) scale(.85); } }
+html[data-theme="overdrive"] .row.out .bubble { box-shadow: 0 0 16px color-mix(in srgb, var(--tint, var(--sent)) 35%, transparent); }
+
+/* ---------- notifications shade + toasts ---------- */
+html[data-theme="overdrive"] .shade-panel { box-shadow: 0 0 0 1px rgba(34,241,255,.4), 0 24px 60px rgba(0,0,0,.7) !important; }
+html[data-theme="overdrive"] .neo-toast {
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  border-left: 4px solid var(--sent) !important;
+  box-shadow: 0 0 22px rgba(212,255,58,.25);
+}
+html[data-theme="overdrive"] .neo-toast.error { border-left-color: var(--od-magenta) !important; }
+html[data-theme="overdrive"] .neo-toast.in { animation: od-toast .45s var(--od-ease); }
+@keyframes od-toast { from { transform: translateX(40px) skewX(-12deg); opacity: 0; } }
+
+/* ---------- badges, pills, chips ---------- */
+html[data-theme="overdrive"] :is(.ns-pill, .tab-badge, .ns-tab-badge, .hb-hits) { box-shadow: 0 0 10px rgba(255,59,92,.6); }
+html[data-theme="overdrive"] .puppet-bar { background: repeating-linear-gradient(-45deg, var(--od-yellow) 0 14px, #111 14px 28px) !important; }
+html[data-theme="overdrive"] .puppet-bar > span:not(.puppet-dot) { background: #111; color: var(--od-yellow); padding: 1px 8px; }
+
+/* ---------- loading shimmer ---------- */
+html[data-theme="overdrive"] .ig-loading { color: var(--od-cyan); text-shadow: 0 0 10px rgba(34,241,255,.6); letter-spacing: .2em; text-transform: uppercase; }
+
+/* ---------- page-to-page transition (Chrome/Edge; others just load) ---------- */
+html[data-theme="overdrive"]::view-transition-old(root) { animation: od-vt-out .32s var(--od-snap) both; }
+html[data-theme="overdrive"]::view-transition-new(root) { animation: od-vt-in .45s var(--od-snap) both; }
+@keyframes od-vt-out { to { opacity: 0; transform: translateX(-30px) skewX(4deg); filter: blur(2px) hue-rotate(40deg); } }
+@keyframes od-vt-in  {
+  from { opacity: 0; clip-path: polygon(0 0, 0 0, -15% 100%, -15% 100%); }
+  to   { opacity: 1; clip-path: polygon(0 0, 115% 0, 100% 100%, -15% 100%); }
+}
+
+/* ---------- colour that pops even when nothing is moving ---------- */
+
+/* A neon grid floor fading up from the bottom of the screen. */
+html[data-theme="overdrive"] body::after {
+  content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 45vh; z-index: -1; pointer-events: none;
+  background:
+    linear-gradient(rgba(34,241,255,.22) 1px, transparent 1px) 0 0 / 100% 38px,
+    linear-gradient(90deg, rgba(255,42,122,.18) 1px, transparent 1px) 0 0 / 64px 100%;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+          mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+  transform: perspective(420px) rotateX(55deg); transform-origin: 50% 100%;
+  animation: od-floor 3s linear infinite;
+}
+@keyframes od-floor { to { background-position: 0 38px, 0 0; } }
+
+/* Wordmarks get a lime-to-cyan fill. */
+html[data-theme="overdrive"] :is(.ig-word, .mail-word, .fl-word, .jr-word, .ns-word, .home-hi) {
+  background: linear-gradient(90deg, #fff 0%, var(--sent) 55%, var(--od-cyan) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent !important;
+}
+html[data-theme="overdrive"] :is(.fl-word, .ns-word) span { -webkit-text-fill-color: transparent; }
+
+/* Cards: a faint diagonal sheen and a neon hairline inside the black outline. */
+html[data-theme="overdrive"] :is(.knot-card, .fl-stat, .fl-task, .fl-ann, .qr-result, .ns-card, .jr-player,
+  .stat, .mail-msg, .home-hint, .table-wrap, .modal, .shade-panel, .fl-bursar, .fl-facts > div) {
+  background-color: var(--panel) !important;
+  outline: 1px solid rgba(34,241,255,.14); outline-offset: -4px;
+}
+html[data-theme="overdrive"] :is(.knot-card, .fl-stat, .qr-result, .ns-card, .jr-player, .stat, .modal, .home-hint)::after {
+  content: none;
+}
+html[data-theme="overdrive"] .modal, html[data-theme="overdrive"] .home-hint, html[data-theme="overdrive"] .shade-panel {
+  background-image: linear-gradient(135deg, rgba(34,241,255,.06), transparent 40%, rgba(255,42,122,.06)) !important;
+}
+
+/* Section labels get a skewed lime tab. */
+html[data-theme="overdrive"] :is(.fl-section-head h3, .ns-cast-head h2, .jr-day, .qr-subhead, .hb-toc b) {
+  display: inline-flex; align-items: center; gap: 8px;
+}
+html[data-theme="overdrive"] :is(.fl-section-head h3, .ns-cast-head h2)::before {
+  content: ""; width: 10px; height: 14px; background: var(--sent); transform: skewX(-18deg);
+  box-shadow: 4px 0 0 var(--od-cyan);
+}
+
+/* Big numbers glow. */
+html[data-theme="overdrive"] :is(.fl-stat b, .fl-stat strong, .stat .n, .lock-time) { color: #fff; text-shadow: 0 0 18px rgba(212,255,58,.45); }
+
+/* Primary buttons: lime into electric yellow. Ghost buttons: a cyan hairline. */
+html[data-theme="overdrive"] :is(.btn-primary, .ns-btn-lime, .jr-new, .send-btn, .ns-send) {
+  background: linear-gradient(100deg, var(--sent), #F2FF4D 55%, var(--od-yellow)) !important;
+  color: #0A0A0A !important;
+}
+html[data-theme="overdrive"] :is(.btn-ghost, .ns-btn) { box-shadow: inset 0 0 0 1px rgba(34,241,255,.28), 0 3px 0 #000 !important; }
+html[data-theme="overdrive"] .btn-danger { box-shadow: inset 0 0 0 1px rgba(255,42,122,.5), 0 0 14px rgba(255,42,122,.2) !important; }
+
+/* Inactive tabs hint cyan on hover; badges go hot magenta. */
+html[data-theme="overdrive"] :is(.ig-tab, .mail-tab, .fl-tab, .jr-tab, .ns-tab):not(.is-on):hover { color: var(--od-cyan) !important; }
+html[data-theme="overdrive"] :is(.app-badge, .tab-badge, .ns-pill, .ns-tab-badge) { background: var(--od-magenta) !important; }
+
+/* ---------- respect "reduce motion" ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="overdrive"]::before, html[data-theme="overdrive"]::after,
+  html[data-theme="overdrive"] *, html[data-theme="overdrive"] *::before, html[data-theme="overdrive"] *::after {
+    animation: none !important; transition: none !important;
+  }
+}

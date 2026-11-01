@@ -3756,3 +3756,12 @@ body.maint-locked { overflow: hidden; }
 @media (max-width: 380px) { .ns-word span { display: none; } }
 .field label.ns-to-row { text-transform: none; letter-spacing: 0; color: var(--text); font: 600 14px var(--font-ui); margin: 0; }
 .ns-to-row input { margin: 0; }
+
+/* Home: theme switch beside Sign out */
+.home-greeting-btns { display: flex; align-items: center; gap: 12px; }
+.home-theme {
+  border: 2px solid var(--outline); border-radius: 999px; cursor: pointer; padding: 5px 12px;
+  background: #1C1C1C; color: var(--muted); font: 800 12px var(--font-ui);
+}
+.home-theme:hover { color: var(--text); }
+html[data-theme="overdrive"] .home-theme { color: #0E0E0E; background: linear-gradient(90deg, var(--sent), var(--od-cyan)); box-shadow: 0 0 14px rgba(34,241,255,.4); }

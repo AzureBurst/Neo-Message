@@ -264,3 +264,17 @@ document.querySelectorAll('.app-icon').forEach(tile => {
     openApp(tile, href);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/*  theme switch (this device only)                                   */
+/* ------------------------------------------------------------------ */
+
+const paintTheme = () => {
+  $('#themeName').textContent = document.documentElement.dataset.theme === 'overdrive' ? 'Overdrive' : 'Classic';
+};
+paintTheme();
+$('#themeBtn').addEventListener('click', async () => {
+  const { setTheme } = await import('./fx.js');
+  setTheme(document.documentElement.dataset.theme === 'overdrive' ? 'classic' : 'overdrive');
+  paintTheme();
+});
