@@ -239,3 +239,14 @@ Switch it with **◐** on the home screen — it's per device. It lives in
 Animations play on every device by default, even when the computer's own
 "reduce motion" setting is on. Anyone who prefers less movement can tap
 **Motion: On** on the home screen to switch it to **Calm** (per device).
+
+## Look & feel notes
+
+- **Background:** every theme (Classic and Overdrive) uses the neon haze,
+  grid floor and faint scanlines from `css/edge.css`.
+- **Neo Message** keeps its own look in every theme, styled after an in-game
+  messenger: charcoal gradient backdrop, a rounded dark window, pill-shaped
+  thread rows that turn yellow when open, white incoming bubbles and
+  colour-filled outgoing ones, plain bold type with no outlines.
+- **New messages grow in** from the sender's side (Messages and NPC Studio).
+  Opening a thread doesn't replay old ones.

@@ -264,7 +264,12 @@ async function openThread(conv) {
   if (matchMedia('(min-width: 761px)').matches) text.focus();
 }
 
+let nsSeenConv = null;
+const nsSeen = new Set();
+
 function paintMessages(list) {
+  const firstPaint = nsSeenConv !== view.conv;
+  if (firstPaint) { nsSeenConv = view.conv; nsSeen.clear(); }
   if (!list.length) return '<div class="ns-empty small">No messages yet — say something.</div>';
   let html = '', lastDay = '', lastSender = null;
   for (const m of list) {
@@ -273,7 +278,7 @@ function paintMessages(list) {
     const npc = isNpc(m.sender_id);
     const first = m.sender_id !== lastSender;
     html += `
-      <div class="ns-msg ${npc ? 'npc' : 'them'} ${first ? 'first' : ''}" style="--c:${esc(colorOf(m.sender_id))}">
+      <div class="ns-msg ${npc ? 'npc' : 'them'} ${first ? 'first' : ''} ${!firstPaint && !nsSeen.has(m.id) ? 'fresh' : ''}" style="--c:${esc(colorOf(m.sender_id))}">
         ${!npc ? `<span class="ns-msg-av">${first ? avatar(m.sender_id, 28) : ''}</span>` : ''}
         <div class="ns-bubble-wrap">
           ${first ? `<span class="ns-msg-name">${esc(nameOf(m.sender_id))}${npc ? ' <i>NPC</i>' : ''}</span>` : ''}
@@ -283,6 +288,7 @@ function paintMessages(list) {
       </div>`;
     lastSender = m.sender_id;
   }
+  list.forEach(m => nsSeen.add(m.id));
   return html;
 }
 

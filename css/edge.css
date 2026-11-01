@@ -26,15 +26,22 @@ html[data-theme="overdrive"] {
   --od-ease: cubic-bezier(.22, 1, .36, 1);
   --od-snap: cubic-bezier(.65, 0, .35, 1);
 
+  scrollbar-color: var(--sent) #0B0B10;
+}
+
+/* =====================================================================
+   SHARED BACKGROUND — every theme (Classic and Overdrive) uses it.
+   The Neo Message app swaps it for its own (see INTER-KNOT below).
+   ===================================================================== */
+html {
   background:
     radial-gradient(circle, rgba(255,255,255,.045) 1.1px, transparent 1.5px) 0 0 / 14px 14px,
-    linear-gradient(165deg, #040407 0%, #0B0B12 45%, #14101C 100%) fixed;
-  scrollbar-color: var(--sent) #0B0B10;
+    linear-gradient(165deg, #040407 0%, #0B0B12 45%, #14101C 100%) fixed !important;
 }
 html[data-theme="overdrive"] ::selection { background: var(--od-magenta); color: #fff; }
 
 /* Drifting neon haze behind everything + a perspective grid floor. */
-html[data-theme="overdrive"]::before {
+html::before {
   content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
   background:
     radial-gradient(38% 30% at 18% 22%, rgba(34,241,255,.24), transparent 70%),
@@ -43,7 +50,7 @@ html[data-theme="overdrive"]::before {
   animation: od-haze 26s ease-in-out infinite alternate;
 }
 /* Scanlines + a slow sweep, over the top but never in the way. */
-html[data-theme="overdrive"]::after {
+html::after {
   content: ""; position: fixed; inset: 0; z-index: 2147483000; pointer-events: none;
   background:
     linear-gradient(180deg, transparent 0%, rgba(34,241,255,.025) 50%, transparent 100%) 0 -30vh / 100% 30vh no-repeat,
@@ -205,9 +212,6 @@ html[data-theme="overdrive"] .home-hint { border-image: none; box-shadow: 0 0 0 
 html[data-theme="overdrive"] .lock-time { text-shadow: 0 0 30px rgba(212,255,58,.25); }
 
 /* ---------- messages ---------- */
-html[data-theme="overdrive"] .row:last-child .bubble,
-html[data-theme="overdrive"] .ns-msg:last-child .ns-bubble { animation: od-bubble .45s var(--od-ease) backwards; }
-@keyframes od-bubble { from { opacity: 0; transform: translateY(8px) scale(.96); } }
 html[data-theme="overdrive"] .row.out .bubble { box-shadow: 0 0 16px color-mix(in srgb, var(--tint, var(--sent)) 35%, transparent); }
 
 /* ---------- notifications shade + toasts ---------- */
@@ -247,7 +251,7 @@ html.od-ready body { animation: od-page-in .55s var(--od-ease) both; }
 /* ---------- colour that pops even when nothing is moving ---------- */
 
 /* A neon grid floor fading up from the bottom of the screen. */
-html[data-theme="overdrive"] body::after {
+html body::after {
   content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 45vh; z-index: -1; pointer-events: none;
   background:
     linear-gradient(rgba(34,241,255,.22) 1px, transparent 1px) 0 0 / 100% 38px,
@@ -296,9 +300,114 @@ html[data-theme="overdrive"] .btn-danger { box-shadow: inset 0 0 0 1px rgba(255,
 html[data-theme="overdrive"] :is(.ig-tab, .mail-tab, .fl-tab, .jr-tab, .ns-tab):not(.is-on):hover { color: var(--od-cyan) !important; }
 html[data-theme="overdrive"] :is(.app-badge, .tab-badge, .ns-pill, .ns-tab-badge) { background: var(--od-magenta) !important; }
 
+/* =====================================================================
+   NEW MESSAGES GROW IN — every theme.
+   Only messages that arrive while you're looking get .fresh (set in
+   js/app.js and js/npcs.js), so reopening a thread doesn't replay them.
+   ===================================================================== */
+.row.fresh .bubble, .ns-msg.fresh .ns-bubble {
+  animation: bubble-grow .26s cubic-bezier(.2, .9, .3, 1.12) backwards;
+}
+.row.out.fresh .bubble, .ns-msg.npc.fresh .ns-bubble { transform-origin: 100% 100%; }
+.row.in.fresh .bubble,  .ns-msg.them.fresh .ns-bubble { transform-origin: 0 100%; }
+@keyframes bubble-grow {
+  0%   { opacity: 0; transform: scale(.35); }
+  60%  { opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* =====================================================================
+   INTER-KNOT — the Neo Message app (app.html, <html class="inter-knot">)
+   A chat window in the style of a game's in-app messenger: soft charcoal
+   gradient backdrop, rounded dark window, pill-shaped thread rows with a
+   yellow highlight, clean bold type (no outlines or glows), white
+   incoming bubbles and colour-filled outgoing ones. Same in every theme.
+   ===================================================================== */
+html.inter-knot {
+  --ik-yellow: #FFD60A;
+  --ik-panel: #141416;
+  --ik-row: #26262A;
+  --ik-row-hover: #303036;
+  background:
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.018) 0 2px, transparent 2px 14px),
+    linear-gradient(160deg, #3A3A40 0%, #1E1E22 45%, #0C0C0E 100%) fixed !important;
+}
+html.inter-knot::before, html.inter-knot::after, html.inter-knot body::after,
+html.inter-knot body::before { display: none !important; }
+html.inter-knot body { background: transparent; }
+
+/* the window */
+html.inter-knot .panes {
+  margin: 14px; border-radius: 22px; overflow: hidden;
+  background: var(--ik-panel);
+  border: 2px solid #000;
+  box-shadow: 0 0 0 1px #3A3A40, 0 24px 60px rgba(0,0,0,.6);
+}
+@media (max-width: 780px) { html.inter-knot .panes { margin: 0; border-radius: 0; border: 0; box-shadow: none; } }
+
+/* plain, readable type everywhere in the app */
+html.inter-knot :is(.me-name, .thread-name, .convo-head h2, .speaker-name, .bubble, .thread-preview) {
+  text-shadow: none !important; -webkit-text-stroke: 0 !important; font-style: normal;
+}
+
+/* sidebar: dark column, pill rows, yellow when open */
+html.inter-knot .sidebar {
+  background: #101012 !important; border-right: 2px solid #000 !important;
+}
+html.inter-knot .sidebar-head, html.inter-knot .search-row { border-bottom: 0 !important; background: transparent !important; box-shadow: none !important; }
+html.inter-knot .sidebar-head::after { display: none !important; }
+html.inter-knot .search-row input { background: #1D1D21 !important; border: 0 !important; border-radius: 999px !important; }
+html.inter-knot .thread-list { padding: 4px 8px 8px; }
+html.inter-knot .thread {
+  margin: 6px 0 !important; padding: 9px 12px; border: 0 !important;
+  border-radius: 16px !important; background: var(--ik-row);
+  box-shadow: none !important;
+  transition: background .2s, transform .2s cubic-bezier(.22, 1, .36, 1) !important;
+}
+html.inter-knot .thread:hover { background: var(--ik-row-hover); transform: translateX(3px); }
+html.inter-knot .thread.active { background: var(--ik-yellow) !important; box-shadow: none !important; }
+html.inter-knot .thread.active :is(.thread-name, .thread-preview, .thread-time) { color: #111 !important; }
+html.inter-knot .thread-name { font-weight: 800; color: #fff; }
+html.inter-knot .thread-preview { color: #A8A8B0; font-weight: 600; }
+html.inter-knot .thread .avatar { box-shadow: 0 0 0 2px #000, 0 0 0 3.5px rgba(255,255,255,.12); }
+
+/* conversation: header bar + a quietly striped message area */
+html.inter-knot .convo {
+  background:
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.025) 0 10px, transparent 10px 22px),
+    #0E0E10 !important;
+}
+html.inter-knot .convo-head {
+  background: #18181B !important; border-bottom: 2px solid #000 !important;
+}
+html.inter-knot .convo-head h2 { font-weight: 800; }
+html.inter-knot .daystamp {
+  background: #1F1F23 !important; border: 0 !important; color: #C8C8D0;
+  box-shadow: 0 2px 0 #000;
+}
+
+/* bubbles: no outline, bold text, soft shadow */
+html.inter-knot .bubble {
+  /* The chat font is already heavy; asking for bold on top smears it. */
+  border: 0 !important; font-weight: 400 !important; border-radius: 18px;
+  box-shadow: 0 2px 0 rgba(0,0,0,.45) !important;
+}
+html.inter-knot .row.in .bubble { background: #FFFFFF !important; color: #141414 !important; border-bottom-left-radius: 6px; }
+html.inter-knot .row.out .bubble { color: #fff; border-bottom-right-radius: 6px; }
+html.inter-knot .row.out[data-tint="lime"] .bubble,
+html.inter-knot .row.out[data-tint="yellow"] .bubble { color: #111; }
+html.inter-knot .bubble.jumbo { box-shadow: none !important; }
+html.inter-knot .speaker-name { font-weight: 800; }
+
+/* composer */
+html.inter-knot .composer { background: #18181B !important; border-top: 2px solid #000 !important; box-shadow: none !important; }
+html.inter-knot .composer textarea { background: #222226 !important; border: 0 !important; }
+html.inter-knot .send-btn { background: var(--ik-yellow) !important; color: #111 !important; border: 0 !important; }
+
 /* ---------- respect "reduce motion" ---------- */
 /* Calm motion (in-app switch on the home screen; not the OS setting).
    .calm is repeated only to outrank every animated rule above. */
+html.calm::before, html.calm::after, html.calm body::after,
 html.calm.calm.calm[data-theme="overdrive"]::before,
 html.calm.calm.calm[data-theme="overdrive"]::after,
 html.calm.calm.calm[data-theme="overdrive"] *,

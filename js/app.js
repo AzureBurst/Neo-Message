@@ -253,9 +253,17 @@ async function openThread(id) {
   renderStream();
 }
 
+/* Messages already on screen, per thread — anything new since the last
+   render gets .fresh and grows in (css/edge.css). Opening a thread marks
+   everything as seen, so history never animates. */
+let seenThread = null;
+const seenIds = new Set();
+
 function renderStream() {
   const stream = $('#stream');
   const t = state.threads.find(x => x.id === state.openId);
+  const firstPaint = seenThread !== state.openId;
+  if (firstPaint) { seenThread = state.openId; seenIds.clear(); }
 
   if (!state.messages.length) {
     stream.innerHTML = '<div class="empty-state">No messages yet. Say something.</div>';
@@ -300,13 +308,14 @@ function renderStream() {
     if (m.body) parts.push(`<span class="msg-text">${esc(m.body)}</span>`);
 
     html += `
-      <div class="row ${out ? 'out' : 'in'} ${gap ? 'gap' : ''}" data-tint="${esc(tint)}">
+      <div class="row ${out ? 'out' : 'in'} ${gap ? 'gap' : ''} ${!firstPaint && !seenIds.has(m.id) ? 'fresh' : ''}" data-tint="${esc(tint)}">
         <div class="bubble ${jumbo ? 'jumbo' : ''}">${parts.join('')}</div>
         <span class="stamp">${shortTime(m.created_at)}</span>
       </div>`;
 
     lastSender = m.sender_id;
   });
+  state.messages.forEach(m => seenIds.add(m.id));
 
   stream.innerHTML = html;
 
