@@ -125,7 +125,7 @@ function setupLock() {
   const tick = setInterval(paintLock, 15_000);
   onClockChange?.(paintLock);
 
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const reduce = document.documentElement.classList.contains('calm');
   let unlocked = false;
 
   const done = () => {
@@ -173,7 +173,7 @@ else lock.remove();
 /*  motion, or a modifier-click, skips both.                          */
 /* ------------------------------------------------------------------ */
 
-const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const reduceMotion = document.documentElement.classList.contains('calm');
 
 const TILE_FOR = { app: '#tileMessage', instagrat: '#tileGrat', calendar: '#tileCal',
                    mail: '#tileMail', flight: '#tileFlight', queree: '#tileQueree', journal: '#tileJournal' };
@@ -295,10 +295,17 @@ document.querySelectorAll('.app-icon').forEach(tile => {
 
 const paintTheme = () => {
   $('#themeName').textContent = document.documentElement.dataset.theme === 'overdrive' ? 'Overdrive' : 'Classic';
+  $('#motionName').textContent = document.documentElement.classList.contains('calm') ? 'Calm' : 'On';
 };
 paintTheme();
 $('#themeBtn').addEventListener('click', async () => {
   const { setTheme } = await import('./fx.js');
   setTheme(document.documentElement.dataset.theme === 'overdrive' ? 'classic' : 'overdrive');
+  paintTheme();
+});
+$('#motionBtn').addEventListener('click', () => {
+  const calm = !document.documentElement.classList.contains('calm');
+  document.documentElement.classList.toggle('calm', calm);
+  try { calm ? localStorage.setItem('neo.motion', 'calm') : localStorage.removeItem('neo.motion'); } catch {}
   paintTheme();
 });

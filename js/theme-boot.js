@@ -9,6 +9,9 @@
    ===================================================================== */
 (function () {
   var root = document.documentElement, on = false;
+  // Animations always play unless this device chose "Calm motion" in the
+  // app (the computer's own reduce-motion setting is deliberately ignored).
+  try { if (localStorage.getItem('neo.motion') === 'calm') root.classList.add('calm'); } catch (e) {}
   try { on = localStorage.getItem('neo.theme') === 'overdrive'; } catch (e) {}
   if (!on) return;
 

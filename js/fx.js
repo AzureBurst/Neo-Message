@@ -6,7 +6,7 @@
 // =====================================================================
 
 const on = () => document.documentElement.dataset.theme === 'overdrive';
-const calm = matchMedia('(prefers-reduced-motion: reduce)');
+const calm = { get matches() { return document.documentElement.classList.contains('calm'); } };
 let wired = false;
 
 export function startFx() {

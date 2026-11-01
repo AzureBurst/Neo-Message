@@ -234,5 +234,8 @@ one piece, so nothing flashes while a page assembles. Opening an app from
 the home screen dims through dark into the app.
 
 Switch it with **◐** on the home screen — it's per device. It lives in
-`css/edge.css`, `js/theme-boot.js` and `js/fx.js`; "reduce motion" settings
-turn the animation off.
+`css/edge.css`, `js/theme-boot.js` and `js/fx.js`.
+
+Animations play on every device by default, even when the computer's own
+"reduce motion" setting is on. Anyone who prefers less movement can tap
+**Motion: On** on the home screen to switch it to **Calm** (per device).

@@ -238,6 +238,9 @@ html[data-theme="overdrive"]::view-transition-old(root) { animation: od-fade-out
 html[data-theme="overdrive"]::view-transition-new(root) { animation: none; }
 @keyframes od-fade-out { to { opacity: 0; } }
 html.od-wait body { opacity: 0; }
+/* Hold every entrance animation until the page is shown, so they play
+   in view instead of finishing while the page is still hidden. */
+html.od-wait body * { animation-play-state: paused !important; }
 html.od-ready body { animation: od-page-in .55s var(--od-ease) both; }
 @keyframes od-page-in { from { opacity: 0; } }
 
@@ -294,9 +297,11 @@ html[data-theme="overdrive"] :is(.ig-tab, .mail-tab, .fl-tab, .jr-tab, .ns-tab):
 html[data-theme="overdrive"] :is(.app-badge, .tab-badge, .ns-pill, .ns-tab-badge) { background: var(--od-magenta) !important; }
 
 /* ---------- respect "reduce motion" ---------- */
-@media (prefers-reduced-motion: reduce) {
-  html[data-theme="overdrive"]::before, html[data-theme="overdrive"]::after,
-  html[data-theme="overdrive"] *, html[data-theme="overdrive"] *::before, html[data-theme="overdrive"] *::after {
-    animation: none !important; transition: none !important;
-  }
-}
+/* Calm motion (in-app switch on the home screen; not the OS setting).
+   .calm is repeated only to outrank every animated rule above. */
+html.calm.calm.calm[data-theme="overdrive"]::before,
+html.calm.calm.calm[data-theme="overdrive"]::after,
+html.calm.calm.calm[data-theme="overdrive"] *,
+html.calm.calm.calm[data-theme="overdrive"] *::before,
+html.calm.calm.calm[data-theme="overdrive"] *::after {
+    animation: none !important; transition: none !important; }

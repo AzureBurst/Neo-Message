@@ -193,10 +193,9 @@ a:hover { text-decoration: underline; }
 .carrier.is-admin .battery i { background: var(--danger); }
 .carrier.is-admin .battery   { border-color: var(--danger); }
 
-@media (prefers-reduced-motion: reduce) {
-  .bars i { animation: none; }
-  * { transition: none !important; }
-}
+/* Calm motion (in-app switch on the home screen; not the OS setting). */
+html.calm .bars i { animation: none; }
+html.calm * { transition: none !important; }
 
 
 /* =====================================================================
@@ -1716,9 +1715,8 @@ body.gated .gate-note { display: flex; }
   will-change: transform, opacity;
   pointer-events: none;
 }
-@media (prefers-reduced-motion: reduce) {
-  .app-open { transition: none; }
-}
+/* Calm motion (in-app switch on the home screen; not the OS setting). */
+html.calm .app-open { transition: none; }
 
 /* Emoji popup floated on the body, anchored to its button in JS. Fixed
    so no overflow:hidden ancestor can clip it — same behaviour on phone
@@ -2017,16 +2015,15 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   0%, 100% { transform: translateY(0); opacity: .6; }
   50%      { transform: translateY(-6px); opacity: 1; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .lock { transition: none; }
-  .lock-chevron { animation: none; }
-}
+/* Calm motion (in-app switch on the home screen; not the OS setting). */
+html.calm .lock { transition: none; }
+html.calm .lock-chevron { animation: none; }
 
 /* =====================================================================
    MOTION
    A small, shared set of transitions to make the apps feel like native
    phone apps: sheets rise, views slide in, controls respond to a press.
-   All of it collapses to nothing under prefers-reduced-motion.
+   All of it switches off with the "Calm motion" switch on the home screen (html.calm).
    ===================================================================== */
 
 @keyframes neo-fade      { from { opacity: 0; }                              to { opacity: 1; } }
@@ -2072,16 +2069,33 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 /* The like heart pops when you tap it on. */
 .ig-like.is-liked { animation: neo-like-pop .3s ease; }
 
-@media (prefers-reduced-motion: reduce) {
-  .scrim, .modal, .emoji-pop,
-  .ig-feed, .ig-profile, .ig-explore, .ig-activity, .ig-review, .ig-setup,
-  .cal-grid, .cal-day, .admin-wrap > .table-wrap,
-  .panes.reading .convo, .ig-like.is-liked {
-    animation: none !important;
-  }
-  .thread, .ig-person, .contact-row, .find-row, .app-icon, .cal-cell,
-  .menu-item, .btn, .icon-btn, .ig-post-btn, .cal-nav { transition: none !important; }
-}
+/* Calm motion (in-app switch on the home screen; not the OS setting). */
+html.calm .scrim,
+html.calm .modal,
+html.calm .emoji-pop,
+html.calm .ig-feed,
+html.calm .ig-profile,
+html.calm .ig-explore,
+html.calm .ig-activity,
+html.calm .ig-review,
+html.calm .ig-setup,
+html.calm .cal-grid,
+html.calm .cal-day,
+html.calm .admin-wrap > .table-wrap,
+html.calm .panes.reading .convo,
+html.calm .ig-like.is-liked {
+    animation: none !important; }
+html.calm .thread,
+html.calm .ig-person,
+html.calm .contact-row,
+html.calm .find-row,
+html.calm .app-icon,
+html.calm .cal-cell,
+html.calm .menu-item,
+html.calm .btn,
+html.calm .icon-btn,
+html.calm .ig-post-btn,
+html.calm .cal-nav { transition: none !important; }
 
 /* =====================================================================
    NOTIFICATION SHADE
@@ -2181,9 +2195,9 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
   border-radius: 3px; background: var(--edge);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .shade-panel, .shade-scrim { transition: none; }
-}
+/* Calm motion (in-app switch on the home screen; not the OS setting). */
+html.calm .shade-panel,
+html.calm .shade-scrim { transition: none; }
 
 /* =====================================================================
    NEOMAIL
@@ -2362,10 +2376,10 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 :focus-visible { outline: 2px solid var(--sent); outline-offset: 2px; border-radius: 4px; }
 button:focus:not(:focus-visible) { outline: none; }
 
-@media (prefers-reduced-motion: reduce) {
-  .app-badge, .neo-toast { animation: none; transition: none; }
-  .ig-loading::before { animation-duration: 1.4s; }
-}
+/* Calm motion (in-app switch on the home screen; not the OS setting). */
+html.calm .app-badge,
+html.calm .neo-toast { animation: none; transition: none; }
+html.calm .ig-loading::before { animation-duration: 1.4s; }
 
 /* The tagger opens above an already-open sheet (the post composer), so
    it needs to sit on a higher layer than the standard scrim. */
@@ -3765,3 +3779,9 @@ body.maint-locked { overflow: hidden; }
 }
 .home-theme:hover { color: var(--text); }
 html[data-theme="overdrive"] .home-theme { color: #0E0E0E; background: linear-gradient(90deg, var(--sent), var(--od-cyan)); box-shadow: 0 0 14px rgba(34,241,255,.4); }
+.home-theme, .home-signout { white-space: nowrap; }
+@media (max-width: 440px) {
+  .home-greeting { flex-wrap: wrap; gap: 10px; }
+  .home-greeting-btns { gap: 8px; }
+  .home-theme { padding: 4px 10px; font-size: 11.5px; }
+}
