@@ -85,6 +85,7 @@ function paintBadges(counts) {
   badge($('#flightBadge'), counts.flight);
   badge($('#quereeBadge'), counts.queree);
   badge($('#journalBadge'), counts.journal);
+  const npcB = $('#npcBadge'); if (npcB) badge(npcB, counts.npc);
 }
 
 mountShade();
@@ -94,7 +95,8 @@ if (me.is_admin) {
   const hint = $('#adminHint');
   hint.hidden = false;
   hint.innerHTML = 'You are the GM. Each app has extra controls for you inside. '
-    + '<button class="home-maint-btn" id="maintBtn">🚧 Maintenance mode</button>';
+    + '<span class="home-gm-btns"><a class="home-maint-btn home-npc-btn" href="npcs.html">🎭 NPC Studio<span class="app-badge" id="npcBadge" hidden></span></a>'
+    + '<button class="home-maint-btn" id="maintBtn">🚧 Maintenance mode</button></span>';
   $('#maintBtn').addEventListener('click', async () =>
     (await import('./maintenance.js')).openMaintenanceModal());
 }

@@ -1004,11 +1004,14 @@ function openAnnouncementEditor(courseId) {
 }
 
 async function openStudentRecords() {
-  const [{ data: people }, { data: recs }] = await Promise.all([
+  let [{ data: people }, { data: recs }] = await Promise.all([
     supa.from('profiles').select('id, username, is_admin').order('username'),
     supa.from('flight_students').select('*')
   ]);
   const byId = new Map((recs || []).map(r => [r.user_id, r]));
+  // NPCs aren't students (unless you ticked "Justice U student" for them).
+  const hide = await (await import('./npc.js')).npcIds();
+  people = (people || []).filter(p => !hide.has(p.id));
 
   const { root } = sheet({
     title: 'Student records', wide: true,

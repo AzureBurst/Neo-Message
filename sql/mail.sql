@@ -115,6 +115,18 @@ create policy mail_state_all on public.mail_state
 --  4. SEND (admin) — creates one private thread per recipient.
 -- ---------------------------------------------------------------------
 
+-- NPCs (see npc.sql) are left out. Defined here too so this file runs on its own.
+create or replace function public.is_npc(uid uuid)
+returns boolean language plpgsql stable security definer
+set search_path = public as $$
+declare r boolean := false;
+begin
+  if to_regclass('public.npcs') is null then return false; end if;
+  execute 'select exists (select 1 from public.npcs where id = $1 and not is_student)' into r using uid;
+  return r;
+end;
+$$;
+
 create or replace function public.mail_send(
   p_subject text, p_body text,
   p_sender_name text, p_sender_addr text,
@@ -138,7 +150,7 @@ begin
   for r in
     select id from public.profiles
      where case
-       when p_audience = 'all'  then id <> auth.uid()
+       when p_audience = 'all'  then id <> auth.uid() and not public.is_npc(id)
        when p_audience = 'tag'  then id in (select user_id from public.account_tags where tag = p_tag)
        when p_audience = 'list' then id = any(p_recipients)
        else false

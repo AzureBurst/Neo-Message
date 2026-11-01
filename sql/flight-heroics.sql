@@ -17,6 +17,19 @@
 -- =====================================================================
 
 
+-- NPCs (see npc.sql) are left out. Defined here too so this file runs on its own.
+create or replace function public.is_npc(uid uuid)
+returns boolean language plpgsql stable security definer
+set search_path = public as $$
+declare r boolean := false;
+begin
+  if to_regclass('public.npcs') is null then return false; end if;
+  execute 'select exists (select 1 from public.npcs where id = $1 and not is_student)' into r using uid;
+  return r;
+end;
+$$;
+
+
 -- 1. A "required" flag. Required courses enrol every student.
 alter table public.flight_courses
   add column if not exists auto_enroll boolean not null default false;
@@ -74,7 +87,7 @@ insert into public.flight_enrollments (course_id, user_id)
 select c.id, p.id
 from public.flight_courses c
 cross join public.profiles p
-where c.auto_enroll and not p.is_admin
+where c.auto_enroll and not p.is_admin and not public.is_npc(p.id)
 on conflict do nothing;
 
 
@@ -88,7 +101,7 @@ alter table public.flight_students
 insert into public.flight_students (user_id, major, coordinator)
 select p.id, 'B.S. in Field Heroics', 'Kaori Hamasaki'
 from public.profiles p
-where not p.is_admin
+where not p.is_admin and not public.is_npc(p.id)
 on conflict (user_id) do update
   set major       = coalesce(public.flight_students.major, excluded.major),
       coordinator = coalesce(public.flight_students.coordinator, excluded.coordinator);
@@ -128,7 +141,7 @@ set search_path = public as $$
 begin
   if new.auto_enroll and (tg_op = 'INSERT' or not old.auto_enroll) then
     insert into public.flight_enrollments (course_id, user_id)
-    select new.id, p.id from public.profiles p where not p.is_admin
+    select new.id, p.id from public.profiles p where not p.is_admin and not public.is_npc(p.id)
     on conflict do nothing;
   end if;
   return new;

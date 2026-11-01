@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NPC Studio</title>
+<meta name="theme-color" content="#08080A">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/neo.css">
+</head>
+<body class="gated ns-page">
+  <div id="gateNote" class="gate-note">
+    <span>Checking your session…</span>
+    <a href="index.html" class="gate-escape">Go to sign in</a>
+  </div>
+
+  <div id="carrier"></div>
+
+  <header class="ns-top">
+    <a class="ig-home" href="home.html" title="Home">⌂</a>
+    <span class="ns-word">🎭 NPC <span>Studio</span></span>
+    <nav class="ns-tabs">
+      <button class="ns-tab is-on" data-view="inbox">Inbox <span class="ns-tab-badge" id="nsUnread" hidden></span></button>
+      <button class="ns-tab" data-view="cast">Cast</button>
+    </nav>
+    <span class="grow"></span>
+    <button class="ns-btn" id="nsCompose" title="Text someone as an NPC">✎ <span>New message</span></button>
+    <button class="ns-btn ns-btn-lime" id="nsNew" title="Create an NPC">＋ <span>New NPC</span></button>
+  </header>
+
+  <main class="ns-main" id="nsMain">
+    <div class="ig-loading">Loading…</div>
+  </main>
+
+  <div id="modalRoot"></div>
+
+<script type="module" src="js/npcs.js"></script>
+</body>
+</html>

@@ -7,7 +7,6 @@ import {
   formatNumber, shortTime, dayLabel, isJumboEmoji, esc, toast,
   lightbox, uploadFile, shrinkImage, $, $$
 } from './supa.js';
-import { mountPuppetBar, openNpcModal, hasHome } from './npc.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
 import { playSent, playReceived, isMuted, toggleMute } from './sfx.js';
@@ -75,11 +74,9 @@ if (me.is_admin) {
   addGmButton('maintBtn', '🚧', 'Maintenance mode',
     async () => (await import('./maintenance.js')).openMaintenanceModal());
 }
-// Puppets stay reachable while you are wearing one, so you can get back.
-if (me.is_admin || hasHome()) {
-  addGmButton('npcBtn', '◑', 'NPC puppets', () => openNpcModal(modal));
+if (me.is_admin) {
+  addGmButton('npcBtn', '🎭', 'NPC Studio', () => location.href = 'npcs.html');
 }
-mountPuppetBar();
 
 $('#signOutBtn').addEventListener('click', signOut);
 $('#meBtn').addEventListener('click', openProfileModal);

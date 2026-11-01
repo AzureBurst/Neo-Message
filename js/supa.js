@@ -64,6 +64,12 @@ export async function requireProfile() {
   // Maintenance mode: shows the sign (and keeps watching) on every page.
   import('./maintenance.js').then(m => m.watchMaintenance(data))
     .catch(err => console.warn('[maintenance]', err));
+  // Signed in as an NPC? Show the "Back to me" bar on every page.
+  try {
+    if (localStorage.getItem('neo.npc.acting')) {
+      import('./npc.js').then(m => m.mountPuppetBar()).catch(err => console.warn('[npc]', err));
+    }
+  } catch {}
   return data;
 }
 

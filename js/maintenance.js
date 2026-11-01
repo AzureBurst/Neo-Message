@@ -47,7 +47,9 @@ function apply(value, first) {
     return;
   }
 
-  if (me?.is_admin) {
+  let gmAsNpc = false;
+  try { gmAsNpc = !!localStorage.getItem('neo.npc.acting'); } catch {}
+  if (me?.is_admin || gmAsNpc) {
     showPill();
     let seen = false;
     try { seen = sessionStorage.getItem(SEEN) === '1'; } catch {}

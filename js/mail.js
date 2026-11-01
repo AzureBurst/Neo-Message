@@ -239,6 +239,10 @@ async function openCompose() {
     supa.from('profiles').select('id, username').neq('id', me.id).order('username')
   ]);
   const tags = [...new Set((tagRows || []).map(r => r.tag))].sort();
+  if (me.is_admin && people) {
+    const hide = await (await import('./npc.js')).npcIds();
+    for (let i = people.length - 1; i >= 0; i--) if (hide.has(people[i].id)) people.splice(i, 1);
+  }
 
   const { root, close } = sheet({
     title: 'Compose mail', wide: true,

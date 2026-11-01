@@ -177,7 +177,8 @@ async function viewPlayers() {
     if (!s.last || new Date(r.created_at) > s.last) s.last = new Date(r.created_at);
     stats.set(r.user_id, s);
   }
-  const players = [...names.values()].filter(p => !p.is_admin || stats.has(p.id))
+  const hide = await (await import('./npc.js')).npcIds();
+  const players = [...names.values()].filter(p => (!p.is_admin && !hide.has(p.id)) || stats.has(p.id))
     .sort((a, b) => (stats.get(b.id)?.last || 0) - (stats.get(a.id)?.last || 0) || a.username.localeCompare(b.username));
 
   main.innerHTML = `

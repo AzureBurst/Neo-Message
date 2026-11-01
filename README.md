@@ -193,3 +193,29 @@ Handbook with a contents list and search. The text lives in
 Link straight to a chapter with `flight.html?handbook=honor` (ids:
 housing, hero, honor, conduct, harassment, academic, health, emergency,
 tech, orgs).
+
+## NPC Studio
+
+Run `sql/npc.sql` once in the Supabase SQL Editor (after `admin-rename.sql`
+if you want to rename NPCs). Then open **🎭 NPC Studio** from your home
+screen (or the 🎭 button in Messages).
+
+- **Inbox** — every conversation that has an NPC in it, newest first, with
+  unread counts. Open one and reply **as** any NPC in it; pick who's talking
+  from the "As" switch above the message box. You stay signed in as yourself.
+  Players texting an NPC send you a notification. "＋ NPC" brings another NPC
+  into a conversation.
+- **✎ New message** — text any player (or several, for a group) as an NPC.
+- **Cast** — your NPCs as cards: name, number, picture, a role and private
+  notes only you see, and a colour so you can tell them apart. Create, edit,
+  archive (hide) or delete them here.
+- **Sign in as** — for using the other apps (Instagrat, Neomail…) as an NPC.
+  A bar at the top of every page takes you back to your own account. No
+  passwords to keep: the Studio stores and resets them for you.
+
+NPCs live in the database now, so they work from any device. Old puppets
+saved in a browser show up in Cast with a **Move into Studio** button, and
+**Use an existing account** turns any other account into an NPC. NPCs are
+left out of Justice U enrolment, "mail everyone" and the journal's player
+list unless you tick "A Justice U student" for them. Players can't see which
+accounts are NPCs.
