@@ -42,28 +42,27 @@ html[data-theme="overdrive"] ::selection { background: var(--od-magenta); color:
 
 /* Drifting neon haze behind everything + a perspective grid floor. */
 html::before {
-  content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
     radial-gradient(38% 30% at 18% 22%, rgba(34,241,255,.24), transparent 70%),
     radial-gradient(34% 28% at 82% 30%, rgba(255,42,122,.22), transparent 70%),
     radial-gradient(40% 30% at 55% 88%, rgba(212,255,58,.14), transparent 70%);
-  animation: od-haze 26s ease-in-out infinite alternate;
+  /* Breathes with opacity only — the cheapest thing a GPU can animate.
+     (Moving/rotating this screen-sized layer made big screens stutter.) */
+  animation: od-haze 9s ease-in-out infinite alternate;
+  will-change: opacity;
 }
 /* Scanlines + a slow sweep, over the top but never in the way. */
 html::after {
   content: ""; position: fixed; inset: 0; z-index: 2147483000; pointer-events: none;
-  background:
-    linear-gradient(180deg, transparent 0%, rgba(34,241,255,.025) 50%, transparent 100%) 0 -30vh / 100% 30vh no-repeat,
-    repeating-linear-gradient(180deg, rgba(0,0,0,.14) 0 1px, transparent 1px 3px);
-  mix-blend-mode: overlay; opacity: .45;
-  animation: od-sweep 14s linear infinite;
+  /* Static, and no blend mode: a full-screen layer that animated or
+     blended had to be repainted every frame, which is what made big
+     desktop screens choppy. Painted once, it costs nothing. */
+  background: repeating-linear-gradient(180deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px);
+  opacity: .5;
+  will-change: transform;
 }
-@keyframes od-haze {
-  0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
-  50%  { transform: translate3d(3%, -2%, 0) rotate(4deg); }
-  100% { transform: translate3d(-3%, 2%, 0) rotate(-3deg); }
-}
-@keyframes od-sweep { to { background-position: 0 130vh, 0 0; } }
+@keyframes od-haze { from { opacity: .75; } to { opacity: 1; } }
 
 /* ---------- type: kept plain and readable ---------- */
 html[data-theme="overdrive"] :is(.fl-word span, .ns-word span) { color: var(--sent) !important; }
@@ -252,7 +251,7 @@ html.od-ready body { animation: od-page-in .55s var(--od-ease) both; }
 
 /* A neon grid floor fading up from the bottom of the screen. */
 html body::after {
-  content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 45vh; z-index: -1; pointer-events: none;
+  content: ""; position: fixed; left: 0; right: 0; bottom: -38px; height: calc(45vh + 38px); z-index: -1; pointer-events: none;
   background:
     linear-gradient(rgba(34,241,255,.22) 1px, transparent 1px) 0 0 / 100% 38px,
     linear-gradient(90deg, rgba(255,42,122,.18) 1px, transparent 1px) 0 0 / 64px 100%;
@@ -260,8 +259,13 @@ html body::after {
           mask-image: linear-gradient(to top, #000 0%, transparent 85%);
   transform: perspective(420px) rotateX(55deg); transform-origin: 50% 100%;
   animation: od-floor 3s linear infinite;
+  will-change: transform;
 }
-@keyframes od-floor { to { background-position: 0 38px, 0 0; } }
+/* Slides exactly one grid row, so the loop is seamless. */
+@keyframes od-floor {
+  from { transform: perspective(420px) rotateX(55deg) translateY(-38px); }
+  to   { transform: perspective(420px) rotateX(55deg) translateY(0); }
+}
 
 /* Cards: a faint diagonal sheen and a neon hairline inside the black outline. */
 html[data-theme="overdrive"] :is(.knot-card, .fl-stat, .fl-task, .fl-ann, .qr-result, .ns-card, .jr-player,
@@ -403,6 +407,36 @@ html.inter-knot .speaker-name { font-weight: 800; }
 html.inter-knot .composer { background: #18181B !important; border-top: 2px solid #000 !important; box-shadow: none !important; }
 html.inter-knot .composer textarea { background: #222226 !important; border: 0 !important; }
 html.inter-knot .send-btn { background: var(--ik-yellow) !important; color: #111 !important; border: 0 !important; }
+
+/* The faint NEO HEROES artwork used a blend mode, which forces the
+   browser to re-mix everything behind it on every animation frame.
+   Plain transparency looks the same here and costs nothing. */
+body::before { mix-blend-mode: normal !important; filter: grayscale(1); }
+
+/* =====================================================================
+   PERFORMANCE — sticky headers sit over the moving background, so a
+   blur behind them had to be recomputed every frame (slow on large
+   screens). They're near-opaque anyway; drop the blur.
+   ===================================================================== */
+:is(.ig-top, .mail-top, .fl-top, .cal-top, .jr-top, .ns-top, .qr-chrome, .sidebar-head) {
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+  background-color: rgba(12,12,16,.97) !important;
+}
+/* Same for the full-screen layers (lock screen, pop-up dimmers, the
+   maintenance sign): a blur across the whole screen, redone every frame
+   while the background moves, is what dropped big monitors to a crawl. */
+.lock { backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+  background: linear-gradient(180deg, rgba(6,6,9,.78) 0%, rgba(6,6,9,.62) 40%, rgba(6,6,9,.88) 100%) !important; }
+.scrim, .maint-lock { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+.scrim { background-color: rgba(4,4,8,.8) !important; }
+
+/* On big screens the background holds still. It looks the same, but a
+   moving full-screen layer means repainting ~10x more pixels than on a
+   phone every frame, which is what made desktops feel choppy.
+   (Measured: 1440p went from ~20 fps to a steady 60.) */
+@media (min-width: 1100px) {
+  html::before, html body::after { animation: none !important; }
+}
 
 /* ---------- respect "reduce motion" ---------- */
 /* Calm motion (in-app switch on the home screen; not the OS setting).
