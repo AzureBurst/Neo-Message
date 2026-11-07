@@ -222,6 +222,10 @@ accounts are NPCs.
 
 ## Overdrive theme
 
+**Hidden for now.** To bring it back, set `OVERDRIVE_AVAILABLE = true` in
+`js/theme-boot.js` and remove `hidden` from the ◐ button (`#themeBtn`) in
+`home.html`. Devices that had chosen it will pick it up again.
+
 An optional look with more colour and smooth motion: neon haze and a grid
 floor, a flowing colour line under each app's header, cards with corner
 brackets that lift on hover, views that rise and fade in, lists that

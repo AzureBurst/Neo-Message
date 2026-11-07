@@ -12,7 +12,10 @@
   // Animations always play unless this device chose "Calm motion" in the
   // app (the computer's own reduce-motion setting is deliberately ignored).
   try { if (localStorage.getItem('neo.motion') === 'calm') root.classList.add('calm'); } catch (e) {}
-  try { on = localStorage.getItem('neo.theme') === 'overdrive'; } catch (e) {}
+  // Overdrive is hidden for now: set OVERDRIVE_AVAILABLE back to true (and
+  // un-hide #themeBtn in home.html) to bring it back. Saved choices are kept.
+  var OVERDRIVE_AVAILABLE = false;
+  try { on = OVERDRIVE_AVAILABLE && localStorage.getItem('neo.theme') === 'overdrive'; } catch (e) {}
   if (!on) return;
 
   root.dataset.theme = 'overdrive';
