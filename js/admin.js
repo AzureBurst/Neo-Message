@@ -375,10 +375,35 @@ function paintUsers() {
       <td>${p.is_admin
         ? '<span class="pill admin">admin</span>'
         : '<span class="pill">player</span>'}</td>
-      <td><button class="icon-btn" data-rename="${esc(p.id)}" title="Rename ${esc(p.username)}">✎</button></td>
+      <td class="row-actions">
+        <button class="icon-btn" data-rename="${esc(p.id)}" title="Rename ${esc(p.username)}">✎</button>
+        ${p.is_admin || p.id === me.id ? '' : `<button class="icon-btn danger-icon" data-delacct="${esc(p.id)}" title="Delete ${esc(p.username)}'s account">🗑</button>`}
+      </td>
     </tr>`).join('');
 
   $$('[data-rename]').forEach(b => b.addEventListener('click', () => startRename(b.dataset.rename)));
+  $$('[data-delacct]').forEach(b => b.addEventListener('click', () => deleteAccount(b.dataset.delacct)));
+}
+
+/* Delete an account for good, after typing the name to confirm. */
+async function deleteAccount(id) {
+  const p = people.find(x => x.id === id);
+  if (!p) return;
+  const typed = prompt(
+    `Delete ${p.username}'s account for good?\n\n` +
+    `• They can no longer sign in.\n` +
+    `• Their chat messages stay, shown as "Unknown".\n` +
+    `• Their Instagrat posts, mail, journal, grades and everything else they own are deleted.\n\n` +
+    `This can't be undone. Type ${p.username} to confirm.`);
+  if (typed === null) return;
+  if (typed.trim() !== p.username) return toast('Name didn\'t match — nothing was deleted.', 'error');
+  const { error } = await supa.rpc('admin_delete_account', { target: id });
+  if (error) {
+    return toast(/admin_delete_account/.test(error.message)
+      ? 'Deleting accounts needs sql/groups.sql — run it in Supabase.' : error.message, 'error');
+  }
+  $('#adminAlert').innerHTML = `<div class="notice notice-ok">Deleted ${esc(p.username)}'s account.</div>`;
+  loadAll();
 }
 
 /* Rename in place: the name cell becomes a text box. The server checks

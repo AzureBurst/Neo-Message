@@ -255,11 +255,24 @@ Animations play on every device by default, even when the computer's own
 - **New messages grow in** from the sender's side (Messages and NPC Studio).
   Opening a thread doesn't replay old ones.
 
-## Managing chat members (GM)
+## Group chats
 
-Run `sql/group-admin.sql` once. Then press **👥** in any open chat in
-Messages, **Members** on any thread in NeoAdmin (works for chats you're not
-in), or **👥 Members** in an NPC Studio thread. Tick anyone in, untick anyone
-out, rename the chat, Save. Adding a third person to a one-on-one chat turns
-it into a group; added people get a notification, and removed people lose
-access straight away (their old messages stay).
+Run `sql/groups.sql` once (it replaces the older `group-admin.sql`).
+
+- **Group info** — tap the chat name at the top of a group: members with
+  their numbers and when they joined, the group name and photo, **＋ Add
+  people** (from your contacts) and **Leave group**.
+- **System lines** — "robin added vale", "kestrel left", "robin renamed the
+  group to …" appear as small centred notes. Changes you make as GM are
+  worded without your name ("vale was added").
+- **Reply / react / pin** — hover a message (or press and hold on a phone)
+  for ↩ reply, ☺ react (👍 ❤️ 😂 😮 😢 ❗) and 📌 pin. The pinned message sits
+  at the top of the chat; tap it to jump there, ✕ to unpin.
+- **@mentions** — type @ in a group to pick a member; they get a
+  "mentioned you" notification and see their name highlighted.
+- **GM** — in Group info you can stop members adding people or changing the
+  name/photo, and "Add or remove anyone" (also 👥 in the header, NeoAdmin →
+  Members, and NPC Studio) adds or removes anyone, even in chats you're not in.
+- **Deleting accounts** — NeoAdmin → Accounts → 🗑. Type the name to confirm.
+  Their chat messages stay (as "Unknown"); everything else they owned goes.
+  Admin accounts and your own can't be deleted.

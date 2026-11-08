@@ -50,6 +50,8 @@ returns trigger language plpgsql security definer
 set search_path = public as $$
 declare r record; sender_name text; sender_av text;
 begin
+  -- System lines (sql/groups.sql) never notify.
+  if to_jsonb(new)->>'kind' = 'system' then return new; end if;
   select username, avatar_url into sender_name, sender_av
     from public.profiles where id = new.sender_id;
   for r in

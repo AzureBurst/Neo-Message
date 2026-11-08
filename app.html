@@ -60,14 +60,17 @@
     <section class="convo" id="convo">
       <div class="convo-head">
         <button class="icon-btn back-btn" id="backBtn" title="Back to threads">‹</button>
-        <span class="avatar avatar-sm" id="convoAvatar"></span>
-        <div style="min-width:0">
-          <h2 id="convoName">Neo Message</h2>
-          <div class="sub" id="convoSub"></div>
-        </div>
+        <button class="convo-title" id="convoTitle" type="button" title="Chat info">
+          <span class="avatar avatar-sm" id="convoAvatar"></span>
+          <span class="convo-title-text">
+            <h2 id="convoName">Neo Message</h2>
+            <span class="sub" id="convoSub"></span>
+          </span>
+        </button>
         <button class="icon-btn members-btn" id="membersBtn" hidden title="Members — add or remove anyone">👥</button>
       </div>
 
+      <button class="pin-bar" id="pinBar" type="button" hidden></button>
       <div class="stream" id="stream">
         <div class="empty-state">
           Pick a thread on the left, or start a new one with ✎.
@@ -75,6 +78,8 @@
       </div>
 
       <div class="composer" style="position:relative">
+        <div id="replyBox"></div>
+        <div class="mention-pop" id="mentionPop" hidden></div>
         <div id="attachBox"></div>
         <div class="composer-row">
           <div class="composer-tools">

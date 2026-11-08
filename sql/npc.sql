@@ -292,6 +292,8 @@ returns trigger language plpgsql security definer
 set search_path = public as $$
 declare who record; npc_name text; a record;
 begin
+  -- System lines (sql/groups.sql) never notify.
+  if to_jsonb(new)->>'kind' = 'system' then return new; end if;
   if new.sender_id is null or exists (select 1 from public.npcs where id = new.sender_id) then
     return new;
   end if;

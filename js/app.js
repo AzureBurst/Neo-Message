@@ -37,8 +37,12 @@ const state = {
   openId: null,       // conversation currently on screen
   messages: [],
   pendingImage: null, // File waiting to be sent
-  search: ''
+  search: '',
+  reactions: new Map(), // message id -> [{ user_id, emoji }]
+  replyTo: null         // message being replied to
 };
+
+const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '❗'];
 
 /* ------------------------------------------------------------------ */
 /*  header                                                            */
@@ -133,7 +137,7 @@ async function loadThreads() {
     supa.from('conversations').select('*').in('id', ids),
     supa.from('conversation_members').select('conversation_id, user_id').in('conversation_id', ids),
     supa.from('messages')
-        .select('conversation_id, body, image_url, created_at, sender_id')
+        .select('conversation_id, body, image_url, created_at, sender_id, kind')
         .in('conversation_id', ids)
         .order('created_at', { ascending: false })
         .limit(400)
@@ -189,15 +193,17 @@ function renderThreads() {
   list.innerHTML = visible.map(t => {
     const other = !t.is_group && t.others.length ? state.people.get(t.others[0]) : null;
     const preview = t.last
-      ? (t.last.body ? esc(t.last.body.slice(0, 60))
-                     : '<span style="opacity:.75">📷 Photo</span>')
+      ? (t.last.kind === 'system' ? `<span style="opacity:.7;font-style:italic">${esc(t.last.body.slice(0, 60))}</span>`
+        : t.last.body ? esc(t.last.body.slice(0, 60))
+        : '<span style="opacity:.75">📷 Photo</span>')
       : '<span style="opacity:.6">No messages yet</span>';
+    const pic = t.is_group ? t.avatar_url : other?.avatar_url;
 
     return `
       <div class="thread ${t.id === state.openId ? 'active' : ''}" data-id="${t.id}">
         <span class="avatar" data-av="${other?.id ?? ''}">${
-          other?.avatar_url
-            ? `<img src="${esc(other.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover">`
+          pic
+            ? `<img src="${esc(pic)}" alt="" style="width:100%;height:100%;object-fit:cover">`
             : esc((t.name || '?').slice(0, 2).toUpperCase())
         }</span>
         <div class="thread-main">
@@ -234,8 +240,10 @@ async function openThread(id) {
   $('#convoSub').textContent = t.is_group
     ? `${t.memberIds.length} people`
     : formatNumber(other?.phone_number);
-  paintAvatar($('#convoAvatar'), other?.avatar_url, t.name);
+  paintAvatar($('#convoAvatar'), t.is_group ? t.avatar_url : other?.avatar_url, t.name);
   $('#membersBtn').hidden = !me.is_admin;
+  $('#convoTitle').classList.toggle('is-group', !!t.is_group);
+  if (state.replyTo?.conversation_id !== id) setReply(null);
 
   $('#input').disabled = false;
   $('#input').placeholder = `Message ${t.is_group ? t.name : (other?.username ?? '')}`;
@@ -251,7 +259,62 @@ async function openThread(id) {
 
   state.messages = data ?? [];
   await cachePeople(state.messages.map(m => m.sender_id));
+  await loadReactions(id);
   renderStream();
+}
+
+/** Reactions for every message in a conversation (one query). */
+async function loadReactions(convId) {
+  state.reactions = new Map();
+  const { data, error } = await supa.from('message_reactions')
+    .select('message_id, user_id, emoji, messages!inner(conversation_id)')
+    .eq('messages.conversation_id', convId);
+  if (error) return;                       // groups.sql not run yet: no reactions, no fuss
+  for (const r of data || []) {
+    if (!state.reactions.has(r.message_id)) state.reactions.set(r.message_id, []);
+    state.reactions.get(r.message_id).push(r);
+  }
+}
+
+/** The pinned message bar at the top of a chat. */
+function paintPin() {
+  const bar = $('#pinBar');
+  const t = state.threads.find(x => x.id === state.openId);
+  const m = t?.pinned_message_id && state.messages.find(x => x.id === t.pinned_message_id);
+  if (!m) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.innerHTML = `<span class="pin-ico">📌</span>
+    <span class="pin-main"><b>${esc(m.sender_id === me.id ? 'You' : personName(m.sender_id))}</b>
+      <span>${esc(m.body || '📷 Photo')}</span></span>
+    <span class="pin-x" data-unpin title="Unpin">✕</span>`;
+  bar.onclick = async (e) => {
+    if (e.target.closest('[data-unpin]')) {
+      const { error } = await supa.rpc('group_pin', { conv: state.openId, msg: null });
+      if (error) toast(error.message, 'error');
+      return;
+    }
+    jumpTo(m.id);
+  };
+}
+
+function jumpTo(id) {
+  const row = $(`#stream [data-mid="${CSS.escape(id)}"]`);
+  if (!row) return toast('That message isn\'t loaded.', 'info');
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash');
+}
+
+/** Message text with @mentions of chat members highlighted. */
+function bodyHtml(text, t) {
+  let h = esc(text);
+  if (!t?.is_group) return h;
+  const names = t.memberIds.map(id => (id === me.id ? me : state.people.get(id))?.username).filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  for (const n of names) {
+    const re = new RegExp(`(^|[^\\w@])@(${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\w])`, 'gi');
+    h = h.replace(re, (_, pre, nm) => `${pre}<span class="mention ${nm.toLowerCase() === me.username.toLowerCase() ? 'me' : ''}">@${nm}</span>`);
+  }
+  return h;
 }
 
 /* Messages already on screen, per thread — anything new since the last
@@ -260,12 +323,14 @@ async function openThread(id) {
 let seenThread = null;
 const seenIds = new Set();
 
-function renderStream() {
+function renderStream({ keepScroll = false } = {}) {
   const stream = $('#stream');
+  const prevScroll = stream.scrollTop;
   const t = state.threads.find(x => x.id === state.openId);
   const firstPaint = seenThread !== state.openId;
   if (firstPaint) { seenThread = state.openId; seenIds.clear(); }
 
+  paintPin();
   if (!state.messages.length) {
     stream.innerHTML = '<div class="empty-state">No messages yet. Say something.</div>';
     return;
@@ -281,6 +346,13 @@ function renderStream() {
       html += `<div class="daystamp">${esc(day)}</div>`;
       lastDay = day;
       lastSender = null;
+    }
+
+    // "robin added vale" — a small centred line, nobody's bubble.
+    if (m.kind === 'system') {
+      html += `<div class="sysline ${!firstPaint && !seenIds.has(m.id) ? 'fresh' : ''}" data-mid="${esc(m.id)}">${esc(m.body)}</div>`;
+      lastSender = null;
+      return;
     }
 
     const out = m.sender_id === me.id;
@@ -303,15 +375,38 @@ function renderStream() {
         </div>`;
     }
 
-    const jumbo = !m.image_url && isJumboEmoji(m.body);
+    const jumbo = !m.image_url && !m.reply_to && isJumboEmoji(m.body);
     const parts = [];
+    if (m.reply_to) {
+      const q = state.messages.find(x => x.id === m.reply_to);
+      parts.push(`<button type="button" class="quote" data-jump="${esc(m.reply_to)}">
+        <b>${esc(q ? (q.sender_id === me.id ? 'You' : personName(q.sender_id)) : 'Earlier message')}</b>
+        <span>${esc(q ? (q.body || '📷 Photo') : 'Not loaded')}</span></button>`);
+    }
     if (m.image_url) parts.push(`<img src="${esc(m.image_url)}" alt="Attached image" loading="lazy">`);
-    if (m.body) parts.push(`<span class="msg-text">${esc(m.body)}</span>`);
+    if (m.body) parts.push(`<span class="msg-text">${bodyHtml(m.body, t)}</span>`);
+
+    const reacts = state.reactions.get(m.id) || [];
+    const counts = new Map();
+    reacts.forEach(r => counts.set(r.emoji, (counts.get(r.emoji) || 0) + 1));
+    const chips = [...counts].map(([e, n]) => {
+      const mine = reacts.some(r => r.emoji === e && r.user_id === me.id);
+      const who = reacts.filter(r => r.emoji === e).map(r => r.user_id === me.id ? 'You' : personName(r.user_id)).join(', ');
+      return `<button type="button" class="react-chip ${mine ? 'mine' : ''}" data-react="${esc(e)}" title="${esc(who)}">${e}<b>${n}</b></button>`;
+    }).join('');
 
     html += `
-      <div class="row ${out ? 'out' : 'in'} ${gap ? 'gap' : ''} ${!firstPaint && !seenIds.has(m.id) ? 'fresh' : ''}" data-tint="${esc(tint)}">
-        <div class="bubble ${jumbo ? 'jumbo' : ''}">${parts.join('')}</div>
+      <div class="row ${out ? 'out' : 'in'} ${gap ? 'gap' : ''} ${!firstPaint && !seenIds.has(m.id) ? 'fresh' : ''} ${t?.pinned_message_id === m.id ? 'pinned' : ''}" data-tint="${esc(tint)}" data-mid="${esc(m.id)}">
+        <div class="bubble-col">
+          <div class="bubble ${jumbo ? 'jumbo' : ''}">${parts.join('')}</div>
+          ${chips ? `<div class="reacts">${chips}</div>` : ''}
+        </div>
         <span class="stamp">${shortTime(m.created_at)}</span>
+        <div class="msg-actions" role="toolbar" aria-label="Message actions">
+          <button type="button" data-act="reply" title="Reply">↩</button>
+          <button type="button" data-act="react" title="React">☺</button>
+          <button type="button" data-act="pin" title="${t?.pinned_message_id === m.id ? 'Unpin' : 'Pin'}">📌</button>
+        </div>
       </div>`;
 
     lastSender = m.sender_id;
@@ -329,7 +424,97 @@ function renderStream() {
   $$('.bubble img', stream).forEach(img =>
     img.addEventListener('click', () => lightbox(img.src)));
 
-  stream.scrollTop = stream.scrollHeight;
+  stream.scrollTop = keepScroll ? prevScroll : stream.scrollHeight;
+}
+
+/* ------------------------------------------------------------------ */
+/*  reply · react · pin                                               */
+/* ------------------------------------------------------------------ */
+
+const streamEl = $('#stream');
+
+streamEl.addEventListener('click', async (e) => {
+  const quote = e.target.closest('[data-jump]');
+  if (quote) return jumpTo(quote.dataset.jump);
+
+  const chip = e.target.closest('.react-chip');
+  if (chip) return toggleReaction(chip.closest('[data-mid]').dataset.mid, chip.dataset.react);
+
+  const act = e.target.closest('.msg-actions [data-act]');
+  if (!act) return;
+  const id = act.closest('[data-mid]').dataset.mid;
+  const m = state.messages.find(x => x.id === id);
+  if (!m) return;
+  if (act.dataset.act === 'reply') { setReply(m); input.focus(); }
+  if (act.dataset.act === 'react') openReactPicker(act, id);
+  if (act.dataset.act === 'pin') {
+    const t = state.threads.find(x => x.id === state.openId);
+    const { error } = await supa.rpc('group_pin', { conv: state.openId, msg: t?.pinned_message_id === id ? null : id });
+    if (error) toast(/group_pin/.test(error.message) ? 'Pinning needs sql/groups.sql.' : error.message, 'error');
+  }
+  closeActions();
+});
+
+/* Phones: press and hold a message to show its actions. */
+let holdTimer = null;
+streamEl.addEventListener('touchstart', (e) => {
+  const row = e.target.closest('.row[data-mid]');
+  if (!row || e.target.closest('.msg-actions, .react-chip, .quote, img')) return;
+  holdTimer = setTimeout(() => { closeActions(); row.classList.add('show-actions'); navigator.vibrate?.(12); }, 450);
+}, { passive: true });
+['touchend', 'touchmove', 'touchcancel'].forEach(ev =>
+  streamEl.addEventListener(ev, () => clearTimeout(holdTimer), { passive: true }));
+const closeActions = () => $$('.row.show-actions').forEach(r => r.classList.remove('show-actions'));
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.react-pop, .msg-actions [data-act="react"]')) return;   // the picker's own clicks
+  closeReactPicker();
+  if (!e.target.closest('.row.show-actions')) closeActions();
+});
+
+let reactPop = null;
+function openReactPicker(anchor, id) {
+  closeReactPicker();
+  reactPop = document.createElement('div');
+  reactPop.className = 'react-pop';
+  reactPop.innerHTML = REACTIONS.map(e => `<button type="button" data-e="${e}">${e}</button>`).join('');
+  document.body.appendChild(reactPop);
+  const r = anchor.getBoundingClientRect();
+  const w = reactPop.offsetWidth;
+  reactPop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+  reactPop.style.top = Math.max(8, r.top - reactPop.offsetHeight - 8) + 'px';
+  reactPop.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const b = e.target.closest('[data-e]');
+    if (b) { toggleReaction(id, b.dataset.e); closeReactPicker(); }
+  });
+}
+function closeReactPicker() { reactPop?.remove(); reactPop = null; }
+
+async function toggleReaction(id, emoji) {
+  const list = state.reactions.get(id) || [];
+  const mine = list.find(r => r.emoji === emoji && r.user_id === me.id);
+  // Show it straight away; realtime confirms.
+  if (mine) state.reactions.set(id, list.filter(r => r !== mine));
+  else state.reactions.set(id, [...list, { message_id: id, user_id: me.id, emoji }]);
+  renderStream({ keepScroll: true });
+  const { error } = mine
+    ? await supa.from('message_reactions').delete().match({ message_id: id, user_id: me.id, emoji })
+    : await supa.from('message_reactions').insert({ message_id: id, user_id: me.id, emoji });
+  if (error) {
+    toast(/message_reactions/.test(error.message) ? 'Reactions need sql/groups.sql.' : error.message, 'error');
+    await loadReactions(state.openId); renderStream({ keepScroll: true });
+  }
+}
+
+function setReply(m) {
+  state.replyTo = m;
+  const box = $('#replyBox');
+  if (!m) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="reply-bar">
+      <span class="reply-main"><b>Replying to ${esc(m.sender_id === me.id ? 'yourself' : personName(m.sender_id))}</b>
+      <span>${esc(m.body || '📷 Photo')}</span></span>
+      <button class="icon-btn" id="dropReply" title="Cancel reply">✕</button></div>`;
+  $('#dropReply').addEventListener('click', () => setReply(null));
 }
 
 
@@ -343,11 +528,68 @@ input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 130) + 'px';
   refreshSendState();
+  paintMentions();
 });
 
 input.addEventListener('keydown', (e) => {
+  if (!$('#mentionPop').hidden) {
+    const opts = $$('#mentionPop [data-name]');
+    const cur = opts.findIndex(o => o.classList.contains('on'));
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = (cur + (e.key === 'ArrowDown' ? 1 : -1) + opts.length) % opts.length;
+      opts.forEach((o, i) => o.classList.toggle('on', i === next));
+      return;
+    }
+    if ((e.key === 'Enter' || e.key === 'Tab') && opts.length) {
+      e.preventDefault(); pickMention((opts[cur] || opts[0]).dataset.name); return;
+    }
+    if (e.key === 'Escape') { $('#mentionPop').hidden = true; return; }
+  }
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
+
+/* @mentions: typing @ in a group suggests its members. */
+function mentionQuery() {
+  const t = state.threads.find(x => x.id === state.openId);
+  if (!t?.is_group) return null;
+  const upto = input.value.slice(0, input.selectionStart ?? input.value.length);
+  const m = upto.match(/(^|\s)@([\w.-]*)$/);
+  return m ? { q: m[2].toLowerCase(), start: upto.length - m[2].length - 1, t } : null;
+}
+function paintMentions() {
+  const pop = $('#mentionPop');
+  const mq = mentionQuery();
+  if (!mq) { pop.hidden = true; return; }
+  const names = mq.t.memberIds.filter(id => id !== me.id)
+    .map(id => state.people.get(id)).filter(p => p && p.username.toLowerCase().startsWith(mq.q)).slice(0, 6);
+  if (!names.length) { pop.hidden = true; return; }
+  pop.hidden = false;
+  pop.innerHTML = names.map((p, i) => `<button type="button" class="${i === 0 ? 'on' : ''}" data-name="${esc(p.username)}">
+    <span class="avatar avatar-xs" data-mav="${esc(p.id)}"></span>${esc(p.username)}</button>`).join('');
+  names.forEach(p => paintAvatar(pop.querySelector(`[data-mav="${p.id}"]`), p.avatar_url, p.username));
+  $$('[data-name]', pop).forEach(b => b.addEventListener('mousedown', (e) => { e.preventDefault(); pickMention(b.dataset.name); }));
+}
+function pickMention(name) {
+  const mq = mentionQuery(); if (!mq) return;
+  const end = input.selectionStart ?? input.value.length;
+  input.value = input.value.slice(0, mq.start) + '@' + name + ' ' + input.value.slice(end);
+  const pos = mq.start + name.length + 2;
+  input.setSelectionRange(pos, pos);
+  $('#mentionPop').hidden = true;
+  input.focus(); refreshSendState();
+}
+input.addEventListener('blur', () => setTimeout(() => { $('#mentionPop').hidden = true; }, 150));
+
+/** Which chat members a message @mentions. */
+function mentionsIn(body) {
+  const t = state.threads.find(x => x.id === state.openId);
+  if (!t?.is_group || !body) return [];
+  return t.memberIds.filter(id => {
+    const n = (id === me.id ? me : state.people.get(id))?.username;
+    return n && id !== me.id && new RegExp(`(^|[^\\w@])@${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w])`, 'i').test(body);
+  });
+}
 
 $('#sendBtn').addEventListener('click', send);
 
@@ -375,12 +617,21 @@ async function send() {
     return;
   }
 
-  const { data, error } = await supa.from('messages').insert({
+  const row = {
     conversation_id: state.openId,
     sender_id: me.id,
     body: body || null,
     image_url: imageUrl
-  }).select().single();
+  };
+  // Replies and @mentions need sql/groups.sql; plain messages don't.
+  const mentions = mentionsIn(body);
+  if (state.replyTo) row.reply_to = state.replyTo.id;
+  if (mentions.length) row.mentions = mentions;
+  let { data, error } = await supa.from('messages').insert(row).select().single();
+  if (error && (row.reply_to || row.mentions) && /reply_to|mentions|column/i.test(error.message)) {
+    delete row.reply_to; delete row.mentions;
+    ({ data, error } = await supa.from('messages').insert(row).select().single());
+  }
 
   if (error) {
     toast('Message did not send. Try again.', 'error');
@@ -408,6 +659,7 @@ async function send() {
 
   input.value = '';
   input.style.height = 'auto';
+  setReply(null);
   clearAttachment();
   refreshSendState();
   input.focus();
@@ -986,14 +1238,24 @@ supa.channel('neo-messages')
         }
       })
   .on('postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'conversation_members',
-        filter: `user_id=eq.${me.id}` },
-      () => loadThreads())
+      { event: 'INSERT', schema: 'public', table: 'conversation_members' },
+      () => refreshOpenChat())
+  .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'conversations' },
+      () => refreshOpenChat())
+  .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'message_reactions' },
+      async (p) => {
+        const id = (p.new && p.new.message_id) || (p.old && p.old.message_id);
+        if (!state.openId || !state.messages.some(m => m.id === id)) return;
+        await loadReactions(state.openId);
+        renderStream({ keepScroll: true });
+      })
   .on('postgres_changes',
       { event: 'DELETE', schema: 'public', table: 'conversation_members' },
       async (payload) => {
         // The GM took someone out of a chat. If it was us, close it.
-        if (payload.old?.user_id !== me.id) return;
+        if (payload.old?.user_id !== me.id) return refreshOpenChat();
         if (payload.old.conversation_id === state.openId) {
           state.openId = null;
           state.messages = [];
@@ -1047,3 +1309,175 @@ $('#membersBtn').addEventListener('click', async () => {
     renderStream?.();
   }
 });
+
+/* Threads changed (members, name, photo, pin): refresh the list and the
+   open chat's header without losing the reader's place. */
+let refreshTimer = null;
+function refreshOpenChat() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    await loadThreads();
+    const t = state.threads.find(x => x.id === state.openId);
+    if (!t) return;
+    $('#convoName').textContent = t.name;
+    if (t.is_group) {
+      $('#convoSub').textContent = `${t.memberIds.length} people`;
+      paintAvatar($('#convoAvatar'), t.avatar_url, t.name);
+    }
+    renderStream({ keepScroll: true });
+  }, 250);
+}
+
+
+/* ------------------------------------------------------------------ */
+/*  group info: members, name, photo, add people, leave               */
+/* ------------------------------------------------------------------ */
+
+$('#convoTitle').addEventListener('click', () => {
+  const t = state.threads.find(x => x.id === state.openId);
+  if (t?.is_group) openGroupInfo(t.id);
+});
+
+async function openGroupInfo(convId) {
+  const t = state.threads.find(x => x.id === convId);
+  if (!t) return;
+  const { data: rows } = await supa.from('conversation_members')
+    .select('user_id, joined_at').eq('conversation_id', convId);
+  await cachePeople((rows || []).map(r => r.user_id));
+  const members = (rows || []).map(r => ({ ...r, p: r.user_id === me.id ? me : state.people.get(r.user_id) }))
+    .sort((a, b) => (a.user_id === me.id) - (b.user_id === me.id) || (a.p?.username || '').localeCompare(b.p?.username || ''));
+  const canEdit = me.is_admin || t.members_can_edit !== false;
+  const canAdd = me.is_admin || t.members_can_add !== false;
+  const joined = iso => new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+  const { root, close } = modal({
+    title: 'Group info',
+    body: `
+      <div class="gi-top">
+        <button type="button" class="gi-photo ${canEdit ? 'can' : ''}" id="giPhoto" ${canEdit ? '' : 'disabled'} title="${canEdit ? 'Change group photo' : ''}">
+          <span class="avatar avatar-lg" id="giAvatar"></span>${canEdit ? '<span class="gi-photo-tip">Change</span>' : ''}
+        </button>
+        <input type="file" id="giFile" accept="image/*" class="hidden">
+        <div class="gi-name">
+          ${canEdit
+            ? `<input type="text" id="giTitle" maxlength="40" value="${esc(t.title || '')}" placeholder="Group name">
+               <button class="btn btn-sm" id="giSaveName">Save</button>`
+            : `<h3>${esc(t.name)}</h3>`}
+          ${t.avatar_url && canEdit ? '<button type="button" class="linkish" id="giNoPhoto">Remove photo</button>' : ''}
+        </div>
+      </div>
+      <div class="gi-head"><b>${members.length} ${members.length === 1 ? 'member' : 'members'}</b>
+        ${canAdd ? '<button class="btn btn-ghost btn-sm" id="giAdd">＋ Add people</button>' : ''}</div>
+      <div class="gi-list">${members.map(m => `
+        <div class="gi-row">
+          <span class="avatar avatar-sm" data-gav="${esc(m.user_id)}"></span>
+          <span class="gi-who"><b>${esc(m.p?.username || 'Unknown')}${m.user_id === me.id ? ' <i>(you)</i>' : ''}</b>
+            <span class="mono">${esc(formatNumber(m.p?.phone_number))}</span></span>
+          <span class="gi-joined">joined ${esc(joined(m.joined_at))}</span>
+        </div>`).join('')}</div>
+      ${me.is_admin ? `
+        <div class="gi-gm">
+          <b>GM settings</b>
+          <label class="check"><input type="checkbox" id="giCanAdd" ${t.members_can_add !== false ? 'checked' : ''}><span>Members can add people</span></label>
+          <label class="check"><input type="checkbox" id="giCanEdit" ${t.members_can_edit !== false ? 'checked' : ''}><span>Members can change the name and photo</span></label>
+          <button class="btn btn-ghost btn-sm" id="giManage">👥 Add or remove anyone…</button>
+        </div>` : ''}
+      <div id="giMsg"></div>`,
+    footer: `
+      <button class="btn btn-danger" id="giLeave">Leave group</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost" data-close>Close</button>`
+  });
+
+  paintAvatar($('#giAvatar', root), t.avatar_url, t.name);
+  members.forEach(m => paintAvatar(root.querySelector(`[data-gav="${m.user_id}"]`), m.p?.avatar_url, m.p?.username || '?'));
+  const say = (msg, kind = 'error') => { $('#giMsg', root).innerHTML = `<div class="notice notice-${kind}">${esc(msg)}</div>`; };
+  const needSql = (err) => /group_(update|add|leave)|admin_group_settings|function/i.test(err.message)
+    ? 'This needs sql/groups.sql — ask the GM to run it in Supabase.' : err.message;
+  const after = async () => { await loadThreads(); refreshOpenChat(); };
+
+  $('#giSaveName', root)?.addEventListener('click', async () => {
+    const { error } = await supa.rpc('group_update', { conv: convId, p_title: $('#giTitle', root).value, p_avatar: t.avatar_url || null });
+    if (error) return say(needSql(error));
+    say('Name saved.', 'ok'); await after();
+  });
+  $('#giPhoto', root).addEventListener('click', () => canEdit && $('#giFile', root).click());
+  $('#giFile', root).addEventListener('change', async (e) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    say('Uploading…', 'info');
+    try {
+      const url = await uploadFile('avatars', me.id, await shrinkImage(file, 480, 0.9));
+      const { error } = await supa.rpc('group_update', { conv: convId, p_title: t.title || null, p_avatar: url });
+      if (error) return say(needSql(error));
+      t.avatar_url = url; paintAvatar($('#giAvatar', root), url, t.name);
+      say('Group photo updated.', 'ok'); await after();
+    } catch (err) { say(err.message || 'Upload failed.'); }
+  });
+  $('#giNoPhoto', root)?.addEventListener('click', async () => {
+    const { error } = await supa.rpc('group_update', { conv: convId, p_title: t.title || null, p_avatar: null });
+    if (error) return say(needSql(error));
+    close(); await after();
+  });
+  $('#giLeave', root).addEventListener('click', async () => {
+    if (!confirm(`Leave "${t.name}"? You'll stop getting its messages. Someone in the group can add you back.`)) return;
+    const { error } = await supa.rpc('group_leave', { conv: convId });
+    if (error) return say(needSql(error));
+    close();
+    state.openId = null; state.messages = [];
+    $('#panes').classList.remove('reading');
+    toast(`You left ${t.name}.`, 'ok');
+    await loadThreads();
+  });
+  $('#giAdd', root)?.addEventListener('click', () => { close(); openAddPeople(t); });
+  for (const id of ['#giCanAdd', '#giCanEdit']) {
+    $(id, root)?.addEventListener('change', async () => {
+      const { error } = await supa.rpc('admin_group_settings', {
+        conv: convId, can_add: $('#giCanAdd', root).checked, can_edit: $('#giCanEdit', root).checked });
+      if (error) return say(needSql(error));
+      say('Settings saved.', 'ok'); await after();
+    });
+  }
+  $('#giManage', root)?.addEventListener('click', async () => {
+    close();
+    const { openMembers } = await import('./members.js');
+    if (await openMembers(convId)) refreshOpenChat();
+  });
+}
+
+/* Members add from their contacts; the GM can add anyone. */
+async function openAddPeople(t) {
+  let people;
+  if (me.is_admin) {
+    const { data } = await supa.from('profiles').select('*');
+    (data || []).forEach(p => state.people.set(p.id, p));
+    people = (data || []).map(p => ({ id: p.id, label: p.username, profile: p }));
+  } else {
+    const { data: rows } = await supa.from('contacts').select('contact_id, nickname').eq('owner_id', me.id);
+    await cachePeople((rows || []).map(r => r.contact_id));
+    people = (rows || []).map(r => ({ id: r.contact_id, label: r.nickname || personName(r.contact_id), profile: state.people.get(r.contact_id) }));
+  }
+  people = people.filter(p => !t.memberIds.includes(p.id) && p.id !== me.id).sort((a, b) => a.label.localeCompare(b.label));
+
+  const { root, close } = modal({
+    title: `Add people to ${t.name}`,
+    body: people.length ? people.map(p => `
+      <label class="checkline">
+        <input type="checkbox" value="${esc(p.id)}">
+        <span class="avatar avatar-sm" data-aav="${esc(p.id)}"></span>
+        <span><span style="font-family:var(--font-ui);font-weight:600">${esc(p.label)}</span><br>
+        <span class="mono" style="font-size:11.5px;color:var(--muted)">${esc(formatNumber(p.profile?.phone_number))}</span></span>
+      </label>`).join('')
+      : `<div class="empty-state">${me.is_admin ? 'Everyone is already here.' : 'All your contacts are already here. Add more contacts with ☰.'}</div>`,
+    footer: people.length ? `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn" id="apGo">Add</button>` : ''
+  });
+  people.forEach(p => paintAvatar(root.querySelector(`[data-aav="${p.id}"]`), p.profile?.avatar_url, p.label));
+  $('#apGo', root)?.addEventListener('click', async () => {
+    const ids = $$('.checkline input:checked', root).map(i => i.value);
+    if (!ids.length) return toast('Pick someone to add.', 'error');
+    const { error } = await supa.rpc('group_add', { conv: t.id, user_ids: ids });
+    if (error) return toast(/group_add|function/i.test(error.message) ? 'This needs sql/groups.sql.' : error.message, 'error');
+    close();
+    toast(`Added ${ids.length} ${ids.length === 1 ? 'person' : 'people'}.`, 'ok');
+    refreshOpenChat();
+  });
+}

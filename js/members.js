@@ -2,7 +2,7 @@
 //  GM: who's in this conversation?
 //  One panel, used from Messages, NPC Studio and NeoAdmin. Tick anyone
 //  in, untick anyone out, rename the group, Save. Needs
-//  sql/group-admin.sql.
+//  sql/groups.sql.
 // =====================================================================
 
 import { supa, esc, toast, initials, $, $$ } from './supa.js';
@@ -102,7 +102,7 @@ export async function openMembers(convId) {
       const fail = (err) => {
         btn.disabled = false; btn.textContent = 'Save';
         toast(/admin_(add|remove)_members|admin_set_group_title/.test(err.message)
-          ? 'Run sql/group-admin.sql in Supabase first.' : err.message, 'error');
+          ? 'Run sql/groups.sql in Supabase first.' : err.message, 'error');
       };
       if (d.add.length) {
         const { error } = await supa.rpc('admin_add_members', { conv: convId, user_ids: d.add });
