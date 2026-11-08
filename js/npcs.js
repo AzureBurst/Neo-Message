@@ -200,6 +200,7 @@ async function openThread(conv) {
         <strong>${esc(convTitle(r))}</strong>
         <span class="ns-members">${(r.member_ids || []).map(id => `<span class="ns-member ${isNpc(id) ? 'npc' : ''}" style="--c:${esc(colorOf(id))}">${esc(nameOf(id))}${isNpc(id) ? ' · NPC' : ''}</span>`).join('')}</span>
       </div>
+      <button class="ns-btn" id="nsMembers" title="Add or remove anyone">👥 Members</button>
       <button class="ns-btn" id="nsAddNpc" title="Bring another NPC into this conversation">＋ NPC</button>
     </header>
     <div class="ns-msgs" id="nsMsgs">${paintMessages(threadMsgs)}</div>
@@ -221,6 +222,10 @@ async function openThread(conv) {
   $$('.ns-bubble img', box).forEach(im => im.addEventListener('click', () => lightbox(im.src)));
   $('#nsBack').addEventListener('click', () => { view.conv = null; history.replaceState(null, '', 'npcs.html'); paintRows(); paintEmptyThread(); });
   $('#nsAddNpc').addEventListener('click', () => pickNpcToAdd(conv, inConv));
+  $('#nsMembers').addEventListener('click', async () => {
+    const { openMembers } = await import('./members.js');
+    if (await openMembers(conv)) await refresh({ keepThread: true });
+  });
 
   const as = $('#nsAs'), text = $('#nsText');
   const paintAs = () => {

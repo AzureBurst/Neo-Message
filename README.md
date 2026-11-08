@@ -254,3 +254,12 @@ Animations play on every device by default, even when the computer's own
   colour-filled outgoing ones, plain bold type with no outlines.
 - **New messages grow in** from the sender's side (Messages and NPC Studio).
   Opening a thread doesn't replay old ones.
+
+## Managing chat members (GM)
+
+Run `sql/group-admin.sql` once. Then press **👥** in any open chat in
+Messages, **Members** on any thread in NeoAdmin (works for chats you're not
+in), or **👥 Members** in an NPC Studio thread. Tick anyone in, untick anyone
+out, rename the chat, Save. Adding a third person to a one-on-one chat turns
+it into a group; added people get a notification, and removed people lose
+access straight away (their old messages stay).

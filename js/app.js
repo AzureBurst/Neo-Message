@@ -235,6 +235,7 @@ async function openThread(id) {
     ? `${t.memberIds.length} people`
     : formatNumber(other?.phone_number);
   paintAvatar($('#convoAvatar'), other?.avatar_url, t.name);
+  $('#membersBtn').hidden = !me.is_admin;
 
   $('#input').disabled = false;
   $('#input').placeholder = `Message ${t.is_group ? t.name : (other?.username ?? '')}`;
@@ -989,6 +990,19 @@ supa.channel('neo-messages')
         filter: `user_id=eq.${me.id}` },
       () => loadThreads())
   .on('postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'conversation_members' },
+      async (payload) => {
+        // The GM took someone out of a chat. If it was us, close it.
+        if (payload.old?.user_id !== me.id) return;
+        if (payload.old.conversation_id === state.openId) {
+          state.openId = null;
+          state.messages = [];
+          $('#panes').classList.remove('reading');
+          toast('You were removed from that chat.', 'info');
+        }
+        await loadThreads();
+      })
+  .on('postgres_changes',
       { event: 'DELETE', schema: 'public', table: 'conversations' },
       async (payload) => {
         const gone = payload.old?.id;
@@ -1018,3 +1032,18 @@ const wantConvo = new URLSearchParams(location.search).get('c');
 if (wantConvo && state.threads.some(t => t.id === wantConvo)) {
   openThread(wantConvo);
 }
+
+/* GM: add or remove anyone in the open chat (js/members.js). */
+$('#membersBtn').addEventListener('click', async () => {
+  const id = state.openId;
+  if (!id || !me.is_admin) return;
+  const { openMembers } = await import('./members.js');
+  if (!(await openMembers(id))) return;
+  await loadThreads();
+  if (state.threads.some(t => t.id === id)) openThread(id);
+  else {
+    state.openId = null; state.messages = [];
+    $('#panes').classList.remove('reading');
+    renderStream?.();
+  }
+});

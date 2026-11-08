@@ -140,11 +140,17 @@ function paintThreads() {
       <td class="mono">${r.count}</td>
       <td class="mono">${r.last ? esc(fullStamp(r.last)) : '—'}</td>
       <td class="row-actions">
+        <button class="btn btn-ghost btn-sm" data-members title="Add or remove anyone">Members</button>
         <button class="btn btn-ghost btn-sm" data-act="clear"
                 ${r.count ? '' : 'disabled'}>Clear</button>
         <button class="btn btn-sm btn-danger" data-act="delete">Delete</button>
       </td>
     </tr>`).join('');
+
+  $$('#threadRows [data-members]', document).forEach(btn => btn.addEventListener('click', async () => {
+    const { openMembers } = await import('./members.js');
+    if (await openMembers(btn.closest('tr').dataset.conv)) await loadAll();
+  }));
 
   $$('#threadRows [data-act]', document).forEach(btn => {
     btn.addEventListener('click', async () => {
