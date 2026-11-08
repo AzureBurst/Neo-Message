@@ -43,6 +43,27 @@ const KINDS = {
   text:  { label: 'Plain answer',   icon: '✎',  source: () => 'queree.net/answer' },
   image: { label: 'Image',          icon: '🖼', source: () => 'images.queree.net' }
 };
+const DEAD = { label: 'Dead end', icon: '🚫' };
+const kindOf = k => KINDS[k] || (k === 'none' ? DEAD : KINDS.text);
+const DEAD_TIPS = ['Make sure all words are spelled correctly.', 'Try different keywords.', 'Try more general keywords.'];
+
+/** The "did not match any documents" page. */
+function deadEndHtml(query, body = {}) {
+  const tips = String(body.tips ?? DEAD_TIPS.join('\n')).split('\n').map(t => t.trim()).filter(Boolean);
+  const es = ['y', 'g', 'r', 'g', 'y', 'r', 'g'];
+  return `
+    <div class="qr-dead">
+      ${body.suggest ? `<p class="qr-dead-dym">Did you mean: <a href="#" data-dym="${esc(body.suggest)}"><b><i>${esc(body.suggest)}</i></b></a></p>` : ''}
+      <p>Your search - <b>${esc(query)}</b> - did not match any documents.</p>
+      ${tips.length ? `<p>Suggestions:</p><ul>${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+      <div class="qr-pager" aria-hidden="true">
+        <span class="qr-pg"><img class="qr-pg-quer" src="assets/queree-pg-quer.png" alt=""><i></i></span>${
+        es.map((c, i) => `<span class="qr-pg"><img src="assets/queree-pg-e-${c}.png" alt=""><i class="${i ? '' : 'on'}">${i + 1}</i></span>`).join('')}
+        <span class="qr-pg qr-pg-next"><b>›</b><i>Next</i></span>
+      </div>
+    </div>`;
+}
+
 const slug = t => String(t || 'Page').trim().replace(/\s+/g, '_').replace(/[^\w()_-]/g, '');
 
 /* ------------------------------------------------------------------ */
@@ -230,8 +251,12 @@ async function viewSearch(id) {
 
   const { data: results } = await supa.from('qr_results').select('*')
     .eq('search_id', id).order('created_at');
-  const indexed = matchPages(pages, s.query);
-  const total = (results?.length || 0) + indexed.length;
+  const dead = (results || []).find(r => r.kind === 'none');
+  const real = (results || []).filter(r => r.kind !== 'none');
+  // A dead end wins unless you've since sent real results.
+  const isDead = dead && !real.length;
+  const indexed = isDead ? [] : matchPages(pages, s.query);
+  const total = real.length + indexed.length;
   const secs = (0.18 + (s.query.length % 7) * 0.07).toFixed(2);
 
   main.innerHTML = `
@@ -241,7 +266,7 @@ async function viewSearch(id) {
         ${searchBox({ value: s.query })}
       </div>
       <p class="qr-count">${total
-        ? `About ${total} result${total === 1 ? '' : 's'} (${secs} seconds)` : ''}</p>
+        ? `About ${total} result${total === 1 ? '' : 's'} (${secs} seconds)` : isDead ? `About 0 results (${secs} seconds)` : ''}</p>
 
       ${s.status === 'pending' ? `
         <div class="qr-crawling">
@@ -249,13 +274,15 @@ async function viewSearch(id) {
           <div><strong>Queree is loading…</strong></div>
         </div>` : ''}
 
-      ${(results || []).map(r => resultCard(r, 'result')).join('')}
+      ${isDead ? deadEndHtml(s.query, dead.body) : ''}
+
+      ${real.map(r => resultCard(r, 'result')).join('')}
 
       ${indexed.length ? `
-        ${results?.length ? '<h4 class="qr-subhead">More from the index</h4>' : ''}
+        ${real.length ? '<h4 class="qr-subhead">More from the index</h4>' : ''}
         ${indexed.map(p => resultCard(p, 'page')).join('')}` : ''}
 
-      ${!total && s.status !== 'pending' ? '<div class="qr-none">No results found for this search.</div>' : ''}
+      ${!total && !isDead && s.status !== 'pending' ? '<div class="qr-none">No results found for this search.</div>' : ''}
 
       ${me.is_admin ? `<div class="qr-admin-strip"><button class="btn btn-sm btn-primary" id="qrAnswerThis">Answer this search</button></div>` : ''}
     </div>`;
@@ -267,6 +294,7 @@ async function viewSearch(id) {
     go('result', { source, id: rid, searchId: id });
   }));
   $('#qrAnswerThis')?.addEventListener('click', () => go('answer', { searchId: id }));
+  $$('[data-dym]', main).forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); runSearch(a.dataset.dym); }));
 }
 
 function viewHistory() {
@@ -492,6 +520,7 @@ async function viewAnswer(searchId) {
       <div class="fl-section-head"><h3>Answer with…</h3></div>
       <div class="qr-kinds">
         ${Object.entries(KINDS).map(([k, v]) => `<button class="qr-kind" data-kind="${k}"><span>${v.icon}</span>${v.label}</button>`).join('')}
+        <button class="qr-kind qr-kind-dead" id="qrDeadEnd"><span>🚫</span>No results</button>
       </div>
 
       ${suggested.length ? `
@@ -501,7 +530,7 @@ async function viewAnswer(searchId) {
 
       <div class="fl-section-head" style="margin-top:18px"><h3>Results sent · ${results?.length || 0}</h3></div>
       ${(results || []).map(r => `<div class="qr-hist-row">
-          <span class="qr-hist-q static">${KINDS[r.kind].icon} ${esc(r.title || KINDS[r.kind].label)}<small>${esc(snippet(r, 90))}</small></span>
+          <span class="qr-hist-q static">${kindOf(r.kind).icon} ${esc(r.kind === 'none' ? 'Dead end — no results' : (r.title || kindOf(r.kind).label))}<small>${esc(r.kind === 'none' ? (r.body?.suggest ? `Did you mean: ${r.body.suggest}` : 'did not match any documents') : snippet(r, 90))}</small></span>
           <button class="icon-btn" data-edit="${esc(r.id)}" title="Edit">✎</button>
           <button class="icon-btn" data-delres="${esc(r.id)}" title="Remove">🗑</button></div>`).join('')
         || '<div class="fl-empty">Nothing sent yet.</div>'}
@@ -523,8 +552,11 @@ async function viewAnswer(searchId) {
       }
     });
   }));
+  $('#qrDeadEnd').addEventListener('click', () =>
+    openDeadEnd({ searchId, query: s.query, existing: (results || []).find(r => r.kind === 'none') }));
   $$('[data-edit]', main).forEach(b => b.addEventListener('click', () => {
     const r = results.find(x => x.id === b.dataset.edit);
+    if (r.kind === 'none') return openDeadEnd({ searchId, query: s.query, existing: r });
     openComposer({ kind: r.kind, target: 'result', searchId, existing: r });
   }));
   $$('[data-delres]', main).forEach(b => b.addEventListener('click', async () => {
@@ -599,6 +631,64 @@ function showPreview(r, { who = 'the player', action = 'Send', fallbackAddr = nu
   $$('a.qr-wikilink, .qr-result', layer).forEach(a => a.addEventListener('click', (ev) => ev.preventDefault()));
   $('[data-back]', layer).addEventListener('click', () => layer.remove());
   $('[data-send]', layer).addEventListener('click', () => { layer.remove(); onSend?.(); });
+}
+
+/* A dead end: one click, optional "Did you mean", live preview. */
+function openDeadEnd({ searchId, query, existing = null }) {
+  const b = existing?.body || {};
+  const root = $('#modalRoot');
+  root.innerHTML = `
+    <div class="scrim"><div class="modal modal-wide qr-compose" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>${existing ? 'Edit dead end' : 'No results'}</h3>
+        <span class="qr-compose-tabs"><button type="button" class="on" data-pane="form">Edit</button><button type="button" data-pane="live">Preview</button></span>
+        <button class="icon-btn" data-close>✕</button></div>
+      <div class="modal-body qr-compose-body" data-show="form">
+       <div class="qr-compose-form">
+        <p class="muted small">“${esc(query)}” comes back empty. The player gets a notification as usual.</p>
+        <div class="field"><label for="dDym">Did you mean (optional)</label>
+          <input type="text" id="dDym" maxlength="120" value="${esc(b.suggest || '')}" placeholder="A nudge toward a better search">
+          <small class="muted">The player can tap it to search for that instead.</small></div>
+        <div class="field"><label for="dTips">Suggestions — one per line</label>
+          <textarea id="dTips" rows="5">${esc(b.tips ?? DEAD_TIPS.join('\n'))}</textarea></div>
+        <div id="dMsg"></div>
+       </div>
+       <aside class="qr-compose-live" aria-label="Live preview">
+         <div class="qr-preview-label">Live preview · what the player will see</div>
+         <div class="qr-dead-frame" id="dLive"></div>
+       </aside>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close>Cancel</button>
+        <button class="btn btn-primary" id="dSave">${existing ? 'Save' : 'Send dead end'}</button>
+      </div>
+    </div></div>`;
+  const close = () => { root.innerHTML = ''; };
+  $$('[data-close]', root).forEach(x => x.addEventListener('click', close));
+  const body = () => ({ suggest: $('#dDym', root).value.trim() || null, tips: $('#dTips', root).value });
+  const paint = () => {
+    $('#dLive', root).innerHTML = `<p class="qr-count">About 0 results (0.21 seconds)</p>${deadEndHtml(query, body())}`;
+    $$('#dLive a', root).forEach(a => a.addEventListener('click', e => e.preventDefault()));
+  };
+  root.addEventListener('input', paint); paint();
+  $$('[data-pane]', root).forEach(x => x.addEventListener('click', () => {
+    $$('[data-pane]', root).forEach(y => y.classList.toggle('on', y === x));
+    $('.qr-compose-body', root).dataset.show = x.dataset.pane;
+  }));
+  $('#dSave', root).addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
+    const row = { kind: 'none', title: 'No results', source: 'queree.net', body: body() };
+    const { error } = existing
+      ? await supa.from('qr_results').update(row).eq('id', existing.id)
+      : await supa.from('qr_results').insert({ ...row, search_id: searchId });
+    if (error) {
+      e.currentTarget.disabled = false;
+      $('#dMsg', root).innerHTML = `<div class="notice notice-error">${esc(/kind_check|check constraint/.test(error.message)
+        ? 'Run sql/queree-deadend.sql in Supabase first.' : error.message)}</div>`;
+      return;
+    }
+    playSound('sent'); toast(existing ? 'Saved.' : 'Dead end sent — the player has been notified.', 'ok');
+    close(); go('answer', { searchId });
+  });
 }
 
 /* ------------------------------------------------------------------ */
