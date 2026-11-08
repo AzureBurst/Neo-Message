@@ -413,20 +413,63 @@ async function viewInbox() {
   const pending = all.filter(s => s.status === 'pending').reverse();   // oldest first
   const done = all.filter(s => s.status === 'answered').slice(0, 30);
   const row = s => `
-    <button class="qr-hist-q qr-inbox-row" data-ans="${esc(s.id)}">
-      <i class="qr-tab-dot ${s.status}"></i>${esc(s.query)}
-      <small>${esc(names.get(s.user_id) || 'someone')} · ${new Date(s.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</small>
-    </button>`;
+    <div class="qr-hist-row qr-inbox-line">
+      <input type="checkbox" class="qr-pick" value="${esc(s.id)}" aria-label="Select “${esc(s.query)}”">
+      <button class="qr-hist-q qr-inbox-row" data-ans="${esc(s.id)}">
+        <i class="qr-tab-dot ${s.status}"></i>${esc(s.query)}
+        <small>${esc(names.get(s.user_id) || 'someone')} · ${new Date(s.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</small>
+      </button>
+      <button class="icon-btn" data-delsearch="${esc(s.id)}" title="Delete this search">🗑</button>
+    </div>`;
   main.innerHTML = `
     <div class="qr-history">
+      <div class="qr-bulk" id="qrBulk" hidden>
+        <strong id="qrBulkN"></strong><span class="jr-spacer"></span>
+        <button class="btn btn-sm btn-ghost" id="qrBulkNone">Unselect</button>
+        <button class="btn btn-sm btn-danger" id="qrBulkDel">Delete selected</button>
+      </div>
       <div class="fl-section-head"><h3>Waiting on you · ${pending.length}</h3>
-        <button class="btn btn-sm btn-ghost" id="qrToIndex">Indexed pages</button></div>
+        <span class="qr-head-btns">
+          ${pending.length ? '<button class="btn btn-sm btn-ghost" id="qrSelPending">Select all waiting</button>' : ''}
+          <button class="btn btn-sm btn-ghost" id="qrToIndex">Indexed pages</button></span></div>
       ${pending.map(row).join('') || '<div class="fl-empty">Every search has an answer.</div>'}
       <div class="fl-section-head" style="margin-top:22px"><h3>Recently answered</h3></div>
       ${done.map(row).join('') || '<div class="fl-empty">Nothing yet.</div>'}
     </div>`;
   $$('[data-ans]', main).forEach(b => b.addEventListener('click', () => go('answer', { searchId: b.dataset.ans })));
   $('#qrToIndex').addEventListener('click', () => go('index'));
+
+  const picked = () => $$('.qr-pick:checked', main).map(i => i.value);
+  const paintBulk = () => {
+    const n = picked().length;
+    $('#qrBulk').hidden = !n;
+    $('#qrBulkN').textContent = `${n} selected`;
+  };
+  main.addEventListener('change', (e) => { if (e.target.matches('.qr-pick')) paintBulk(); });
+  $('#qrSelPending')?.addEventListener('click', () => {
+    const ids = new Set(pending.map(s => s.id));
+    $$('.qr-pick', main).forEach(i => { if (ids.has(i.value)) i.checked = true; });
+    paintBulk();
+  });
+  $('#qrBulkNone').addEventListener('click', () => { $$('.qr-pick', main).forEach(i => { i.checked = false; }); paintBulk(); });
+  $('#qrBulkDel').addEventListener('click', () => deleteSearches(picked(), all));
+  $$('[data-delsearch]', main).forEach(b => b.addEventListener('click', () => deleteSearches([b.dataset.delsearch], all)));
+}
+
+/* Deleting a search removes it for the player too (their tab closes) and
+   takes any results you sent with it. */
+async function deleteSearches(ids, known = []) {
+  if (!ids.length) return;
+  const qs = ids.map(id => known.find(s => s.id === id)?.query).filter(Boolean);
+  const list = qs.slice(0, 6).map(q => `  • ${q}`).join('\n') + (qs.length > 6 ? `\n  …and ${qs.length - 6} more` : '');
+  if (!confirm(`Delete ${ids.length} search${ids.length === 1 ? '' : 'es'}?\n\n${list}\n\nThe player's tab and any results you sent go too. This can't be undone.`)) return;
+  const { error } = await supa.from('qr_searches').delete().in('id', ids);
+  if (error) return toast(error.message, 'error');
+  ids.forEach(id => clearNotificationsFor(id));
+  toast(`Deleted ${ids.length} search${ids.length === 1 ? '' : 'es'}.`, 'ok');
+  paintInboxBadge();
+  await loadMine();
+  go('inbox');
 }
 
 async function viewAnswer(searchId) {
@@ -443,6 +486,7 @@ async function viewAnswer(searchId) {
         <small>${esc(names.get(s.user_id) || 'someone')} searched</small>
         <h2>“${esc(s.query)}”</h2>
         <span class="muted small">${s.status === 'pending' ? 'Waiting on you' : 'Answered — you can add more'}</span>
+        <button class="qr-ask-del" id="qrDelThis" title="Delete this search">🗑 Delete search</button>
       </div>
 
       <div class="fl-section-head"><h3>Answer with…</h3></div>
@@ -453,7 +497,7 @@ async function viewAnswer(searchId) {
       ${suggested.length ? `
         <div class="fl-section-head" style="margin-top:18px"><h3>Or send an indexed page</h3></div>
         ${suggested.map(p => `<div class="qr-hist-row"><span class="qr-hist-q static">${KINDS[p.kind].icon} ${esc(p.title)}</span>
-          <button class="btn btn-sm btn-ghost" data-send="${esc(p.id)}">Send</button></div>`).join('')}` : ''}
+          <button class="btn btn-sm btn-ghost" data-send="${esc(p.id)}">Preview &amp; send</button></div>`).join('')}` : ''}
 
       <div class="fl-section-head" style="margin-top:18px"><h3>Results sent · ${results?.length || 0}</h3></div>
       ${(results || []).map(r => `<div class="qr-hist-row">
@@ -464,14 +508,20 @@ async function viewAnswer(searchId) {
     </div>`;
 
   $('#qrBackInbox').addEventListener('click', () => go('inbox'));
+  $('#qrDelThis').addEventListener('click', () => deleteSearches([searchId], [s]));
   $$('[data-kind]', main).forEach(b => b.addEventListener('click',
     () => openComposer({ kind: b.dataset.kind, target: 'result', searchId, query: s.query })));
-  $$('[data-send]', main).forEach(b => b.addEventListener('click', async () => {
+  $$('[data-send]', main).forEach(b => b.addEventListener('click', () => {
     const p = pages.find(x => x.id === b.dataset.send);
-    const { error } = await supa.from('qr_results').insert(
-      { search_id: searchId, kind: p.kind, title: p.title, source: p.source, body: p.body });
-    if (error) return toast(error.message, 'error');
-    playSound('sent'); toast('Sent.', 'ok'); go('answer', { searchId });
+    showPreview({ ...p, id: p.id }, {
+      who: 'the player', action: 'Send to player',
+      onSend: async () => {
+        const { error } = await supa.from('qr_results').insert(
+          { search_id: searchId, kind: p.kind, title: p.title, source: p.source, body: p.body });
+        if (error) return toast(error.message, 'error');
+        playSound('sent'); toast('Sent — the player has been notified.', 'ok'); go('answer', { searchId });
+      }
+    });
   }));
   $$('[data-edit]', main).forEach(b => b.addEventListener('click', () => {
     const r = results.find(x => x.id === b.dataset.edit);
@@ -515,6 +565,43 @@ async function viewIndex() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  previews                                                          */
+/* ------------------------------------------------------------------ */
+
+/** The result card plus the opened page, as a player will see them. */
+function previewInner(r, addr) {
+  return `
+    <div class="qr-preview-label">In the results list</div>
+    <div class="qr-results">${resultCard({ ...r, source: addr }, 'preview')}</div>
+    <div class="qr-preview-label">Opened</div>
+    <div class="qr-page-view">
+      <div class="qr-addressbar"><span class="qr-url">🔒 ${esc(addr)}</span></div>
+      <div class="qr-doc qr-doc-${r.kind}">${renderBody(r)}</div>
+    </div>`;
+}
+
+/** Full-screen preview with "Keep editing" and a send/save button. */
+function showPreview(r, { who = 'the player', action = 'Send', fallbackAddr = null, onSend }) {
+  const addr = r.source || fallbackAddr || KINDS[r.kind].source(r.title || 'Page');
+  const layer = document.createElement('div');
+  layer.className = 'qr-preview';
+  layer.innerHTML = `
+    <div class="qr-preview-bar">
+      <span class="qr-preview-tag">Preview</span>
+      <span class="muted small">This is what ${esc(who)} will see.</span>
+      <span class="jr-spacer"></span>
+      <button class="btn btn-ghost btn-sm" data-back>‹ Back</button>
+      <button class="btn btn-primary btn-sm" data-send>${esc(action)}</button>
+    </div>
+    <div class="qr-preview-scroll">${previewInner(r, addr)}</div>`;
+  document.body.appendChild(layer);
+  $$('.qr-doc img[data-zoom]', layer).forEach(im => im.addEventListener('click', () => lightbox(im.src)));
+  $$('a.qr-wikilink, .qr-result', layer).forEach(a => a.addEventListener('click', (ev) => ev.preventDefault()));
+  $('[data-back]', layer).addEventListener('click', () => layer.remove());
+  $('[data-send]', layer).addEventListener('click', () => { layer.remove(); onSend?.(); });
+}
+
+/* ------------------------------------------------------------------ */
 /*  the composer — one form for every kind of result                  */
 /* ------------------------------------------------------------------ */
 
@@ -550,10 +637,12 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
 
   const root = $('#modalRoot');
   root.innerHTML = `
-    <div class="scrim"><div class="modal modal-wide" role="dialog" aria-modal="true">
+    <div class="scrim"><div class="modal modal-wide qr-compose" role="dialog" aria-modal="true">
       <div class="modal-head"><h3>${existing ? 'Edit' : 'New'} ${k.label.toLowerCase()}${target === 'page' ? ' · indexed page' : ''}</h3>
+        <span class="qr-compose-tabs"><button type="button" class="on" data-pane="form">Edit</button><button type="button" data-pane="live">Preview</button></span>
         <button class="icon-btn" data-close>✕</button></div>
-      <div class="modal-body">
+      <div class="modal-body qr-compose-body" data-show="form">
+       <div class="qr-compose-form">
         ${query ? `<p class="muted small">Answering “${esc(query)}”</p>` : ''}
         ${field('cTitle', kind === 'forum' ? 'Thread subject' : 'Title' + (kind === 'text' ? ' (optional)' : ''),
           `<input type="text" id="cTitle" value="${esc(e.title || (kind === 'wiki' && !existing ? query : ''))}" maxlength="140">`)}
@@ -562,9 +651,14 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
           `<input type="text" id="cKeys" value="${esc(e.keywords || '')}" placeholder="phoenix, campus, school, university">`) : ''}
         ${kindFields[kind]}
         <div id="cMsg"></div>
+       </div>
+       <aside class="qr-compose-live" aria-label="Live preview">
+         <div class="qr-preview-label">Live preview · what ${target === 'page' ? 'players' : 'the player'} will see</div>
+         <div id="cLive"></div>
+       </aside>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-ghost" id="cPreview">Preview</button>
+        <button class="btn btn-ghost" id="cPreview">Full-screen preview</button>
         <button class="btn btn-primary" id="cSave">${target === 'result' ? (existing ? 'Save' : 'Send to player') : 'Save page'}</button>
       </div>
     </div></div>`;
@@ -595,34 +689,31 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
     return { id: e.id || 'preview', kind, title: v('#cTitle') || null, source: v('#cSource') || null, body };
   };
 
-  // Preview: the page exactly as the player will see it, over the form.
+  // Live preview beside the form, redrawn as you type.
+  let liveT = null;
+  const paintLive = () => {
+    const r = collect();
+    $('#cLive', root).innerHTML = previewInner(r, r.source || k.source(r.title || query || 'Page'));
+    $$('#cLive a.qr-wikilink, #cLive .qr-result', root).forEach(a => a.addEventListener('click', (ev) => ev.preventDefault()));
+  };
+  root.addEventListener('input', () => { clearTimeout(liveT); liveT = setTimeout(paintLive, 150); });
+  paintLive();
+  // Phones: switch between the form and the preview.
+  $$('[data-pane]', root).forEach(b => b.addEventListener('click', () => {
+    $$('[data-pane]', root).forEach(x => x.classList.toggle('on', x === b));
+    $('.qr-compose-body', root).dataset.show = b.dataset.pane;
+    if (b.dataset.pane === 'live') paintLive();
+  }));
+
+  // Full-screen preview, the same as the player's screen.
   $('#cPreview', root).addEventListener('click', () => {
     const r = collect();
-    const addr = r.source || k.source(r.title || query || 'Page');
-    const layer = document.createElement('div');
-    layer.className = 'qr-preview';
-    layer.innerHTML = `
-      <div class="qr-preview-bar">
-        <span class="qr-preview-tag">Preview</span>
-        <span class="muted small">This is what ${target === 'page' ? 'players' : 'the player'} will see.</span>
-        <span class="jr-spacer"></span>
-        <button class="btn btn-ghost btn-sm" data-back>‹ Keep editing</button>
-        <button class="btn btn-primary btn-sm" data-send>${target === 'result' ? (existing ? 'Save' : 'Send to player') : 'Save page'}</button>
-      </div>
-      <div class="qr-preview-scroll">
-        <div class="qr-preview-label">In the results list</div>
-        <div class="qr-results">${resultCard({ ...r, source: addr }, 'preview')}</div>
-        <div class="qr-preview-label">Opened</div>
-        <div class="qr-page-view">
-          <div class="qr-addressbar"><span class="qr-url">🔒 ${esc(addr)}</span></div>
-          <div class="qr-doc qr-doc-${r.kind}">${renderBody(r)}</div>
-        </div>
-      </div>`;
-    document.body.appendChild(layer);
-    $$('.qr-doc img[data-zoom]', layer).forEach(im => im.addEventListener('click', () => lightbox(im.src)));
-    $$('a.qr-wikilink, .qr-result', layer).forEach(a => a.addEventListener('click', (ev) => ev.preventDefault()));
-    $('[data-back]', layer).addEventListener('click', () => layer.remove());
-    $('[data-send]', layer).addEventListener('click', () => { layer.remove(); $('#cSave', root).click(); });
+    showPreview(r, {
+      who: target === 'page' ? 'players' : 'the player',
+      action: target === 'result' ? (existing ? 'Save' : 'Send to player') : 'Save page',
+      fallbackAddr: k.source(r.title || query || 'Page'),
+      onSend: () => $('#cSave', root).click()
+    });
   });
 
   $('#cSave', root).addEventListener('click', async (ev) => {
