@@ -21,11 +21,11 @@ create table if not exists public.qr_searches (
   answered_at timestamptz
 );
 
--- kind: wiki | forum | text | image | none (a dead end). body holds the kind's fields.
+-- kind: wiki | forum | text | image | ai | none (a dead end). body holds the kind's fields.
 create table if not exists public.qr_results (
   id         uuid primary key default gen_random_uuid(),
   search_id  uuid not null references public.qr_searches(id) on delete cascade,
-  kind       text not null check (kind in ('wiki', 'forum', 'text', 'image', 'none')),
+  kind       text not null check (kind in ('wiki', 'forum', 'text', 'image', 'none', 'ai')),
   title      text,
   source     text,                               -- the display address
   body       jsonb not null default '{}'::jsonb,
@@ -34,7 +34,7 @@ create table if not exists public.qr_results (
 
 create table if not exists public.qr_pages (
   id         uuid primary key default gen_random_uuid(),
-  kind       text not null check (kind in ('wiki', 'forum', 'text', 'image')),
+  kind       text not null check (kind in ('wiki', 'forum', 'text', 'image', 'ai')),
   title      text not null,
   keywords   text,                               -- words that should find it
   source     text,

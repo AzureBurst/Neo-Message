@@ -41,7 +41,8 @@ const KINDS = {
   wiki:  { label: 'Wiki article',   icon: '📖', source: t => `heropedia.net/wiki/${slug(t)}` },
   forum: { label: 'Forum thread',   icon: '💬', source: () => 'boards.knotchan.net/x/' },
   text:  { label: 'Plain answer',   icon: '✎',  source: () => 'queree.net/answer' },
-  image: { label: 'Image',          icon: '🖼', source: () => 'images.queree.net' }
+  image: { label: 'Image',          icon: '🖼', source: () => 'images.queree.net' },
+  ai:    { label: 'Queree AI',      icon: '✦',  source: () => 'ai.queree.net' }
 };
 const DEAD = { label: 'Dead end', icon: '🚫' };
 const kindOf = k => KINDS[k] || (k === 'none' ? DEAD : KINDS.text);
@@ -62,6 +63,80 @@ function deadEndHtml(query, body = {}) {
         <span class="qr-pg qr-pg-next"><b>›</b><i>Next</i></span>
       </div>
     </div>`;
+}
+
+/* ---------- Queree AI overview ---------- */
+const aiSeen = new Set();            // types out once per visit, then sits still
+
+function aiHtml(r) {
+  const b = r.body || {};
+  const sections = parseWiki(b.text);
+  const blocks = sec => sec.blocks.map(x => x.type === 'ul'
+    ? `<ul>${x.items.map(i => `<li>${inline(i)}</li>`).join('')}</ul>` : `<p>${inline(x.text)}</p>`).join('');
+  const lines = t => String(t || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const sources = lines(b.sources).map(l => { const [name, site] = l.split('|').map(x => x.trim()); return { name, site: site || '' }; });
+  const follow = lines(b.followups);
+  return `
+    <section class="qr-ai${b.low ? ' low' : ''}" data-ai="${esc(r.id || 'preview')}">
+      <header class="qr-ai-head">
+        <span class="qr-ai-spark" aria-hidden="true">✦</span><b>Queree AI Overview</b>
+        ${b.low ? '<span class="qr-ai-flag">Low confidence</span>' : ''}
+      </header>
+      <div class="qr-ai-think" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="qr-ai-text">${sections.map(sec => (sec.heading ? `<h4>${esc(sec.heading)}</h4>` : '') + blocks(sec)).join('')
+        || '<p class="muted">Write the overview on the left…</p>'}</div>
+      <button type="button" class="qr-ai-more" hidden>Show more <span>⌄</span></button>
+      ${sources.length ? `<div class="qr-ai-src">${sources.map(x => `
+        <button type="button" class="qr-ai-chip" data-q="${esc(x.name)}"><i>${esc((x.site || x.name).replace(/^www\./, '')[0]?.toUpperCase() || '?')}</i>
+          <span>${esc(x.name)}${x.site ? `<small>${esc(x.site)}</small>` : ''}</span></button>`).join('')}</div>` : ''}
+      ${follow.length ? `<div class="qr-ai-follow"><h5>Ask a follow-up</h5>${follow.map(q =>
+        `<button type="button" data-q="${esc(q)}"><span>↳</span>${esc(q)}</button>`).join('')}</div>` : ''}
+      <footer class="qr-ai-foot"><span>AI responses may include mistakes.</span>
+        <span class="qr-ai-thumbs"><button type="button" title="Good response">👍</button><button type="button" title="Bad response">👎</button></span></footer>
+    </section>`;
+}
+
+/** Thinking dots, then the words type in; long answers fold under "Show more". */
+function wireAi(scope, { animate = true, onSearch = null } = {}) {
+  $$('.qr-ai', scope).forEach(box => {
+    const text = $('.qr-ai-text', box), more = $('.qr-ai-more', box);
+    const fold = () => {
+      if (text.scrollHeight > 300 && !box.classList.contains('open')) { box.classList.add('folded'); more.hidden = false; }
+    };
+    more.addEventListener('click', () => { box.classList.add('open'); box.classList.remove('folded'); more.hidden = true; });
+    $$('.qr-ai-thumbs button', box).forEach(t => t.addEventListener('click', () => {
+      $$('.qr-ai-thumbs button', box).forEach(x => x.classList.toggle('on', x === t && !t.classList.contains('on')));
+    }));
+    $$('[data-q]', box).forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); onSearch?.(a.dataset.q); }));
+
+    const id = box.dataset.ai;
+    const calm = document.documentElement.classList.contains('calm') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!animate || calm || aiSeen.has(id)) { fold(); return; }
+    aiSeen.add(id);
+    // Wrap each word so it can fade in on its own beat.
+    let n = 0;
+    const walk = el => [...el.childNodes].forEach(node => {
+      if (node.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        node.textContent.split(/(\s+)/).forEach(w => {
+          if (!w) return;
+          if (/^\s+$/.test(w)) { frag.appendChild(document.createTextNode(w)); return; }
+          const sp = document.createElement('span'); sp.className = 'qr-w'; sp.textContent = w;
+          sp.style.setProperty('--d', `${Math.min(n++ * 28, 4200)}ms`); frag.appendChild(sp);
+        });
+        node.replaceWith(frag);
+      } else if (node.nodeType === 1) {
+        if (/^(LI|H4)$/.test(node.tagName)) { node.classList.add('qr-wb'); node.style.setProperty('--d', `${Math.min(n * 28, 4200)}ms`); }
+        walk(node);
+      }
+    });
+    walk(text);
+    box.classList.add('thinking');
+    setTimeout(() => {
+      box.classList.remove('thinking'); box.classList.add('typing'); fold();
+      setTimeout(() => box.classList.remove('typing'), Math.min(n * 28, 4200) + 400);
+    }, 900);
+  });
 }
 
 const slug = t => String(t || 'Page').trim().replace(/\s+/g, '_').replace(/[^\w()_-]/g, '');
@@ -252,10 +327,14 @@ async function viewSearch(id) {
   const { data: results } = await supa.from('qr_results').select('*')
     .eq('search_id', id).order('created_at');
   const dead = (results || []).find(r => r.kind === 'none');
-  const real = (results || []).filter(r => r.kind !== 'none');
+  const real = (results || []).filter(r => r.kind !== 'none' && r.kind !== 'ai');
+  const sentAi = (results || []).filter(r => r.kind === 'ai').at(-1);
   // A dead end wins unless you've since sent real results.
-  const isDead = dead && !real.length;
-  const indexed = isDead ? [] : matchPages(pages, s.query);
+  const isDead = dead && !real.length;   // (a Queree AI answer also lifts it)
+  const isDeadNow = isDead && !sentAi;
+  const allIndexed = isDeadNow ? [] : matchPages(pages, s.query);
+  const ai = sentAi || allIndexed.find(p => p.kind === 'ai');
+  const indexed = allIndexed.filter(p => p.kind !== 'ai');
   const total = real.length + indexed.length;
   const secs = (0.18 + (s.query.length % 7) * 0.07).toFixed(2);
 
@@ -266,7 +345,7 @@ async function viewSearch(id) {
         ${searchBox({ value: s.query })}
       </div>
       <p class="qr-count">${total
-        ? `About ${total} result${total === 1 ? '' : 's'} (${secs} seconds)` : isDead ? `About 0 results (${secs} seconds)` : ''}</p>
+        ? `About ${total} result${total === 1 ? '' : 's'} (${secs} seconds)` : isDeadNow ? `About 0 results (${secs} seconds)` : ''}</p>
 
       ${s.status === 'pending' ? `
         <div class="qr-crawling">
@@ -274,7 +353,9 @@ async function viewSearch(id) {
           <div><strong>Queree is loading…</strong></div>
         </div>` : ''}
 
-      ${isDead ? deadEndHtml(s.query, dead.body) : ''}
+      ${ai ? aiHtml(ai) : ''}
+
+      ${isDeadNow ? deadEndHtml(s.query, dead.body) : ''}
 
       ${real.map(r => resultCard(r, 'result')).join('')}
 
@@ -282,7 +363,7 @@ async function viewSearch(id) {
         ${real.length ? '<h4 class="qr-subhead">More from the index</h4>' : ''}
         ${indexed.map(p => resultCard(p, 'page')).join('')}` : ''}
 
-      ${!total && !isDead && s.status !== 'pending' ? '<div class="qr-none">No results found for this search.</div>' : ''}
+      ${!total && !isDeadNow && !ai && s.status !== 'pending' ? '<div class="qr-none">No results found for this search.</div>' : ''}
 
       ${me.is_admin ? `<div class="qr-admin-strip"><button class="btn btn-sm btn-primary" id="qrAnswerThis">Answer this search</button></div>` : ''}
     </div>`;
@@ -295,6 +376,7 @@ async function viewSearch(id) {
   }));
   $('#qrAnswerThis')?.addEventListener('click', () => go('answer', { searchId: id }));
   $$('[data-dym]', main).forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); runSearch(a.dataset.dym); }));
+  wireAi(main, { onSearch: runSearch });
 }
 
 function viewHistory() {
@@ -348,10 +430,12 @@ async function viewResult({ source, id, searchId }) {
   $('#qrBack').addEventListener('click', () => searchId ? go('search', { searchId }) : go('home'));
   $$('.qr-wikilink', main).forEach(a => a.addEventListener('click', () => runSearch(a.dataset.q)));
   $$('.qr-doc img[data-zoom]', main).forEach(im => im.addEventListener('click', () => lightbox(im.src)));
+  wireAi(main, { onSearch: runSearch });
 }
 
 function renderBody(r) {
   const b = r.body || {};
+  if (r.kind === 'ai') return aiHtml(r);
   if (r.kind === 'wiki') {
     const info = parseInfobox(b.infobox);
     const sections = parseWiki(b.text);
@@ -574,7 +658,7 @@ async function viewIndex() {
       <p class="muted small">Pages here show up instantly for any search that matches their title or keywords,
         for every player — good for lore you've written ahead of time.</p>
       <div class="qr-kinds">
-        ${Object.entries(KINDS).map(([k, v]) => `<button class="qr-kind" data-kind="${k}"><span>${v.icon}</span>New ${v.label.toLowerCase()}</button>`).join('')}
+        ${Object.entries(KINDS).map(([k, v]) => `<button class="qr-kind" data-kind="${k}"><span>${v.icon}</span>New ${k === 'ai' ? v.label : v.label.toLowerCase()}</button>`).join('')}
       </div>
       <div style="margin-top:16px">
       ${pages.map(p => `<div class="qr-hist-row">
@@ -602,6 +686,9 @@ async function viewIndex() {
 
 /** The result card plus the opened page, as a player will see them. */
 function previewInner(r, addr) {
+  if (r.kind === 'ai') return `
+    <div class="qr-preview-label">At the top of the results</div>
+    <div class="qr-results">${aiHtml(r)}</div>`;
   return `
     <div class="qr-preview-label">In the results list</div>
     <div class="qr-results">${resultCard({ ...r, source: addr }, 'preview')}</div>
@@ -629,6 +716,7 @@ function showPreview(r, { who = 'the player', action = 'Send', fallbackAddr = nu
   document.body.appendChild(layer);
   $$('.qr-doc img[data-zoom]', layer).forEach(im => im.addEventListener('click', () => lightbox(im.src)));
   $$('a.qr-wikilink, .qr-result', layer).forEach(a => a.addEventListener('click', (ev) => ev.preventDefault()));
+  wireAi(layer, { animate: true });
   $('[data-back]', layer).addEventListener('click', () => layer.remove());
   $('[data-send]', layer).addEventListener('click', () => { layer.remove(); onSend?.(); });
 }
@@ -720,6 +808,16 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
         `<textarea id="cPosts" rows="12" placeholder="anyone else see the lights over the overpass last night&#10;&gt;be me&#10;&gt;walking home&#10;---&#10;Name: definitely_not_a_villain&#10;&gt;&gt;40000001&#10;swamp gas">${esc(b.posts || '')}</textarea>`)}
       <p class="muted small">Start a post with <code>Name: …</code> to sign it. Lines starting <code>&gt;</code> turn green.</p>`,
     text: field('cText', 'Answer', `<textarea id="cText" rows="10">${esc(b.text || '')}</textarea>`),
+    ai: `
+      ${field('cText', 'Overview',
+        `<textarea id="cText" rows="10" placeholder="**The Heron Bridge** collapsed at 4:12 a.m. on September 14th, according to city reports.&#10;&#10;- No casualties were reported&#10;- Investigators cite *structural fatigue*&#10;&#10;## Related&#10;Some forum users link it to [[Project Gemini]].">${esc(b.text || '')}</textarea>`)}
+      <p class="muted small" style="margin-top:-6px">**bold**, *italic*, <code>- </code>bullets, <code>## </code>small headings, [[Links]] that search when tapped.</p>
+      ${field('cSources', 'Sources — one per line, "Name | site"  (optional; tapping one searches for it)',
+        `<textarea id="cSources" rows="3" placeholder="Heron Bridge | heropedia.net&#10;City Transit Bulletin | neocity.gov">${esc(b.sources || '')}</textarea>`)}
+      ${field('cFollow', 'Follow-up questions — one per line (optional)',
+        `<textarea id="cFollow" rows="3" placeholder="Who built the Heron Bridge?&#10;What is Project Gemini?">${esc(b.followups || '')}</textarea>`)}
+      <label class="qr-check"><input type="checkbox" id="cLow" ${b.low ? 'checked' : ''}> Low confidence — flag it as possibly wrong</label>
+      <p class="muted small">Queree AI sits at the top of the results and types itself out the first time it's opened. It can be wrong in-world — that's half the fun.</p>`,
     image: `
       ${imageField('Image')}
       ${field('cCaption', 'Caption (optional)', `<textarea id="cCaption" rows="2">${esc(b.caption || '')}</textarea>`)}`
@@ -728,15 +826,15 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
   const root = $('#modalRoot');
   root.innerHTML = `
     <div class="scrim"><div class="modal modal-wide qr-compose" role="dialog" aria-modal="true">
-      <div class="modal-head"><h3>${existing ? 'Edit' : 'New'} ${k.label.toLowerCase()}${target === 'page' ? ' · indexed page' : ''}</h3>
+      <div class="modal-head"><h3>${existing ? 'Edit' : 'New'} ${kind === 'ai' ? 'Queree AI answer' : k.label.toLowerCase()}${target === 'page' ? ' · indexed page' : ''}</h3>
         <span class="qr-compose-tabs"><button type="button" class="on" data-pane="form">Edit</button><button type="button" data-pane="live">Preview</button></span>
         <button class="icon-btn" data-close>✕</button></div>
       <div class="modal-body qr-compose-body" data-show="form">
        <div class="qr-compose-form">
         ${query ? `<p class="muted small">Answering “${esc(query)}”</p>` : ''}
-        ${field('cTitle', kind === 'forum' ? 'Thread subject' : 'Title' + (kind === 'text' ? ' (optional)' : ''),
-          `<input type="text" id="cTitle" value="${esc(e.title || (kind === 'wiki' && !existing ? query : ''))}" maxlength="140">`)}
-        ${field('cSource', 'Address shown on the result', `<input type="text" id="cSource" class="mono" value="${esc(e.source || '')}" placeholder="${esc(k.source(e.title || query || 'Page'))}">`)}
+        ${kind === 'ai' && target !== 'page' ? '' : field('cTitle', kind === 'forum' ? 'Thread subject' : kind === 'ai' ? 'Name in your index (only you see this)' : 'Title' + (kind === 'text' ? ' (optional)' : ''),
+          `<input type="text" id="cTitle" value="${esc(e.title || ((kind === 'wiki' || kind === 'ai') && !existing ? query : ''))}" maxlength="140">`)}
+        ${kind === 'ai' ? '' : field('cSource', 'Address shown on the result', `<input type="text" id="cSource" class="mono" value="${esc(e.source || '')}" placeholder="${esc(k.source(e.title || query || 'Page'))}">`)}
         ${target === 'page' ? field('cKeys', 'Keywords — words a search should match',
           `<input type="text" id="cKeys" value="${esc(e.keywords || '')}" placeholder="phoenix, campus, school, university">`) : ''}
         ${kindFields[kind]}
@@ -774,7 +872,8 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
       wiki:  { text: v('#cText'), infobox: v('#cInfo'), image_url: v('#cImg'), image_caption: v('#cCap') },
       forum: { board: v('#cBoard'), posts: v('#cPosts'), image_url: v('#cImg') },
       text:  { text: v('#cText') },
-      image: { image_url: v('#cImg'), caption: v('#cCaption') }
+      image: { image_url: v('#cImg'), caption: v('#cCaption') },
+      ai:    { text: v('#cText'), sources: v('#cSources'), followups: v('#cFollow'), low: !!$('#cLow', root)?.checked }
     }[kind];
     return { id: e.id || 'preview', kind, title: v('#cTitle') || null, source: v('#cSource') || null, body };
   };
@@ -785,8 +884,10 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
     const r = collect();
     $('#cLive', root).innerHTML = previewInner(r, r.source || k.source(r.title || query || 'Page'));
     $$('#cLive a.qr-wikilink, #cLive .qr-result', root).forEach(a => a.addEventListener('click', (ev) => ev.preventDefault()));
+    wireAi($('#cLive', root), { animate: false });
   };
   root.addEventListener('input', () => { clearTimeout(liveT); liveT = setTimeout(paintLive, 150); });
+  root.addEventListener('change', () => { clearTimeout(liveT); liveT = setTimeout(paintLive, 50); });
   paintLive();
   // Phones: switch between the form and the preview.
   $$('[data-pane]', root).forEach(b => b.addEventListener('click', () => {
@@ -812,9 +913,10 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
       wiki:  { text: v('#cText'), infobox: v('#cInfo'), image_url: v('#cImg'), image_caption: v('#cCap') },
       forum: { board: v('#cBoard'), posts: v('#cPosts'), image_url: v('#cImg') },
       text:  { text: v('#cText') },
-      image: { image_url: v('#cImg'), caption: v('#cCaption') }
+      image: { image_url: v('#cImg'), caption: v('#cCaption') },
+      ai:    { text: v('#cText'), sources: v('#cSources'), followups: v('#cFollow'), low: !!$('#cLow', root)?.checked }
     }[kind];
-    const title = v('#cTitle') || null;
+    const title = v('#cTitle') || (kind === 'ai' && target !== 'page' ? 'Queree AI Overview' : null);
     const msg = t => {
       const box = $('#cMsg', root);
       box.innerHTML = `<div class="notice notice-error">${esc(t)}</div>`;
@@ -822,7 +924,7 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
       toast(t, 'error');
     };
     if (kind === 'wiki' && !title) return msg('A wiki article needs a title.');
-    if ((kind === 'wiki' || kind === 'text') && !body.text) return msg('Write something first.');
+    if ((kind === 'wiki' || kind === 'text' || kind === 'ai') && !body.text) return msg('Write something first.');
     if (kind === 'forum' && !parseForum(body.posts).length) return msg('Write at least one post.');
     if (kind === 'image' && !body.image_url) return msg('Add an image.');
     if (target === 'page' && !title) return msg('Indexed pages need a title so searches can find them.');
@@ -844,7 +946,7 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
     if (error) {
       console.error('[queree] save failed', error);
       btn.disabled = false; btn.textContent = label;
-      return msg(error.message || String(error));
+      return msg(/kind_check|check constraint/.test(error.message || '') ? 'Run sql/queree-ai.sql in Supabase first.' : (error.message || String(error)));
     }
     close();
     playSound('sent');
