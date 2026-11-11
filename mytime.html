@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MyTime</title>
+<meta name="theme-color" content="#123a7a">
+<link rel="icon" href="assets/apps/mytime.png" type="image/png">
+<link rel="stylesheet" href="css/neo.css">
+<link rel="stylesheet" href="css/edge.css">
+<link rel="stylesheet" href="css/mytime.css">
+<script src="js/theme-boot.js"></script>
+</head>
+<body class="gated mt-page">
+  <div id="gateNote" class="gate-note">
+    <span>Checking your session…</span>
+    <a href="index.html" class="gate-escape">Go to sign in</a>
+  </div>
+
+  <div id="carrier"></div>
+
+  <header class="mt-top">
+    <div class="mt-top-row">
+      <a class="mt-home" href="home.html" title="Home">⌂</a>
+      <a class="mt-logo" href="#profile" title="My page">my<b>time</b><i>.</i></a>
+      <span class="mt-tag">a place for heroes</span>
+      <span class="mt-spacer"></span>
+      <button class="mt-dice" id="mtDice" title="Roll a trait">🎲</button>
+    </div>
+    <nav class="mt-nav" id="mtNav">
+      <a href="#profile" data-nav="profile">Profile</a>
+      <a href="#browse" data-nav="browse">Browse</a>
+      <a href="#transcript" data-nav="transcript">Transcript</a>
+      <a href="#freetime" data-nav="freetime">Free Time</a>
+      <a href="#gm" data-nav="gm" class="mt-gm-link" hidden>GM</a>
+    </nav>
+  </header>
+
+  <div class="mt-checks" id="mtChecks"></div>
+
+  <main class="mt-main" id="mtMain">
+    <div class="mt-loading">Loading…</div>
+  </main>
+
+  <div id="modalRoot"></div>
+
+<script type="module" src="js/mytime.js"></script>
+</body>
+</html>

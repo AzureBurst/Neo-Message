@@ -10,7 +10,7 @@
 
 import {
   supa, requireProfile, ungate, mountCarrier, setClockSource, startPresence,
-  esc, toast, uploadFile, shrinkImage, lightbox, initials, shortTime, dayLabel, formatNumber, $, $$
+  esc, toast, uploadFile, shrinkImage, lightbox, initials, shortTime, dayLabel, formatNumber, $, $$, icStamp, icAt
 } from './supa.js';
 import { loadClock, storyNow } from './clock.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
@@ -278,7 +278,7 @@ function paintMessages(list) {
   if (!list.length) return '<div class="ns-empty small">No messages yet — say something.</div>';
   let html = '', lastDay = '', lastSender = null;
   for (const m of list) {
-    const day = dayLabel(m.created_at);
+    const day = dayLabel(icAt(m));
     if (day !== lastDay) { html += `<div class="ns-day">${esc(day)}</div>`; lastDay = day; lastSender = null; }
     const npc = isNpc(m.sender_id);
     const first = m.sender_id !== lastSender;
@@ -289,7 +289,7 @@ function paintMessages(list) {
           ${first ? `<span class="ns-msg-name">${esc(nameOf(m.sender_id))}${npc ? ' <i>NPC</i>' : ''}</span>` : ''}
           <div class="ns-bubble">${m.image_url ? `<img src="${esc(m.image_url)}" alt="" loading="lazy">` : ''}${m.body ? `<span>${esc(m.body).replace(/\n/g, '<br>')}</span>` : ''}</div>
         </div>
-        <time>${esc(shortTime(m.created_at))}</time>
+        ${icStamp(m)}
       </div>`;
     lastSender = m.sender_id;
   }

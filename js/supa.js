@@ -143,8 +143,8 @@ export function shortTime(iso) {
 
 export function dayLabel(iso) {
   const d = new Date(iso);
-  const today = new Date();
-  const yest = new Date(); yest.setDate(today.getDate() - 1);
+  const today = clockSource();                   // story clock when one is set
+  const yest = new Date(today); yest.setDate(today.getDate() - 1);
   const same = (a, b) => a.toDateString() === b.toDateString();
   if (same(d, today)) return 'Today';
   if (same(d, yest))  return 'Yesterday';
@@ -156,6 +156,49 @@ export function fullStamp(iso) {
     year: 'numeric', month: 'short', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit'
   });
+}
+
+/* ------------------------------------------------------------------ */
+/*  In-character vs real timestamps                                    */
+/*  Rows carry story_at (in-character, stamped by the server from the  */
+/*  GM's story clock) and created_at (real). We show the IC time and   */
+/*  reveal the real one on hover, or on tap on phones.                 */
+/* ------------------------------------------------------------------ */
+const STAMP_FMT = {
+  time:  { hour: 'numeric', minute: '2-digit' },
+  short: { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' },
+  date:  { month: 'short', day: 'numeric', year: 'numeric' },
+  full:  { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }
+};
+const REAL_FMT = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+
+/** The in-character moment of a row (falls back to real time). */
+export const icAt = (row, icKey = 'story_at', realKey = 'created_at') => row?.[icKey] || row?.[realKey];
+
+/** <time> showing IC time; hover/tap shows the real timestamp. */
+export function icStamp(row, { fmt = 'time', icKey = 'story_at', realKey = 'created_at', cls = '' } = {}) {
+  const real = row?.[realKey];
+  const ic = row?.[icKey] || real;
+  if (!ic) return '';
+  const icTxt = new Date(ic).toLocaleString([], STAMP_FMT[fmt] || STAMP_FMT.time);
+  const realTxt = real ? new Date(real).toLocaleString([], REAL_FMT) : '';
+  const differs = real && row?.[icKey] && Math.abs(new Date(real) - new Date(ic)) > 60000;
+  return `<time class="ic-stamp${differs ? ' ic-diff' : ''} ${cls}" datetime="${esc(ic)}"`
+    + (realTxt ? ` data-real="${esc('Real time · ' + realTxt)}" aria-label="${esc(icTxt + ' in character. Real time ' + realTxt)}"` : '')
+    + `>${esc(icTxt)}</time>`;
+}
+
+// Tap a stamp to flip between IC and real time (phones have no hover).
+if (typeof document !== 'undefined' && !window.__icStampWired) {
+  window.__icStampWired = true;
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest?.('.ic-stamp[data-real]');
+    if (!t || matchMedia('(hover: hover)').matches || t.closest('button, a')) return;
+    e.stopPropagation();
+    t.classList.toggle('show-real');
+    clearTimeout(t._icT);
+    if (t.classList.contains('show-real')) t._icT = setTimeout(() => t.classList.remove('show-real'), 3500);
+  }, true);
 }
 
 export const initials = (name) => {

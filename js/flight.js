@@ -13,9 +13,10 @@
 
 import {
   supa, requireProfile, ungate, mountCarrier, setClockSource,
-  startPresence, esc, toast, fullStamp, $, $$
+  startPresence, esc, toast, fullStamp, $, $$, icStamp, icAt
 } from './supa.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
+import { openRoller, openRequest, requestCard, loadRequests, requestResultsHtml, wireRequestButtons } from './dice.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { playSound } from './sfx.js';
 import { courseGrade, letterFor, gpa, dueLabel, parseMeetings, fmtClock } from './flight-grades.js';
@@ -205,7 +206,7 @@ function announcementHtml(n) {
         ${c ? `<span class="fl-chip" style="--c:${colorOf(c.color)}">${esc(c.code)}</span>`
             : '<span class="fl-chip fl-chip-portal">Portal</span>'}
         <strong>${esc(n.title)}</strong>
-        <span class="fl-ann-time mono">${esc(fullStamp(n.created_at))}</span>
+        <span class="fl-ann-time mono">${icStamp(n, { fmt: 'full' })}</span>
       </div>
       ${n.body ? `<div class="fl-ann-body">${esc(n.body)}</div>` : ''}
     </div>`;
@@ -225,6 +226,7 @@ function viewDash() {
     <div class="fl-dash">
       ${idCard()}
       ${holdsBanner()}
+      <div id="flRolls"></div>
       <div class="fl-stats">
         <div class="fl-stat"><span>GPA</span><strong>${D.gpa == null ? '—' : D.gpa.toFixed(2)}</strong></div>
         <div class="fl-stat"><span>Courses</span><strong>${D.courses.length}</strong></div>
@@ -262,6 +264,7 @@ function viewDash() {
   wireTasks(main);
   $$('[data-goto]', main).forEach(b => b.addEventListener('click', () => go(b.dataset.goto)));
   $$('[data-course]', main).forEach(b => b.addEventListener('click', () => go('course', b.dataset.course)));
+  paintFlightRolls();
 
   // Seeing the portal-wide announcements clears their notifications.
   supa.from('notifications').update({ read_at: new Date().toISOString() })
@@ -650,6 +653,26 @@ const toLocalInput = (iso) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
+/* Roll requests from the GM, on the student's home page. */
+async function paintFlightRolls() {
+  const box = $('#flRolls');
+  if (!box || me.is_admin) return;
+  const { reqs, rolls } = await loadRequests('flight');
+  const open = reqs.filter(q => q.targets.includes(me.id))
+    .filter(q => !q.closed || (rolls.get(q.id) || []).length)
+    .slice(-4);
+  if (!document.body.contains(box)) return;
+  box.innerHTML = `
+    <section class="fl-section fl-rolls">
+      <div class="fl-section-head"><h3>Checks</h3>
+        <button class="btn btn-ghost btn-sm" id="flDice">🎲 Roll a trait</button></div>
+      ${open.map(q => requestCard(q, { mine: (rolls.get(q.id) || []).filter(r => r.user_id === me.id), canRoll: true })).join('')
+        || '<div class="fl-empty">No checks requested. Use 🎲 when a scene calls for a roll.</div>'}
+    </section>`;
+  wireRequestButtons(box, { me, reqs, onDone: paintFlightRolls });
+  $('#flDice', box).addEventListener('click', () => openRoller({ me, kind: 'flight', onDone: paintFlightRolls }));
+}
+
 async function viewAdmin() {
   const [{ data: courses, error }, { data: enr }] = await Promise.all([
     supa.from('flight_courses').select('*').order('code'),
@@ -666,7 +689,9 @@ async function viewAdmin() {
         <button class="btn btn-primary" id="aNewCourse">＋ New course</button>
         <button class="btn btn-ghost" id="aStudents">Student records</button>
         <button class="btn btn-ghost" id="aPortalAnn">Portal announcement</button>
+        <button class="btn btn-ghost" id="aAskRoll">🎲 Ask for a roll</button>
       </div>
+      <section class="fl-section" id="aRolls"></section>
       <section class="fl-section">
         <div class="fl-section-head"><h3>Courses</h3></div>
         ${(courses || []).map(c => `
@@ -682,6 +707,23 @@ async function viewAdmin() {
   $('#aNewCourse').addEventListener('click', () => openCourseEditor(null));
   $('#aStudents').addEventListener('click', openStudentRecords);
   $('#aPortalAnn').addEventListener('click', () => openAnnouncementEditor(null));
+  const paintRolls = async () => {
+    const [{ reqs, rolls }, { data: ppl }] = await Promise.all([loadRequests('flight'),
+      supa.from('profiles').select('id, username, is_admin').order('username')]);
+    const names = new Map((ppl || []).map(p => [p.id, p.username]));
+    const box = $('#aRolls');
+    if (!box) return;
+    box.innerHTML = reqs.length ? `<div class="fl-section-head"><h3>Checks</h3></div>
+      ${reqs.slice(-6).reverse().map(q => requestResultsHtml(q, rolls.get(q.id) || [], names)).join('')}` : '';
+    wireRequestButtons(box, { me, reqs, onDone: paintRolls });
+    return ppl;
+  };
+  const pplP = paintRolls();
+  $('#aAskRoll').addEventListener('click', async () => {
+    const ppl = (await pplP) || [];
+    const people = ppl.filter(p => !p.is_admin);
+    if (await openRequest({ kind: 'flight', people, preselect: [], title: 'Ask students for a roll' })) paintRolls();
+  });
   $$('[data-acourse]', main).forEach(b => b.addEventListener('click',
     () => go('adminCourse', { id: b.dataset.acourse, tab: 'roster' })));
 }
@@ -923,7 +965,7 @@ async function viewAdminCourse(id, tab = 'roster') {
       ${(ann || []).map(n => `
         <div class="fl-ann">
           <div class="fl-ann-head"><strong>${esc(n.title)}</strong>
-            <span class="fl-ann-time mono">${esc(fullStamp(n.created_at))}</span>
+            <span class="fl-ann-time mono">${icStamp(n, { fmt: 'full' })}</span>
             <button class="icon-btn" data-adel="${esc(n.id)}" title="Delete">🗑</button></div>
           ${n.body ? `<div class="fl-ann-body">${esc(n.body)}</div>` : ''}
         </div>`).join('') || '<div class="fl-empty">Nothing posted yet.</div>'}`;

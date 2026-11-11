@@ -42,6 +42,7 @@ tryIcon(document.querySelector('[data-icon="mail"]'), 'assets/apps/mail.png');
 tryIcon(document.querySelector('[data-icon="flight"]'), 'assets/apps/flight.png');
 tryIcon(document.querySelector('[data-icon="queree"]'), 'assets/apps/queree.png');
 tryIcon(document.querySelector('[data-icon="journal"]'), 'assets/apps/journal.png');
+tryIcon(document.querySelector('[data-icon="mytime"]'), 'assets/apps/mytime.png');
 
 /* The calendar tile shows the current story date, like a real phone's
    calendar icon. Painted from storyNow() so it reflects the GM's clock,
@@ -85,6 +86,7 @@ function paintBadges(counts) {
   badge($('#flightBadge'), counts.flight);
   badge($('#quereeBadge'), counts.queree);
   badge($('#journalBadge'), counts.journal);
+  badge($('#mytimeBadge'), counts.mytime);
   const npcB = $('#npcBadge'); if (npcB) badge(npcB, counts.npc);
 }
 
@@ -176,7 +178,7 @@ else lock.remove();
 const reduceMotion = document.documentElement.classList.contains('calm');
 
 const TILE_FOR = { app: '#tileMessage', instagrat: '#tileGrat', calendar: '#tileCal',
-                   mail: '#tileMail', flight: '#tileFlight', queree: '#tileQueree', journal: '#tileJournal' };
+                   mail: '#tileMail', flight: '#tileFlight', queree: '#tileQueree', journal: '#tileJournal', mytime: '#tileMyTime' };
 
 /** Builds an overlay sitting exactly over an app's icon, styled like it. */
 function makeOverlay(glyph, rect) {

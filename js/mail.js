@@ -12,7 +12,7 @@
 
 import {
   supa, requireProfile, ungate, mountCarrier, setClockSource,
-  startPresence, paintAvatar, esc, toast, fullStamp, shortTime, $, $$
+  startPresence, paintAvatar, esc, toast, fullStamp, shortTime, $, $$, icStamp, icAt
 } from './supa.js';
 import { MAIL_DOMAIN } from './config.js';
 import { playSound } from './sfx.js';
@@ -107,7 +107,7 @@ function renderList(rows, state) {
         <span class="mail-row-main">
           <span class="mail-row-top">
             <span class="mail-from">${esc(who)}</span>
-            <span class="mail-time">${esc(shortTime(t.last_at))}</span>
+            <span class="mail-time">${icStamp(t, { icKey: 'last_story_at', realKey: 'last_at' })}</span>
           </span>
           <span class="mail-subject">${esc(t.subject)}</span>
           <span class="mail-snippet">${esc(t.last_snippet || '')}</span>
@@ -205,7 +205,7 @@ function messageHtml(m) {
       <div class="mail-msg-head">
         <strong>${esc(m.from_name)}</strong>
         <span class="mail-addr mono">${esc(addr)}</span>
-        <span class="mail-msg-time mono">${esc(fullStamp(m.created_at))}</span>
+        <span class="mail-msg-time mono">${icStamp(m, { fmt: 'full' })}</span>
       </div>
       <div class="mail-msg-body">${esc(m.body)}</div>
     </div>`;

@@ -15,7 +15,7 @@
 import {
   supa, requireProfile, ungate, mountCarrier, setClockSource,
   paintAvatar, uploadFile, shrinkImage, lightbox, esc, toast, startPresence,
-  shortTime, fullStamp, $, $$
+  shortTime, fullStamp, $, $$, icStamp, icAt
 } from './supa.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow } from './clock.js';
@@ -247,7 +247,7 @@ function wallCard(post, likes, comments) {
         <span class="knot-card-handle">${esc(handle(a))}</span>
         ${headline ? `<span class="knot-card-title">${esc(headline)}</span>` : ''}
         ${rest.join(' ').trim() ? `<span class="knot-card-snip">${esc(rest.join(' ').trim())}</span>` : ''}
-        <span class="knot-card-date">${esc(storyDateOf(post))}</span>
+        <span class="knot-card-date">${icStamp(post, { fmt: 'date' })}</span>
       </div>
     </button>`;
 }
@@ -504,7 +504,7 @@ async function viewReview() {
           <img src="${esc(p.image_url)}" alt="" loading="lazy">
           <div class="ig-review-meta">
             <strong>${esc(name(a))}</strong> <span class="muted">${esc(handle(a))}</span>
-            <span class="muted mono">${esc(fullStamp(p.created_at))}</span>
+            <span class="muted mono">${icStamp(p, { fmt: 'full' })}</span>
             ${p.caption ? `<p>${esc(p.caption)}</p>` : ''}
           </div>
           <div class="ig-review-actions">
@@ -561,7 +561,7 @@ function cardHtml(post, { expanded = false } = {}) {
       <div class="ig-card-actions">
         <button class="ig-like" data-like="${esc(post.id)}" aria-pressed="false">♡</button>
         <span class="ig-like-count" data-likes="${esc(post.id)}">0</span>
-        <span class="ig-postdate">${esc(storyDateOf(post))}</span>
+        <span class="ig-postdate">${icStamp(post, { fmt: 'date' })}</span>
       </div>
 
       ${post.caption ? `<div class="ig-caption"><strong>${esc(handle(a))}</strong> ${esc(post.caption)}</div>` : ''}
