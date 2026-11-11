@@ -12,6 +12,7 @@ import {
   esc, toast, lightbox, downloadBlob, toCSV, $, $$
 } from './supa.js';
 import { loadClock, storyNow } from './clock.js';
+import { loadCategories, categorySelect, setCategory, openCategoryManager } from './categories.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -39,6 +40,7 @@ $('#refresh').addEventListener('click', () => loadAll());
 
 let log = [];      // every message, joined with names
 let people = [];   // every profile
+let cats = null;   // account categories (null until categories.sql is run)
 
 /* ------------------------------------------------------------------ */
 /*  load                                                              */
@@ -64,6 +66,7 @@ async function loadAll() {
   }
 
   people = profRes.data ?? [];
+  cats = await loadCategories();
   const nameOf = new Map(people.map(p => [p.id, p]));
 
   const membersOf = new Map();
@@ -373,7 +376,8 @@ function paintUsers() {
       <td class="t-time">${new Date(p.created_at).toLocaleDateString()}</td>
       <td class="t-num">${counts.get(p.username) ?? 0}</td>
       <td>${p.is_admin
-        ? '<span class="pill admin">admin</span>'
+        ? '<span class="pill admin">GM</span>'
+        : cats ? categorySelect(cats.filter(c => c.key !== 'gm'), p.category_id, `class="cat-select" data-cat-for="${esc(p.id)}"`)
         : '<span class="pill">player</span>'}</td>
       <td class="row-actions">
         <button class="icon-btn" data-rename="${esc(p.id)}" title="Rename ${esc(p.username)}">✎</button>
@@ -381,6 +385,13 @@ function paintUsers() {
       </td>
     </tr>`).join('');
 
+  $$('[data-cat-for]').forEach(sel => sel.addEventListener('change', async () => {
+    if (await setCategory(sel.dataset.catFor, sel.value)) {
+      const p = people.find(x => x.id === sel.dataset.catFor);
+      if (p) p.category_id = sel.value;
+      toast(`${p?.username || 'Account'} is now in ${cats.find(c => c.id === sel.value)?.name}.`, 'ok');
+    }
+  }));
   $$('[data-rename]').forEach(b => b.addEventListener('click', () => startRename(b.dataset.rename)));
   $$('[data-delacct]').forEach(b => b.addEventListener('click', () => deleteAccount(b.dataset.delacct)));
 }
@@ -531,3 +542,9 @@ $('#dlTxt').addEventListener('click', () => {
 });
 
 await loadAll();
+
+$('#catManage')?.addEventListener('click', async () => {
+  await openCategoryManager();
+  cats = await loadCategories();
+  paintUsers();
+});

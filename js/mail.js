@@ -16,6 +16,7 @@ import {
 } from './supa.js';
 import { MAIL_DOMAIN } from './config.js';
 import { playSound } from './sfx.js';
+import { loadDirectory, categoryChip, byCategory } from './directory.js';
 import { loadClock, storyNow } from './clock.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 
@@ -31,6 +32,7 @@ mountShade();
 try { sessionStorage.setItem('neo.deep', '1'); sessionStorage.setItem('neo.lastApp', 'mail'); } catch {}
 
 if (me.is_admin) $$('.mail-admin-tab').forEach(el => el.hidden = false);
+else $('#mailWrite').hidden = false;
 
 const main = $('#mailMain');
 let box = 'inbox';
@@ -56,6 +58,7 @@ async function stateFor(threadIds) {
 
 async function loadBox() {
   main.innerHTML = '<div class="ig-loading">Loading…</div>';
+  if (box === 'directory') return renderDirectory();
 
   // Admin "Sent" shows threads they own; everything else is the player's
   // own inbox. (An admin also has a normal inbox as a recipient.)
@@ -209,6 +212,71 @@ function messageHtml(m) {
       </div>
       <div class="mail-msg-body">${esc(m.body)}</div>
     </div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  directory + player email (sql/categories.sql)                     */
+/* ------------------------------------------------------------------ */
+
+async function renderDirectory() {
+  const dir = await loadDirectory({ fresh: true });
+  const card = p => `
+    <div class="dir-card">
+      <span class="avatar" data-dav="${esc(p.id)}"></span>
+      <div class="dir-main">
+        <strong>${esc(p.username)}</strong>
+        <span class="dir-meta">${categoryChip(p)}${p.about ? `<span class="muted">${esc(p.about)}</span>` : ''}</span>
+        <span class="mono dir-addr">${esc(addrOf(p.username))}</span>
+      </div>
+      ${p.can_email ? `<button class="btn btn-sm btn-primary" data-mailto="${esc(p.id)}">Email</button>` : ''}
+    </div>`;
+  main.innerHTML = dir.length ? `
+    <div class="dir-wrap">
+      <input type="search" id="dirFind" class="dir-find" placeholder="Search the directory">
+      <div id="dirList">${byCategory(dir).map(g => `<h4 class="dir-group">${esc(g.name)}</h4>${g.rows.map(card).join('')}`).join('')}</div>
+    </div>` : '<div class="ig-empty muted">Nobody in your directory yet.</div>';
+  const paint = () => {
+    dir.forEach(p => { const el = main.querySelector(`[data-dav="${p.id}"]`); if (el) paintAvatar(el, p.avatar_url, p.username); });
+    $$('[data-mailto]', main).forEach(b => b.addEventListener('click', () => openWrite(b.dataset.mailto)));
+  };
+  paint();
+  $('#dirFind')?.addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const rows = dir.filter(p => !q || p.username.toLowerCase().includes(q) || (p.about || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q));
+    $('#dirList').innerHTML = byCategory(rows).map(g => `<h4 class="dir-group">${esc(g.name)}</h4>${g.rows.map(card).join('')}`).join('') || '<div class="muted">No matches.</div>';
+    paint();
+  });
+}
+
+/** A player writes an email: to faculty, or anyone in their contacts. */
+async function openWrite(toId = null) {
+  const dir = (await loadDirectory({ fresh: true })).filter(p => p.can_email);
+  if (!dir.length) return toast('There\'s nobody you can email yet. Add people to your contacts first.', 'info');
+  const { root, close } = sheet({
+    title: 'New email', wide: true,
+    body: `
+      <div class="field"><label for="wTo">To</label>
+        <select id="wTo">${byCategory(dir).map(g => `<optgroup label="${esc(g.name)}">${g.rows.map(p =>
+          `<option value="${esc(p.id)}" ${p.id === toId ? 'selected' : ''}>${esc(p.username)} · ${esc(addrOf(p.username))}${p.about ? ' (' + esc(p.about) + ')' : ''}</option>`).join('')}</optgroup>`).join('')}</select></div>
+      <div class="field"><label for="wSubj">Subject</label><input id="wSubj" maxlength="140"></div>
+      <div class="field"><label for="wBody">Message</label><textarea id="wBody" rows="8"></textarea></div>
+      <div id="wMsg"></div>`,
+    footer: `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="wSend">Send</button>`
+  });
+  $('#wSend', root).addEventListener('click', async (e) => {
+    const subject = $('#wSubj', root).value.trim(), body = $('#wBody', root).value.trim();
+    if (!subject || !body) { $('#wMsg', root).innerHTML = '<div class="notice notice-error">Add a subject and a message.</div>'; return; }
+    e.currentTarget.disabled = true;
+    const { data, error } = await supa.rpc('mail_compose', { p_target: $('#wTo', root).value, p_subject: subject, p_body: body, p_domain: MAIL_DOMAIN });
+    if (error) {
+      e.currentTarget.disabled = false;
+      $('#wMsg', root).innerHTML = `<div class="notice notice-error">${esc(/mail_compose|does not exist/.test(error.message) ? 'Run sql/categories.sql in Supabase first.' : error.message)}</div>`;
+      return;
+    }
+    playSound('sent'); toast('Sent.', 'ok'); close();
+    box = 'inbox'; $$('.mail-tab').forEach(x => x.classList.toggle('is-on', x.dataset.box === 'inbox'));
+    openThread(data);
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -396,6 +464,7 @@ $$('.mail-tab').forEach(t => t.addEventListener('click', () => {
 }));
 
 $('#mailCompose')?.addEventListener('click', openCompose);
+$('#mailWrite')?.addEventListener('click', () => openWrite());
 $('#mailTags')?.addEventListener('click', openTags);
 
 // Live: new mail or replies refresh the current box.

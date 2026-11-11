@@ -6,9 +6,10 @@
 //  roller, the little dice animation, the result cards that show up in
 //  chats and pages, and the GM's "ask for a roll" form.
 //
-//  Rules: trait die + Wild Die (d6), take the higher; a die that rolls
-//  its top face aces (rolls again and adds). 4 is a success, every 4
-//  over is a raise. Both dice showing 1 is a Critical Failure.
+//  Rules: trait die + Wild Die (d6), take the higher. A die that rolls
+//  its top face aces: the player taps it to roll again and add.
+//  Cards show the total only. Nobody's roll is called a success or a
+//  failure; for a roll the GM asked for, the GM marks Pass or Fail.
 //  Unskilled is d4−2. Wounds (max −3) and Fatigue (max −2) apply.
 // =====================================================================
 
@@ -80,34 +81,54 @@ export const traitChoices = t => String(t || '').split(/\s+or\s+|\/|,/i).map(x =
 const chain = (arr, sides) => (arr || []).map((v, i) =>
   `<b class="${v === sides ? 'ace' : ''}${i === 0 && v === 1 ? ' one' : ''}">${v}</b>`).join('<i>+</i>');
 
-export function rollCard(r, { who = null, compact = false } = {}) {
+export function rollCard(r, { who = null, compact = false, judge = false } = {}) {
   if (!r) return '';
-  const o = OUTCOME[r.best_outcome || r.outcome] || OUTCOME.fail;
+  const total = r.best_total ?? r.total;
   const tSum = (r.trait_rolls || []).reduce((a, b) => a + b, 0);
   const wSum = (r.wild_rolls || []).reduce((a, b) => a + b, 0);
   const mods = (r.bonus || 0) + (r.modifier || 0) + (r.wound_mod || 0);
   const used = r.wild_rolls && wSum > tSum ? 'wild' : 'trait';
-  const raises = (r.best_outcome || r.outcome) === 'raise' ? Math.max(1, Math.floor(((r.best_total ?? r.total) - 4) / 4)) : 0;
   const aced = (r.trait_rolls || []).length > 1 || (r.wild_rolls || []).length > 1;
+  const snake = r.outcome === 'crit_fail';
+  const v = r.verdict;
   return `
-    <div class="sw-card ${o.cls}${compact ? ' compact' : ''}">
+    <div class="sw-card ${v === 'pass' ? 'ok' : v === 'fail' ? 'fail' : 'plain'}${compact ? ' compact' : ''}" data-roll="${esc(r.id || '')}">
       <div class="sw-card-top">
         <span class="sw-card-die">🎲</span>
         <span class="sw-card-what"><strong>${esc(r.label)}</strong>
           <small>${esc(who ? who + ' · ' : '')}${dieLabel(r.die, r.bonus)}${r.modifier ? ' ' + signed(r.modifier) : ''}${r.wound_mod ? ` · wounds ${signed(r.wound_mod)}` : ''}</small></span>
-        <span class="sw-card-total">${r.best_total ?? r.total}</span>
+        <span class="sw-card-total">${total}</span>
       </div>
       <div class="sw-card-bottom">
-        <span class="sw-badge">${o.word}${raises > 1 ? ' ×' + raises : ''}</span>
+        ${v ? `<span class="sw-verdict ${v}">${v === 'pass' ? '✓ Passed' : '✗ Failed'}</span>` : ''}
         ${aced ? '<span class="sw-ace-tag">Ace!</span>' : ''}
-        ${r.benny_spent ? `<span class="sw-benny-tag">Benny reroll${(r.best_total ?? r.total) !== r.total ? ` · kept ${r.best_total}` : ''}</span>` : ''}
+        ${snake ? '<span class="sw-snake">Snake eyes</span>' : ''}
+        ${r.benny_spent ? `<span class="sw-benny-tag">Benny reroll${total !== r.total ? ` · kept ${total}` : ''}</span>` : ''}
         <span class="sw-chain">
           <span class="${used === 'trait' ? 'used' : ''}">d${r.die} ${chain(r.trait_rolls, r.die)}</span>
           ${r.wild_rolls ? `<span class="${used === 'wild' ? 'used' : ''}">wild ${chain(r.wild_rolls, 6)}</span>` : ''}
           ${mods ? `<span>${signed(mods)}</span>` : ''}
         </span>
       </div>
+      ${judge && r.id ? `
+      <div class="sw-judge">
+        <span>Your call:</span>
+        <button type="button" data-verdict="${esc(r.id)}:pass" class="${v === 'pass' ? 'on' : ''}">✓ Pass</button>
+        <button type="button" data-verdict="${esc(r.id)}:fail" class="${v === 'fail' ? 'on' : ''}">✗ Fail</button>
+      </div>` : ''}
     </div>`;
+}
+
+/** GM: Pass / Fail buttons on roll cards inside scope. */
+export function wireVerdicts(scope, onDone) {
+  $$('[data-verdict]', scope).forEach(b => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const [id, v] = b.dataset.verdict.split(':');
+    const next = b.classList.contains('on') ? null : v;
+    const { error } = await supa.rpc('sw_verdict', { p_roll: id, p_verdict: next });
+    if (error) return toast(/sw_verdict|does not exist/.test(error.message) ? 'Run sql/dice-v2.sql in Supabase first.' : error.message, 'error');
+    onDone?.();
+  }));
 }
 
 /* A GM's request, as the player sees it. */
@@ -171,7 +192,7 @@ export async function openRoller(opts = {}) {
   const chip = t => `<button type="button" class="sw-trait" data-trait="${esc(t.key)}"><span>${esc(t.label)}</span><b>${dieLabel(t.die, t.mod)}</b></button>`;
   const choiceChips = (choices || []).map(c => find(c) || { key: c.toLowerCase(), label: cap(c) + ' (unskilled)', die: 4, mod: -2 });
 
-  const { root, close } = overlay(`
+  const { root, close: closeNow } = overlay(`
     <div class="modal-head"><h3>${esc(opts.title || (request ? 'Roll requested' : 'Roll a trait'))}</h3>
       <button class="icon-btn" data-x title="Close">✕</button></div>
     <div class="modal-body sw-body">
@@ -202,6 +223,10 @@ export async function openRoller(opts = {}) {
       <button class="btn btn-primary" id="swGo" disabled>Roll</button>
     </div>`);
 
+  let busy = false;              // an unfinished ace: don't let the roll be lost
+  const close = () => { if (!busy) closeNow(); };
+  $$('[data-x]', root).forEach(b => b.addEventListener('click', e => { if (busy) e.stopImmediatePropagation(); }, true));
+  $('.scrim', root).addEventListener('click', e => { if (busy && e.target === e.currentTarget) e.stopImmediatePropagation(); }, true);
   const go = $('#swGo', root);
   const select = (key) => {
     pick = key; gmDie = null;
@@ -238,23 +263,44 @@ export async function openRoller(opts = {}) {
     } catch (e) { error = e; }
     if (error || !r) {
       toast(/sw_roll|does not exist/.test(error?.message || '') ? 'Run sql/mytime.sql in Supabase first.' : (error?.message || 'Roll failed.'), 'error');
-      close(); return;
+      closeNow(); return;
     }
     await new Promise(res => setTimeout(res, Math.max(0, 750 - (performance.now() - started))));
     showResult(r);
   });
 
+  /* Aces: the aced die waits for a tap, then the server rolls it again. */
+  function showAces(r) {
+    busy = true;
+    const tray = $('#swTray', root);
+    const tAce = r.trait_rolls.at(-1) === r.die, wAce = r.wild_rolls && r.wild_rolls.at(-1) === 6;
+    tray.innerHTML = landed(r, { tap: true }) + `<p class="sw-tap">${tAce && wAce ? 'Both dice aced!' : 'Ace!'} Tap the glowing die to roll it again.</p>`;
+    playSound('unlock');
+    $('.modal-foot', root).innerHTML = `<span class="sw-bennies"></span><span class="grow"></span><small class="muted">Finish rolling your aces</small>`;
+    $$('[data-ace]', tray).forEach(d => d.addEventListener('click', async () => {
+      if (d.classList.contains('spinning')) return;
+      d.classList.add('spinning');
+      const started = performance.now();
+      const { data, error } = await supa.rpc('sw_ace', { p_roll: r.id, p_which: d.dataset.ace });
+      await new Promise(res => setTimeout(res, Math.max(0, 550 - (performance.now() - started))));
+      if (error) { d.classList.remove('spinning'); return toast(/sw_ace|does not exist/.test(error.message) ? 'Run sql/dice-v2.sql in Supabase first.' : error.message, 'error'); }
+      showResult({ ...data, bennies_left: r.bennies_left });
+    }));
+  }
+
   function showResult(r) {
+    if (r.pending) return showAces(r);
+    busy = false;
     const tray = $('#swTray', root);
     tray.innerHTML = landed(r) + rollCard(r);
-    playSound(r.outcome === 'raise' ? 'unlock' : r.outcome === 'success' ? 'sent' : 'received');
+    playSound('sent');
     const benny = r.outcome !== 'crit_fail';
     const left = r.bennies_left ?? sheet.bennies;
     $('.modal-foot', root).innerHTML = `
       <span class="sw-bennies">${sheet.missing ? '' : `● ${left} Benn${left === 1 ? 'y' : 'ies'}`}</span><span class="grow"></span>
       ${benny && !sheet.missing && left > 0 && !gm ? `<button class="btn btn-ghost" id="swBenny" title="Reroll and keep the best">Spend a Benny · reroll</button>` : ''}
       <button class="btn btn-primary" id="swDone">Done</button>`;
-    if (r.outcome === 'crit_fail') tray.insertAdjacentHTML('beforeend', '<p class="sw-note">Critical Failures can\'t be rerolled.</p>');
+    if (r.outcome === 'crit_fail') tray.insertAdjacentHTML('beforeend', '<p class="sw-note">Snake eyes can\'t be rerolled with a Benny.</p>');
     $('#swDone', root).addEventListener('click', () => { close(); opts.onDone?.(r); });
     $('#swBenny', root)?.addEventListener('click', async (e) => {
       e.currentTarget.disabled = true;
@@ -289,11 +335,14 @@ function flicker() {
   });
   return '';
 }
-function landed(r) {
+function landed(r, { tap = false } = {}) {
   const tSum = r.trait_rolls.reduce((a, b) => a + b, 0), wSum = (r.wild_rolls || []).reduce((a, b) => a + b, 0);
-  return `<div class="sw-dice landed">
-      <span class="sw-die d${r.die} ${tSum >= wSum ? 'kept' : 'dropped'} ${r.trait_rolls.length > 1 ? 'aced' : ''}"><i>${tSum}</i><em>d${r.die}</em></span>
-      ${r.wild_rolls ? `<span class="sw-die wild ${wSum > tSum ? 'kept' : 'dropped'} ${r.wild_rolls.length > 1 ? 'aced' : ''}"><i>${wSum}</i><em>wild</em></span>` : ''}
+  const tAce = tap && r.trait_rolls.at(-1) === r.die, wAce = tap && r.wild_rolls && r.wild_rolls.at(-1) === 6;
+  const face = (arr) => arr.length > 1 ? `<i>${arr.at(-1)}</i><span class="sw-sofar">${arr.join(' + ')}</span>` : `<i>${arr[0]}</i>`;
+  const cls = (mine, other, ace) => tap ? (ace ? 'ace-ready' : 'waiting') : (mine >= other ? 'kept' : 'dropped');
+  return `<div class="sw-dice landed ${tap ? 'tapping' : ''}">
+      <${tAce ? 'button type="button" data-ace="trait"' : 'span'} class="sw-die d${r.die} ${cls(tSum, wSum, tAce)} ${r.trait_rolls.length > 1 ? 'aced' : ''}">${face(r.trait_rolls)}<em>d${r.die}${tap ? ' · ' + tSum : ''}</em></${tAce ? 'button' : 'span'}>
+      ${r.wild_rolls ? `<${wAce ? 'button type="button" data-ace="wild"' : 'span'} class="sw-die wild ${cls(wSum, tSum + 0.5, wAce)} ${r.wild_rolls.length > 1 ? 'aced' : ''}">${face(r.wild_rolls)}<em>wild${tap ? ' · ' + wSum : ''}</em></${wAce ? 'button' : 'span'}>` : ''}
     </div>`;
 }
 
@@ -358,7 +407,7 @@ export async function loadRequests(kind, ctx = null) {
   if (ctx) q = q.eq('context_id', ctx);
   const { data: reqs, error } = await q;
   if (error || !reqs?.length) return { reqs: [], rolls: new Map() };
-  const { data: rolls } = await supa.from('sw_rolls').select('*').in('request_id', reqs.map(r => r.id)).order('created_at');
+  const { data: rolls } = await supa.from('sw_rolls').select('*').in('request_id', reqs.map(r => r.id)).eq('pending', false).order('created_at');
   const by = new Map();
   (rolls || []).forEach(r => { if (!by.has(r.request_id)) by.set(r.request_id, []); by.get(r.request_id).push(r); });
   return { reqs, rolls: by };
@@ -375,12 +424,13 @@ export function requestResultsHtml(q, rolls = [], names = new Map()) {
         ${q.closed ? '<span class="sw-req-closed">Closed</span>' : `<button type="button" class="btn btn-ghost btn-sm" data-closereq="${esc(q.id)}">Close</button>`}</div>
       ${q.note ? `<p class="sw-req-note">${esc(q.note)}</p>` : ''}
       ${q.targets.map(id => latest.get(id)
-        ? rollCard(latest.get(id), { who: names.get(id) || 'player', compact: true })
+        ? rollCard(latest.get(id), { who: names.get(id) || 'player', compact: true, judge: true })
         : `<div class="sw-waiting">${esc(names.get(id) || 'player')} hasn't rolled yet…</div>`).join('')}
     </div>`;
 }
 
 export function wireRequestButtons(scope, { me, reqs, onDone }) {
+  if (me?.is_admin) wireVerdicts(scope, onDone);
   $$('[data-rollreq]', scope).forEach(b => b.addEventListener('click', () => {
     const q = reqs.find(x => x.id === b.dataset.rollreq);
     openRoller({ me, request: q, onDone });

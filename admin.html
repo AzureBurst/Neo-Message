@@ -85,10 +85,13 @@
     </table>
   </div>
 
-  <h2 style="margin:34px 0 12px;font-size:18px">Accounts</h2>
+  <div style="display:flex;align-items:center;gap:10px;margin:34px 0 12px">
+    <h2 style="margin:0;font-size:18px">Accounts</h2>
+    <button class="btn btn-ghost btn-sm" id="catManage">Categories…</button>
+  </div>
   <p class="muted small" style="margin:-6px 0 12px">
-    Press ✎ to rename a player. They sign in with the new name and the same password
-    from then on — let them know. Their messages, posts, mail and journal come with them.
+    Pick each account's category to set who can find, add and email them. Press ✎ to rename
+    someone; they sign in with the new name and the same password. NPCs' categories are set in the NPC Studio.
   </p>
   <div class="table-wrap" style="max-height:none">
     <table>
@@ -98,7 +101,7 @@
           <th>Number</th>
           <th>Joined</th>
           <th>Messages</th>
-          <th style="width:120px">Role</th>
+          <th style="width:220px">Category</th>
           <th style="width:60px"></th>
         </tr>
       </thead>

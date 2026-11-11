@@ -517,7 +517,7 @@ async function diceFor(searchId) {
   const { reqs, rolls } = await loadRequests('queree', searchId);
   const { data: free } = await supa.from('sw_rolls').select('*')
     .eq('context_kind', 'queree').eq('context_id', searchId).is('request_id', null).order('created_at');
-  const latestFree = (free || []).filter(r => !(free || []).some(x => x.rerolled_from === r.id));
+  const latestFree = (free || []).filter(r => !r.pending && !(free || []).some(x => x.rerolled_from === r.id));
   const html = [
     ...reqs.map(q => me.is_admin
       ? requestResultsHtml(q, rolls.get(q.id) || [], names)

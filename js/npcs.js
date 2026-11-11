@@ -18,6 +18,7 @@ import { playSound } from './sfx.js';
 import {
   createNpc, signInAs, rollNumber, legacyRoster, forgetLegacy
 } from './npc.js';
+import { loadCategories, categorySelect } from './categories.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -35,6 +36,7 @@ const main = $('#nsMain');
 const COLORS = ['#CFF23A', '#FF8A3D', '#FF4D6D', '#B57BFF', '#4DA3FF', '#2FD4B4', '#F5D810', '#E0E0E0'];
 
 let people = new Map();     // id -> profile
+let cats = null;            // account categories (sql/categories.sql)
 let npcs = new Map();       // id -> npc row
 let inbox = [];             // rows from npc_inbox()
 let view = { name: 'inbox', conv: null, filter: null };
@@ -45,8 +47,9 @@ let ready = false;
 /* ------------------------------------------------------------------ */
 
 async function loadPeople() {
-  const { data } = await supa.from('profiles').select('id, username, phone_number, avatar_url, bio, is_admin, created_at');
+  const [{ data }, c] = await Promise.all([supa.from('profiles').select('*'), loadCategories()]);
   people = new Map((data || []).map(p => [p.id, p]));
+  cats = c;
 }
 
 async function loadNpcs() {
@@ -528,11 +531,13 @@ function openEditor(id = null) {
     </div>
     <div class="field"><label for="neRole">Role <span class="muted">(only you see this)</span></label>
       <input type="text" id="neRole" maxlength="60" value="${esc(n?.role || '')}" placeholder="e.g. Night dispatcher, Rival student, Informant"></div>
+    ${cats ? `<div class="field"><label for="neCat">Category <span class="muted">(decides who can find, add and email them)</span></label>
+      ${categorySelect(cats.filter(c => c.key !== 'gm'), p?.category_id || cats.find(c => c.key === 'outsiders')?.id, 'id="neCat"')}</div>` : ''}
     <div class="field"><label>Colour <span class="muted">(how they show in your Studio)</span></label>
       <div class="ns-swatches">${COLORS.map(c => `<button type="button" class="ns-swatch ${c === color ? 'on' : ''}" data-color="${c}" style="--c:${c}" aria-label="${c}"></button>`).join('')}</div></div>
     <div class="field"><label for="neNotes">Notes <span class="muted">(only you see this — personality, secrets, what they know)</span></label>
       <textarea id="neNotes" rows="3" maxlength="4000">${esc(n?.notes || '')}</textarea></div>
-    <div class="field"><label for="neBio">Bio <span class="muted">(players see this on their profile)</span></label>
+    <div class="field"><label for="neBio">Bio <span class="muted">(players see this on their profile and in the directory)</span></label>
       <input type="text" id="neBio" maxlength="160" value="${esc(p?.bio || '')}"></div>
     <label class="check"><input type="checkbox" id="neStudent" ${n?.is_student ? 'checked' : ''}>
       <span>A Justice U student (enrolled in classes, gets "mail everyone")</span></label>
@@ -580,6 +585,7 @@ function openEditor(id = null) {
           ? 'Renaming needs sql/admin-rename.sql — run it in Supabase.' : error.message);
       }
       const prof = { avatar_url: avatarUrl || null, bio: bio || null };
+      if ($('#neCat', root)) prof.category_id = $('#neCat', root).value;
       if (!id || phone !== formatNumber(p.phone_number)) prof.phone_number = phone;
       const { error: pErr } = await supa.from('profiles').update(prof).eq('id', target);
       if (pErr) throw new Error(/phone_number/.test(pErr.message) ? 'That number is already taken.' : pErr.message);

@@ -17,9 +17,10 @@ import { loadClock, storyNow } from './clock.js';
 import { mountShade } from './shade.js';
 import { playSound } from './sfx.js';
 import {
-  openRoller, openRequest, rollCard, requestCard, loadRequests, wireRequestButtons,
+  openRoller, openRequest, rollCard, requestCard, loadRequests, wireRequestButtons, wireVerdicts,
   ATTRS, SKILLS, CORE_SKILLS, DIES, dieLabel, signed, blankSheet
 } from './dice.js';
+import { loadDirectory } from './directory.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -101,8 +102,11 @@ async function loadPeople() {
   ]);
   people = new Map((ppl || []).map(p => [p.id, p]));
   mtRows = new Map((mts || []).map(m => [m.user_id, m]));
+  // Players only see who their category lets them see (sql/categories.sql).
+  if (!me.is_admin) visible = new Set((await loadDirectory({ fresh: true })).map(r => r.id).concat(me.id));
 }
-const players = () => [...people.values()].filter(p => !p.is_admin);
+let visible = null;
+const players = () => [...people.values()].filter(p => !p.is_admin && (!visible || visible.has(p.id)));
 const nameOf = id => mtRows.get(id)?.char_name || people.get(id)?.username || 'someone';
 const userOf = id => people.get(id)?.username || '';
 const photoOf = id => mtRows.get(id)?.photo_url || people.get(id)?.avatar_url || null;
@@ -320,7 +324,7 @@ function openProfileEditor(uid, v) {
           </div>
         </div>
         <h5 class="mt-edit-h">Top 8 <small class="muted" id="eTopN"></small></h5>
-        <div class="mt-top-pick">${[...people.values()].filter(p => p.id !== uid && !p.is_admin).map(p => `
+        <div class="mt-top-pick">${players().filter(p => p.id !== uid).map(p => `
           <label><input type="checkbox" value="${esc(p.id)}" ${top.has(p.id) ? 'checked' : ''}>${pic(p.id)}<span>${esc(nameOf(p.id))}</span></label>`).join('')}</div>
         <div id="eMsg"></div>
       </div>
@@ -517,7 +521,7 @@ async function viewTranscript(uid) {
             <span>@${esc(userOf(uid))}</span></div>
           <span class="tr-seal">OFFICIAL<br>RECORD</span>
         </header>
-        ${!sheet && !me.is_admin ? '<p class="tr-empty">No stats on file yet. The GM fills these in.</p>' : ''}
+        ${!sheet && !me.is_admin ? '<p class="tr-empty">GM is yet to fill in your record.</p>' : ''}
         <div class="tr-body">${tabs[transcriptTab]}</div>
       </div>
       <nav class="tr-tabs" aria-label="Sections">
@@ -643,6 +647,17 @@ function parseStatBlock(text, base) {
   return { sheet: out, found };
 }
 
+/** A SWADE skill from the list, or a custom trait the GM names. */
+function pickTrait(value) {
+  if (!value) return null;
+  if (value !== '__custom') return { name: value, attr: SKILLS[value] };
+  const name = (prompt('Trait name (e.g. Flight, Hero Lore, Driving: Hoverbike):') || '').trim();
+  if (!name) return null;
+  let attr = (prompt('Linked attribute: Agility, Smarts, Spirit, Strength or Vigor', 'Smarts') || 'smarts').trim().toLowerCase();
+  if (!ATTRS.includes(attr)) attr = 'smarts';
+  return { name, attr, custom: true };
+}
+
 function openQuickEntry(uid, current, isNew) {
   const root = $('#modalRoot');
   let draft = structuredClone({ ...blankSheet(uid), ...current });
@@ -673,6 +688,7 @@ function openQuickEntry(uid, current, isNew) {
             <h5 class="mt-edit-h">Skills</h5>
             <div id="qeSkills"></div>
             <div class="qe-add"><select id="qeAddSkill"><option value="">＋ Add a skill…</option>
+              <option value="__custom">✦ Custom trait…</option>
               ${Object.keys(SKILLS).map(k => `<option>${esc(k)}</option>`).join('')}</select>
               <span class="mt-stepper">Bennies <button data-b="-1">−</button><b id="qeBennies"></b><button data-b="1">+</button></span></div>
           </div>
@@ -707,8 +723,8 @@ function openQuickEntry(uid, current, isNew) {
   root.addEventListener('change', (e) => {
     if (e.target.dataset.qmod != null) { draft.skills[+e.target.dataset.qmod].mod = +e.target.value || 0; base = structuredClone(draft); }
     if (e.target.id === 'qeAddSkill' && e.target.value) {
-      const n = e.target.value;
-      if (!draft.skills.some(k => k.name === n)) draft.skills.push({ name: n, attr: SKILLS[n], die: 4, mod: 0 });
+      const t = pickTrait(e.target.value);
+      if (t && !draft.skills.some(k => k.name.toLowerCase() === t.name.toLowerCase())) draft.skills.push({ ...t, die: 4, mod: 0 });
       e.target.value = ''; base = structuredClone(draft); paint();
     }
   });
@@ -773,7 +789,7 @@ function openSheetEditor(uid, current, isNew) {
             <div id="seSkills">${s.skills.map((k, i) => `<div class="se-trait" data-si="${i}"><span>${esc(k.name)}</span>
               ${dsel(k.die, `data-sdie="${i}"`)}<input type="number" min="0" max="5" data-smod="${i}" value="${k.mod || 0}">
               <button type="button" class="qe-x" data-sdel="${i}">✕</button></div>`).join('')}</div>
-            <select id="seAddSkill"><option value="">＋ Add a skill…</option>${Object.keys(SKILLS).map(k => `<option>${esc(k)}</option>`).join('')}</select>
+            <select id="seAddSkill"><option value="">＋ Add a skill…</option><option value="__custom">✦ Custom trait…</option>${Object.keys(SKILLS).map(k => `<option>${esc(k)}</option>`).join('')}</select>
             <h5 class="mt-edit-h">Status</h5>
             <div class="se-nums">
               <label>Bennies <input type="number" id="seBen" min="0" value="${s.bennies}"></label>
@@ -833,9 +849,9 @@ function openSheetEditor(uid, current, isNew) {
     else if (b.hasAttribute('data-rmrow')) b.closest('.se-row').remove();
   });
   $('#seAddSkill', root).addEventListener('change', (e) => {
-    const n = e.target.value; if (!n) return;
+    const t = pickTrait(e.target.value); if (!t) { e.target.value = ''; return; }
     collect();
-    if (!s.skills.some(k => k.name === n)) s.skills.push({ name: n, attr: SKILLS[n], die: 4, mod: 0 });
+    if (!s.skills.some(k => k.name.toLowerCase() === t.name.toLowerCase())) s.skills.push({ ...t, die: 4, mod: 0 });
     openSheetEditor(uid, s, isNew);
   });
   $('#seSave', root).addEventListener('click', async (e) => {
@@ -872,7 +888,7 @@ async function freeTimeData(uid) {
   const progress = Object.fromEntries(TRACKS.map(t => [t.key, 0]));
   (prog || []).forEach(p => { progress[p.track] = p.boxes; });
   const latestRoll = new Map();
-  (rolls || []).forEach(r => latestRoll.set(r.context_id, r));
+  (rolls || []).filter(r => !r.pending).forEach(r => latestRoll.set(r.context_id, r));
   const byWeek = new Map();
   (entries || []).forEach(e => { if (!byWeek.has(e.week_id)) byWeek.set(e.week_id, []); byWeek.get(e.week_id).push(e); });
   return { term, progress, conns: conns || [], rep: rep?.level || 'Unknown', plan: plan || {}, weeks: weeks || [],
@@ -1283,11 +1299,12 @@ async function viewGM() {
 
       <section class="ft-card gm-log">
         <h3>Roll log</h3>
-        ${(rolls || []).map(r => `<div class="gm-roll">${rollCard(r, { who: nameOf(r.user_id) + ' · ' + ({ freetime: 'free time', message: 'chat', queree: 'Queree', flight: 'Flight', mytime: 'MyTime' }[r.context_kind] || 'roll'), compact: true })}${icStamp(r, { fmt: 'short' })}</div>`).join('')
+        ${(rolls || []).filter(r => !r.pending).map(r => `<div class="gm-roll">${rollCard(r, { who: nameOf(r.user_id) + ' · ' + ({ freetime: 'free time', message: 'chat', queree: 'Queree', flight: 'Flight', mytime: 'MyTime' }[r.context_kind] || 'roll'), compact: true, judge: !!r.request_id })}${icStamp(r, { fmt: 'short' })}</div>`).join('')
           || '<p class="mt-none">No rolls yet.</p>'}
       </section>
     </div>`;
 
+  wireVerdicts(main, viewGM);
   $$('[data-approve]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.approve, true, viewGM)));
   $$('[data-return]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.return, false, viewGM)));
   $$('[data-gate]', main).forEach(b => b.addEventListener('click', () => editGate((conns || []).find(c => c.id === b.dataset.gate), viewGM)));

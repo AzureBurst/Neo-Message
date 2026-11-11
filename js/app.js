@@ -10,6 +10,7 @@ import {
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
 import { openRoller, openRequest, rollCard, requestCard } from './dice.js';
+import { loadDirectory, categoryChip, byCategory } from './directory.js';
 import { playSent, playReceived, isMuted, toggleMute } from './sfx.js';
 import { EMOJI } from './emoji.js';
 
@@ -354,7 +355,7 @@ function renderStream({ keepScroll = false } = {}) {
       const fresh = !firstPaint && !seenIds.has(m.id) ? 'fresh' : '';
       if (m.kind === 'roll') {
         html += `<div class="roll-line ${fresh}" data-mid="${esc(m.id)}">${m.meta
-          ? rollCard(m.meta, { who: m.sender_id === me.id ? 'You' : personName(m.sender_id) })
+          ? rollCard(m.meta, { who: m.sender_id === me.id ? 'You' : personName(m.sender_id), judge: me.is_admin && !!m.meta.request_id })
           : `<div class="sysline">${esc(m.body)}</div>`}${icStamp(m)}</div>`;
       } else {
         const q = m.meta || {};
@@ -829,10 +830,10 @@ async function openContactsModal() {
       <div class="field">
         <label for="addFind">Add someone</label>
         <div class="inline-row">
-          <input id="addFind" placeholder="Username or number" maxlength="24" autocomplete="off">
+          <input id="addFind" placeholder="Name or phone number" maxlength="24" autocomplete="off">
           <button class="btn btn-sm" id="addGo" style="flex-shrink:0">Add</button>
         </div>
-        <div class="hint">Type a username to search, or paste the number they signed up with.</div>
+        <div class="hint">Search the directory by name, or type a phone number. Some people can only be added by number.</div>
       </div>
       <div id="addResults" class="find-results"></div>
       <div id="addMsg"></div>
@@ -867,6 +868,7 @@ async function openContactsModal() {
       msgBox.innerHTML = `<div class="notice notice-${/duplicate|unique/i.test(error.message) ? 'info' : 'error'}">${
         /duplicate|unique/i.test(error.message)
           ? esc(name) + ' is already in your contacts.'
+          : /row-level security/i.test(error.message) ? esc(name) + ' can only be added by phone number.'
           : esc(error.message)}</div>`;
       return;
     }
@@ -874,47 +876,31 @@ async function openContactsModal() {
     setTimeout(() => { close(); openContactsModal(); }, 700);
   }
 
-  /* Live username search. Profiles are readable by anyone signed in —
-     that is what makes looking each other up possible at all — so this
-     needs no extra database work. */
-  let findTimer = null;
+  /* Directory search: only people you're allowed to see (sql/categories.sql). */
+  const dir = await loadDirectory({ fresh: true });
+  const already = new Set(list.map(c => c.contact_id));
+  const findRow = (p) => `
+    <${p.can_add && !already.has(p.id) ? 'button type="button"' : 'div'} class="find-row ${p.can_add ? '' : 'no-add'}" data-id="${esc(p.id)}" data-name="${esc(p.username)}">
+      <span class="avatar avatar-sm" data-find-avatar="${esc(p.id)}"></span>
+      <span class="find-id">
+        <strong>${esc(p.username)}</strong>
+        <span>${categoryChip(p)}${p.about ? ` <small class="muted">${esc(p.about)}</small>` : ''}</span>
+      </span>
+      <span class="find-add">${already.has(p.id) ? 'In contacts' : p.can_add ? 'Add' : 'By number only'}</span>
+    </${p.can_add && !already.has(p.id) ? 'button' : 'div'}>`;
+  const paintFind = (rows) => {
+    results.innerHTML = rows.length ? byCategory(rows).map(g =>
+      `<div class="find-group">${esc(g.name)}</div>${g.rows.map(findRow).join('')}`).join('')
+      : '<div class="find-none">Nobody by that name.</div>';
+    rows.forEach(p => paintAvatar(results.querySelector(`[data-find-avatar="${p.id}"]`), p.avatar_url, p.username));
+    $$('button.find-row', results).forEach(r => r.addEventListener('click', () => addById(r.dataset.id, r.dataset.name)));
+  };
   findBox.addEventListener('input', () => {
-    clearTimeout(findTimer);
-    const q = findBox.value.trim();
-
-    if (q.length < 2 || /^[\d ()\-+.]+$/.test(q)) { results.innerHTML = ''; return; }
-
-    findTimer = setTimeout(async () => {
-      const { data } = await supa
-        .from('profiles')
-        .select('id, username, phone_number, avatar_url')
-        .ilike('username', `%${q}%`)
-        .neq('id', me.id)
-        .limit(8);
-
-      if (!data?.length) {
-        results.innerHTML = '<div class="find-none">Nobody by that name.</div>';
-        return;
-      }
-
-      results.innerHTML = data.map(p => `
-        <button type="button" class="find-row" data-id="${esc(p.id)}"
-                data-name="${esc(p.username)}">
-          <span class="avatar avatar-sm" data-find-avatar="${esc(p.id)}"></span>
-          <span class="find-id">
-            <strong>${esc(p.username)}</strong>
-            <span class="mono">${esc(formatNumber(p.phone_number))}</span>
-          </span>
-          <span class="find-add">Add</span>
-        </button>`).join('');
-
-      data.forEach(p => paintAvatar(
-        results.querySelector(`[data-find-avatar="${p.id}"]`), p.avatar_url, p.username));
-
-      $$('.find-row', results).forEach(r => r.addEventListener('click',
-        () => addById(r.dataset.id, r.dataset.name)));
-    }, 220);
+    const q = findBox.value.trim().toLowerCase();
+    if (/^[\d ()\-+.]+$/.test(q)) { results.innerHTML = ''; return; }
+    paintFind(q ? dir.filter(p => p.username.toLowerCase().includes(q) || (p.about || '').toLowerCase().includes(q)) : dir);
   });
+  if (dir.length) paintFind(dir);
 
   $('#addGo', root).addEventListener('click', async () => {
     const q = findBox.value.trim();
@@ -935,14 +921,16 @@ async function openContactsModal() {
       return;
     }
 
-    const { data } = await supa.from('profiles')
-      .select('id, username').ilike('username', q).neq('id', me.id).maybeSingle();
-
-    if (!data) {
-      msgBox.innerHTML = '<div class="notice notice-error">No account with that username.</div>';
+    const hit = dir.find(p => p.username.toLowerCase() === q.toLowerCase());
+    if (!hit) {
+      msgBox.innerHTML = '<div class="notice notice-error">Nobody by that name in your directory. Try their number.</div>';
       return;
     }
-    await addById(data.id, data.username);
+    if (!hit.can_add) {
+      msgBox.innerHTML = `<div class="notice notice-info">${esc(hit.username)} can only be added by phone number.</div>`;
+      return;
+    }
+    await addById(hit.id, hit.username);
   });
 
   findBox.addEventListener('keydown', (e) => {
@@ -1257,6 +1245,16 @@ supa.channel('neo-messages')
         }
       })
   .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'messages' },
+      (payload) => {
+        // The GM marking a roll Pass/Fail updates its card.
+        const m = payload.new;
+        const i = state.messages.findIndex(x => x.id === m.id);
+        if (i < 0) return;
+        state.messages[i] = { ...state.messages[i], ...m };
+        renderStream({ keepScroll: true });
+      })
+  .on('postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'conversation_members' },
       () => refreshOpenChat())
   .on('postgres_changes',
@@ -1315,7 +1313,14 @@ if (wantConvo && state.threads.some(t => t.id === wantConvo)) {
 }
 
 /* Dice: players roll into the chat; the GM asks for rolls (js/dice.js). */
-$('#stream').addEventListener('click', (e) => {
+$('#stream').addEventListener('click', async (e) => {
+  const v = e.target.closest('[data-verdict]');
+  if (v) {
+    const [id, verdict] = v.dataset.verdict.split(':');
+    const { error } = await supa.rpc('sw_verdict', { p_roll: id, p_verdict: v.classList.contains('on') ? null : verdict });
+    if (error) toast(/sw_verdict|does not exist/.test(error.message) ? 'Run sql/dice-v2.sql in Supabase first.' : error.message, 'error');
+    return;
+  }
   const b = e.target.closest('[data-rollreq]');
   if (!b) return;
   const m = state.messages.find(x => x.kind === 'roll_request' && x.meta?.id === b.dataset.rollreq);
