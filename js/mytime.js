@@ -1320,7 +1320,7 @@ async function viewGM() {
           <div class="gm-week"><button class="mt-btn ghost" id="gmPrev" ${term.current_week <= 1 ? 'disabled' : ''}>‹</button>
             <div><small>${esc(term.name)}</small><b>Week ${term.current_week}</b><small>of ${term.weeks}${term.start_date ? ` · from ${weekStart(term, term.current_week)}` : ''}</small></div>
             <button class="mt-btn" id="gmNext" ${term.current_week >= term.weeks ? 'disabled' : ''}>Next week ›</button></div>
-          <label class="gm-start">Term began <input type="date" id="gmStart" value="${esc(term.start_date || '')}"></label>
+          <label class="gm-start">Term began <input type="date" id="gmStart" min="1000-01-01" max="9999-12-31" value="${esc(term.start_date || '')}"></label>
           <p class="muted small">Next week gives everyone 3 new points. Unspent points are lost.</p>` : '<p>No term running.</p>'}
       </section>
 
@@ -1401,11 +1401,21 @@ async function viewGM() {
     viewGM();
   };
   $('#gmPrev')?.addEventListener('click', () => setWeek(term.current_week - 1));
-  $('#gmStart')?.addEventListener('change', async (e) => {
-    const { error } = await supa.from('ft_terms').update({ start_date: e.target.value || null }).eq('id', term.id);
+  // Save when the GM leaves the box or presses Enter — not on every keystroke,
+  // or typing the year "2160" saves 0002 after the first digit.
+  const startBox = $('#gmStart');
+  const saveStart = async () => {
+    const v = startBox.value;
+    if (v === (term.start_date || '')) return;
+    if (v && +v.slice(0, 4) < 1000) return toast('Finish typing the year.', 'info');
+    const { error } = await supa.from('ft_terms').update({ start_date: v || null }).eq('id', term.id);
     if (error) return toast(/start_date/.test(error.message) ? 'Run sql/freetime-v2.sql in Supabase first.' : sqlMsg(error), 'error');
+    term.start_date = v || null;
+    toast(v ? `Term start set to ${new Date(v + 'T12:00:00').toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}.` : 'Term start cleared.', 'ok');
     viewGM();
-  });
+  };
+  startBox?.addEventListener('blur', saveStart);
+  startBox?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); startBox.blur(); } });
   $('#gmNext')?.addEventListener('click', () => {
     if (submitted.length && !confirm(`${submitted.length} plan${submitted.length === 1 ? ' is' : 's are'} still waiting for review. Move on anyway?`)) return;
     setWeek(term.current_week + 1);
