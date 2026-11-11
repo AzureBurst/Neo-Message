@@ -188,6 +188,28 @@ export function icStamp(row, { fmt = 'time', icKey = 'story_at', realKey = 'crea
     + `>${esc(icTxt)}</time>`;
 }
 
+// Hover a stamp for the real time — a floating label kept on screen,
+// so it isn't clipped by scrolling panels.
+if (typeof document !== 'undefined' && !window.__icTipWired) {
+  window.__icTipWired = true;
+  let tip = null;
+  const hide = () => { tip?.remove(); tip = null; };
+  document.addEventListener('mouseover', (e) => {
+    const t = e.target.closest?.('.ic-stamp[data-real]');
+    if (!t || !matchMedia('(hover: hover)').matches) return;
+    hide();
+    tip = document.createElement('div');
+    tip.className = 'ic-tip'; tip.textContent = t.dataset.real;
+    document.body.appendChild(tip);
+    const r = t.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    const left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+    const top = r.top - h - 6 < 8 ? r.bottom + 6 : r.top - h - 6;
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+    t.addEventListener('mouseleave', hide, { once: true });
+  });
+  document.addEventListener('scroll', hide, true);
+}
+
 // Tap a stamp to flip between IC and real time (phones have no hover).
 if (typeof document !== 'undefined' && !window.__icStampWired) {
   window.__icStampWired = true;

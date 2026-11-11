@@ -4087,16 +4087,13 @@ html.calm .qr-ai .qr-w { opacity: 1; animation: none; }
 .qr-ai .qr-wb .qr-w { animation-name: qrAiWord; }
 
 /* ---------- IC timestamps: hover / tap for the real time ---------- */
+.ic-tip { position: fixed; z-index: 9999; white-space: nowrap; padding: 5px 9px; border-radius: 8px; pointer-events: none;
+  background: rgba(10,12,18,.96); color: #fff; border: 1px solid rgba(255,255,255,.14);
+  font: 600 11px/1.2 var(--font-ui); box-shadow: 0 6px 18px rgba(0,0,0,.35); animation: icTip .14s ease-out; }
+@keyframes icTip { from { opacity: 0; transform: translateY(3px); } }
 .ic-stamp[data-real] { position: relative; cursor: help; }
 @media (hover: hover) {
   .ic-stamp[data-real]:hover { text-decoration: underline dotted; text-underline-offset: 2px; }
-  .ic-stamp[data-real]:hover::after {
-    content: attr(data-real); position: absolute; z-index: 60; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-    white-space: nowrap; padding: 5px 9px; border-radius: 8px; pointer-events: none;
-    background: rgba(10,12,18,.96); color: #fff; border: 1px solid rgba(255,255,255,.14);
-    font: 600 11px/1.2 var(--font-ui); letter-spacing: 0; text-transform: none; box-shadow: 0 6px 18px rgba(0,0,0,.35);
-    animation: icTip .14s ease-out; }
-  @keyframes icTip { from { opacity: 0; transform: translate(-50%, 3px); } }
 }
 @media (hover: none) {
   .ic-stamp[data-real] { cursor: pointer; }
