@@ -467,3 +467,17 @@ body.mt-page .modal-head h3 { color: var(--text); }
 .ft-stage .ft-hidden { opacity: .75; letter-spacing: .01em; }
 .ft-stage:not(.done) .ft-hidden + small { opacity: .7; }
 .ft-gmonly { font-style: normal; opacity: .65; }
+
+/* Reputation is free text now */
+.rep-text { background: #eef3ff !important; color: #1d3f86 !important; border: 1px solid #c9d7f5; white-space: normal; max-width: 100%; }
+.ft-rep-text { width: 100%; margin: 6px 0 0; font: 500 14.5px/1.45 var(--font-ui, sans-serif); color: #1e2a44; white-space: pre-wrap; }
+textarea.ft-rep-text { padding: 9px 11px; border-radius: 10px; border: 1px solid #c9d3e6; background: #fff; resize: vertical; }
+.gm-rep { width: 100%; min-width: 180px; padding: 6px 9px; border-radius: 8px; border: 1px solid #c9d3e6; font: 500 13px var(--font-ui, sans-serif); }
+.gm-start { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; font: 600 13px var(--font-ui, sans-serif); color: #33415c; }
+.gm-start input { padding: 5px 8px; border-radius: 8px; border: 1px solid #c9d3e6; }
+.ft-began { display: block; font-size: 11px; color: #6b7891; font-weight: 500; }
+.ft-conn-top .ft-adj { margin-left: 8px; }
+.mt-modal .ft-plan-row { background: rgba(255,255,255,.03); }
+.mt-modal .ft-plan-row.on { background: color-mix(in srgb, var(--tc) 24%, #15171f); background-image: none; }
+.mt-modal .ft-plan-row strong { color: #fff; }
+.mt-modal .ft-plan-row small { color: #aab4c8; }

@@ -88,6 +88,8 @@ const REPUTATION = [
 ];
 const DEFAULT_HEADLINE = 'Together we are Neo Heroes';
 const repSlug = l => String(l || 'Unknown').toLowerCase().replace(/\s+/g, '-');
+/* Reputation is free text the GM writes; nothing shows until there is some. */
+const repPill = (t, cls = 'mt-rep') => (t && t.trim() ? `<span class="${cls} rep-text">★ ${esc(t.trim())}</span>` : '');
 
 /* ------------------------------------------------------------------ */
 /*  people                                                            */
@@ -164,7 +166,7 @@ async function viewProfile(uid) {
   const name = v.char_name || userOf(uid);
   const first = esc(name.split(' ')[0]);
   const top8 = (v.top8 || []).filter(id => people.has(id)).slice(0, 8);
-  const level = rep?.level || 'Unknown';
+  const level = rep?.level || '';
   const row = (k, val) => val ? `<tr><th>${k}</th><td>${esc(val)}</td></tr>` : '';
   const interests = [row('Likes', v.likes), row('Dislikes', v.dislikes), row('Favorite Hero', v.favorite_hero)].join('');
   const details = [row('Status', v.status), row('Height / Weight', v.height_weight), row('Birthday', v.birthday),
@@ -181,7 +183,7 @@ async function viewProfile(uid) {
             <q>${esc(v.headline || DEFAULT_HEADLINE)}</q>
             ${v.status ? `<span>${esc(v.status)}</span>` : ''}
             ${v.birthplace ? `<span>${esc(v.birthplace)}</span>` : ''}
-            <span class="mt-rep rep-${repSlug(level)}" title="${esc(REPUTATION.find(r => r[0] === level)?.[1] || '')}">★ ${esc(level)}</span>
+            ${repPill(level)}
             ${own ? '<span class="mt-online"><i></i>Online now!</span>' : ''}
           </div>
         </div>
@@ -385,7 +387,7 @@ async function viewBrowse() {
           <small>@${esc(p.username)}</small>
           <q class="mt-card-head">${esc(mtRows.get(p.id)?.headline || DEFAULT_HEADLINE)}</q>
           ${mtRows.get(p.id)?.mood ? `<em>Mood: ${esc(mtRows.get(p.id).mood)}</em>` : ''}
-          <span class="mt-rep rep-${repSlug(rep.get(p.id))}">★ ${esc(rep.get(p.id) || 'Unknown')}</span>
+          ${repPill(rep.get(p.id))}
         </a>`).join('') || '<p class="mt-none">Nobody here yet.</p>'}</div>
     </section>`;
   $('#mtFind').addEventListener('input', e => {
@@ -465,7 +467,7 @@ async function viewTranscript(uid) {
         <span class="tr-pill"><b>${s.bennies}</b> Benn${s.bennies === 1 ? 'y' : 'ies'}</span>
         <span class="tr-pill ${s.wounds ? 'bad' : ''}"><b>${s.wounds}</b> Wound${s.wounds === 1 ? '' : 's'}</span>
         <span class="tr-pill ${s.fatigue ? 'bad' : ''}"><b>${s.fatigue}</b> Fatigue</span>
-        <span class="tr-pill rep-${repSlug(rep?.level)}">★ ${esc(rep?.level || 'Unknown')}</span>
+        ${repPill(rep?.level, 'tr-pill')}
       </div>
       <h4 class="tr-h">Attributes</h4>
       <table class="tr-table tr-points"><tr><th>Attribute points</th><td>${s.attr_points || 0}</td></tr></table>
@@ -891,7 +893,7 @@ async function freeTimeData(uid) {
   (rolls || []).filter(r => !r.pending).forEach(r => latestRoll.set(r.context_id, r));
   const byWeek = new Map();
   (entries || []).forEach(e => { if (!byWeek.has(e.week_id)) byWeek.set(e.week_id, []); byWeek.get(e.week_id).push(e); });
-  return { term, progress, conns: conns || [], rep: rep?.level || 'Unknown', plan: plan || {}, weeks: weeks || [],
+  return { term, progress, conns: conns || [], rep: rep?.level || '', plan: plan || {}, weeks: weeks || [],
            byWeek, latestRoll, sheet };
 }
 
@@ -963,6 +965,69 @@ function entryLine(e, D, { roll = true } = {}) {
 
 let draftWeek = null;   // the planner's state survives redraws
 
+/** "Aug 21" — the first day of week n of a term. */
+function weekStart(term, n) {
+  if (!term?.start_date) return '';
+  const d = new Date(term.start_date + 'T12:00:00');
+  d.setDate(d.getDate() + (n - 1) * 7);
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+/** GM: set a player's points for the current week, field by field. */
+function openGmPoints(uid, D, after) {
+  const term = D.term;
+  const week = term ? D.weeks.find(w => w.week === term.current_week) : null;
+  if (week && ['approved', 'resolved'].includes(week.status)) {
+    return toast(`Week ${term.current_week} is already approved. Change their boxes with − / + instead.`, 'info');
+  }
+  const cur = new Map((week ? D.byWeek.get(week.id) || [] : []).map(e => [e.track || e.connection_id, e]));
+  const fields = [...TRACKS.map(t => ({ key: t.key, name: t.name, color: t.color, track: true })),
+                  ...D.conns.map(c => ({ key: c.id, name: c.name, color: '#6b7280', track: false }))];
+  const root = $('#modalRoot');
+  root.innerHTML = `
+    <div class="scrim"><div class="modal modal-wide mt-modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>${esc(nameOf(uid))} · week ${term?.current_week ?? '—'} points</h3><button class="icon-btn" data-x>✕</button></div>
+      <div class="modal-body">
+        <p class="muted small">Set any field from 0 to 3. As the GM you can go over 3 in total. It goes into your review queue as usual.</p>
+        ${fields.map(f => {
+          const e = cur.get(f.key);
+          return `
+          <div class="ft-plan-row ${e ? 'on' : ''}" style="--tc:${f.color}" data-gkey="${esc(f.key)}" data-track="${f.track ? 1 : 0}">
+            <div class="ft-plan-name"><strong>${esc(f.name)}</strong><small>${f.track ? 'Track' : 'Connection'}</small></div>
+            <div class="ft-pts-pick">${[0, 1, 2, 3].map(n => `<button type="button" data-gpts="${n}" class="${(e?.points || 0) === n ? 'on' : ''}">${n || '–'}</button>`).join('')}</div>
+            <textarea class="ft-note" rows="2" placeholder="Note (optional)">${esc(e?.note || '')}</textarea>
+          </div>`;
+        }).join('')}
+        <p class="muted small" id="gpTotal"></p>
+      </div>
+      <div class="modal-foot"><button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" id="gpSave">Save points</button></div>
+    </div></div>`;
+  const close = () => { root.innerHTML = ''; };
+  $$('[data-x]', root).forEach(b => b.addEventListener('click', close));
+  const total = () => $$('[data-gkey]', root).reduce((a, r) => a + +($('[data-gpts].on', r)?.dataset.gpts || 0), 0);
+  const paintTotal = () => { $('#gpTotal', root).textContent = `${total()} point${total() === 1 ? '' : 's'} this week.`; };
+  $$('[data-gkey]', root).forEach(r => $$('[data-gpts]', r).forEach(b => b.addEventListener('click', () => {
+    $$('[data-gpts]', r).forEach(x => x.classList.toggle('on', x === b));
+    r.classList.toggle('on', b.dataset.gpts !== '0'); paintTotal();
+  })));
+  paintTotal();
+  $('#gpSave', root).addEventListener('click', async (ev) => {
+    const entries = $$('[data-gkey]', root).map(r => {
+      const pts = +($('[data-gpts].on', r)?.dataset.gpts || 0), note = $('.ft-note', r).value.trim();
+      const had = cur.has(r.dataset.gkey);
+      if (!pts && !had) return null;
+      return r.dataset.track === '1' ? { track: r.dataset.gkey, points: pts, note } : { connection_id: r.dataset.gkey, points: pts, note };
+    }).filter(Boolean);
+    ev.currentTarget.disabled = true;
+    const { error } = await supa.rpc('ft_gm_set_week', { p_user: uid, p_entries: entries });
+    if (error) {
+      ev.currentTarget.disabled = false;
+      return toast(/ft_gm_set_week|does not exist/.test(error.message) ? 'Run sql/freetime-v2.sql in Supabase first.' : error.message, 'error');
+    }
+    toast('Points saved.', 'ok'); close(); after?.();
+  });
+}
+
 async function viewFreeTime(uid) {
   const D = await freeTimeData(uid);
   const own = uid === me.id;
@@ -995,13 +1060,13 @@ async function viewFreeTime(uid) {
   const past = D.weeks.filter(w => !term || w.week !== term.current_week).reverse();
   main.innerHTML = `
     ${me.is_admin && !own ? `<div class="mt-gmbar"><strong>GM</strong> · ${esc(nameOf(uid))}'s free time<span class="mt-spacer"></span>
-      <label class="mt-inline">Reputation <select id="ftRep">${REPUTATION.map(([l]) => `<option ${l === D.rep ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>` : ''}
+      <button class="mt-btn" id="ftGmPoints">✎ Set points this week</button></div>` : ''}
     <div class="ft-wrap">
       <header class="ft-head">
         <div><h2>Student Progress</h2><p>Spend free time to fill boxes. Fill a whole stage to rank up and unlock its reward.</p></div>
         <div class="ft-meta"><span><small>Student</small><b>${esc(nameOf(uid))}</b></span>
           <span><small>Term</small><b>${esc(term?.name || '—')}</b></span>
-          <span><small>Week</small><b>${term ? `${term.current_week} / ${term.weeks}` : '—'}</b></span></div>
+          <span><small>Week</small><b>${term ? `${term.current_week} / ${term.weeks}` : '—'}</b>${term?.start_date ? `<small class="ft-began">from ${weekStart(term, term.current_week)}</small>` : ''}</span></div>
       </header>
 
       <div class="ft-rules">
@@ -1017,11 +1082,12 @@ async function viewFreeTime(uid) {
       <div class="ft-two">
         <section class="ft-card">
           <div class="ft-card-head"><h3>Connections</h3>${own ? '<button class="mt-btn ghost" id="ftAddConn">＋ Add</button>' : ''}</div>
-          <p class="muted small">NPCs your character spends time with. Each point fills 1 box, no roll. The GM sets a gate you have to clear first.</p>
+          <p class="muted small">NPCs you've built a connection with.</p>
           ${D.conns.map(c => `
             <div class="ft-conn ${c.gate_cleared ? '' : 'gated'}">
               <div class="ft-conn-top"><strong>${esc(c.name)}</strong>
-                <span class="ft-boxes">${Array.from({ length: 5 }, (_, j) => `<i class="${j < c.boxes ? 'on' : ''}"></i>`).join('')}</span></div>
+                <span class="ft-boxes">${Array.from({ length: 5 }, (_, j) => `<i class="${j < c.boxes ? 'on' : ''}"></i>`).join('')}</span>
+                ${me.is_admin ? `<span class="ft-adj"><button data-connadj="${esc(c.id)}:-1" title="Remove a box">−</button><button data-connadj="${esc(c.id)}:1" title="Add a box">+</button></span>` : ''}</div>
               ${c.about ? `<small>${esc(c.about)}</small>` : ''}
               <div class="ft-gate-line">${c.gate_cleared ? '✓ Gate cleared' : `🔒 Gate: ${esc(c.gate || 'the GM will set one')}`}
                 ${me.is_admin ? `<button type="button" class="mt-link" data-gate="${esc(c.id)}">edit</button>` : ''}</div>
@@ -1029,8 +1095,10 @@ async function viewFreeTime(uid) {
         </section>
         <section class="ft-card">
           <h3>Reputation</h3>
-          <p class="muted small">The GM sets this based on what the public sees you do. You can't spend points on it.</p>
-          <div class="ft-rep">${REPUTATION.map(([l, d]) => `<div class="${l === D.rep ? 'on' : ''} rep-${repSlug(l)}"><i></i><b>${l}</b><span>${d}</span></div>`).join('')}</div>
+          <p class="muted small">How you're seen.</p>
+          ${me.is_admin
+            ? `<textarea id="ftRep" class="ft-rep-text" rows="3" placeholder="Written by the GM">${esc(D.rep)}</textarea>`
+            : `<p class="ft-rep-text">${D.rep ? esc(D.rep) : '<span class="mt-none">Nothing yet.</span>'}</p>`}
         </section>
       </div>
 
@@ -1038,16 +1106,16 @@ async function viewFreeTime(uid) {
         <h3>This term</h3>
         <div class="ft-plan">
           <label>What I'm working toward<textarea data-plan="toward" rows="2" ${own ? '' : 'readonly'}>${esc(D.plan.toward || '')}</textarea></label>
-          <label>What I'm letting slide to get there<textarea data-plan="sliding" rows="2" ${own ? '' : 'readonly'}>${esc(D.plan.sliding || '')}</textarea></label>
-          <label class="wide">Deadlines coming up, and what I need to clear them<textarea data-plan="deadlines" rows="2" ${own ? '' : 'readonly'}>${esc(D.plan.deadlines || '')}</textarea></label>
+          <label>Where I'm spending time this week<textarea data-plan="sliding" rows="2" ${own ? '' : 'readonly'}>${esc(D.plan.sliding || '')}</textarea></label>
+          <label class="wide">Deadlines<textarea data-plan="deadlines" rows="2" ${own ? '' : 'readonly'}>${esc(D.plan.deadlines || '')}</textarea></label>
         </div>
       </section>
 
       <section class="ft-card">
-        <div class="ft-card-head"><h3>Semester</h3><small class="muted">${term ? `${term.weeks} weeks, ${term.weeks * 3} points` : ''}</small></div>
+        <div class="ft-card-head"><h3>Semester</h3><small class="muted">${term ? `${term.weeks} weeks, ${term.weeks * 3} points${term.start_date ? ` · began ${weekStart(term, 1)}` : ''}` : ''}</small></div>
         <div class="ft-semester">${term ? Array.from({ length: term.weeks }, (_, i) => {
           const w = i + 1, n = spentByWeek.get(w) || 0;
-          return `<div class="ft-wk ${w === term.current_week ? 'now' : ''} ${w < term.current_week ? 'past' : ''}"><b>${w}</b>
+          return `<div class="ft-wk ${w === term.current_week ? 'now' : ''} ${w < term.current_week ? 'past' : ''}" ${term.start_date ? `title="Week ${w} · from ${weekStart(term, w)}"` : ''}><b>${w}</b>
             <span>${[0, 1, 2].map(j => `<i class="${j < n ? 'on' : ''}"></i>`).join('')}</span></div>`;
         }).join('') : ''}</div>
       </section>
@@ -1090,10 +1158,18 @@ async function viewFreeTime(uid) {
   }));
   $$('[data-gate]', main).forEach(b => b.addEventListener('click', () => editGate(D.conns.find(c => c.id === b.dataset.gate), () => viewFreeTime(uid))));
   $('#ftRep')?.addEventListener('change', async (e) => {
-    const { error } = await supa.from('ft_reputation').upsert({ user_id: uid, level: e.target.value, updated_at: new Date().toISOString() });
-    if (error) return toast(sqlMsg(error), 'error');
-    toast('Reputation updated.', 'ok'); viewFreeTime(uid);
+    const { error } = await supa.from('ft_reputation').upsert({ user_id: uid, level: e.target.value.trim(), updated_at: new Date().toISOString() });
+    if (error) return toast(/check constraint/i.test(error.message) ? 'Run sql/freetime-v2.sql in Supabase first.' : sqlMsg(error), 'error');
+    toast('Reputation saved.', 'ok');
   });
+  $('#ftGmPoints')?.addEventListener('click', () => openGmPoints(uid, D, () => viewFreeTime(uid)));
+  $$('[data-connadj]', main).forEach(b => b.addEventListener('click', async () => {
+    const [id, n] = b.dataset.connadj.split(':');
+    const c = D.conns.find(x => x.id === id);
+    const { error } = await supa.from('ft_connections').update({ boxes: Math.max(0, Math.min(5, c.boxes + +n)) }).eq('id', id);
+    if (error) return toast(sqlMsg(error), 'error');
+    viewFreeTime(uid);
+  }));
   $('#ftAddConn')?.addEventListener('click', async () => {
     const name = prompt('Connection name (an NPC):');
     if (!name?.trim()) return;
@@ -1242,8 +1318,9 @@ async function viewGM() {
         <div class="ft-card-head"><h3>Term</h3><button class="mt-btn ghost" id="gmNewTerm">Start a new term</button></div>
         ${term ? `
           <div class="gm-week"><button class="mt-btn ghost" id="gmPrev" ${term.current_week <= 1 ? 'disabled' : ''}>‹</button>
-            <div><small>${esc(term.name)}</small><b>Week ${term.current_week}</b><small>of ${term.weeks}</small></div>
+            <div><small>${esc(term.name)}</small><b>Week ${term.current_week}</b><small>of ${term.weeks}${term.start_date ? ` · from ${weekStart(term, term.current_week)}` : ''}</small></div>
             <button class="mt-btn" id="gmNext" ${term.current_week >= term.weeks ? 'disabled' : ''}>Next week ›</button></div>
+          <label class="gm-start">Term began <input type="date" id="gmStart" value="${esc(term.start_date || '')}"></label>
           <p class="muted small">Next week gives everyone 3 new points. Unspent points are lost.</p>` : '<p>No term running.</p>'}
       </section>
 
@@ -1289,7 +1366,7 @@ async function viewGM() {
             return `<tr>
               <td><a href="#profile/${esc(p.id)}" class="gm-who">${pic(p.id)}<span>${esc(nameOf(p.id))}<small>@${esc(p.username)}</small></span></a></td>
               <td>${s ? `<span class="gm-ok">✓</span> ● ${s.bennies}${s.wounds ? ` · 🩸${s.wounds}` : ''}` : '<span class="muted">—</span>'}</td>
-              <td><select data-rep="${esc(p.id)}">${REPUTATION.map(([l]) => `<option ${l === (repOf.get(p.id) || 'Unknown') ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+              <td><input type="text" class="gm-rep" data-rep="${esc(p.id)}" value="${esc(repOf.get(p.id) || '')}" placeholder="How they're seen" maxlength="200"></td>
               <td class="gm-acts"><button class="mt-btn" data-quick="${esc(p.id)}">⚡ Stats</button>
                 <a class="mt-btn ghost" href="#transcript/${esc(p.id)}">Sheet</a><a class="mt-btn ghost" href="#freetime/${esc(p.id)}">Free time</a></td>
             </tr>`;
@@ -1309,9 +1386,9 @@ async function viewGM() {
   $$('[data-return]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.return, false, viewGM)));
   $$('[data-gate]', main).forEach(b => b.addEventListener('click', () => editGate((conns || []).find(c => c.id === b.dataset.gate), viewGM)));
   $$('[data-rep]', main).forEach(s => s.addEventListener('change', async () => {
-    const { error } = await supa.from('ft_reputation').upsert({ user_id: s.dataset.rep, level: s.value, updated_at: new Date().toISOString() });
-    if (error) return toast(sqlMsg(error), 'error');
-    toast(`${nameOf(s.dataset.rep)} is now ${s.value}.`, 'ok');
+    const { error } = await supa.from('ft_reputation').upsert({ user_id: s.dataset.rep, level: s.value.trim(), updated_at: new Date().toISOString() });
+    if (error) return toast(/check constraint/i.test(error.message) ? 'Run sql/freetime-v2.sql in Supabase first.' : sqlMsg(error), 'error');
+    toast(`Saved ${nameOf(s.dataset.rep)}'s reputation.`, 'ok');
   }));
   $$('[data-quick]', main).forEach(b => b.addEventListener('click', async () => {
     const s = await getSheet(b.dataset.quick);
@@ -1324,6 +1401,11 @@ async function viewGM() {
     viewGM();
   };
   $('#gmPrev')?.addEventListener('click', () => setWeek(term.current_week - 1));
+  $('#gmStart')?.addEventListener('change', async (e) => {
+    const { error } = await supa.from('ft_terms').update({ start_date: e.target.value || null }).eq('id', term.id);
+    if (error) return toast(/start_date/.test(error.message) ? 'Run sql/freetime-v2.sql in Supabase first.' : sqlMsg(error), 'error');
+    viewGM();
+  });
   $('#gmNext')?.addEventListener('click', () => {
     if (submitted.length && !confirm(`${submitted.length} plan${submitted.length === 1 ? ' is' : 's are'} still waiting for review. Move on anyway?`)) return;
     setWeek(term.current_week + 1);
