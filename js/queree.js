@@ -9,11 +9,12 @@
 
 import {
   supa, requireProfile, ungate, mountCarrier, setClockSource, startPresence,
-  esc, toast, uploadFile, shrinkImage, lightbox, $, $$
+  esc, toast, uploadFile, shrinkImage, lightbox, $, $$, icStamp, icAt
 } from './supa.js';
 import { loadClock, storyNow } from './clock.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { playSound } from './sfx.js';
+import { openRoller, openRequest, rollCard, requestCard, loadRequests, requestResultsHtml, wireRequestButtons } from './dice.js';
 import {
   inline, parseWiki, parseInfobox, parseForum, forumLine, postNumber,
   matchPages, snippet
@@ -337,13 +338,16 @@ async function viewSearch(id) {
   const indexed = allIndexed.filter(p => p.kind !== 'ai');
   const total = real.length + indexed.length;
   const secs = (0.18 + (s.query.length % 7) * 0.07).toFixed(2);
+  const dice = await diceFor(id);
 
   main.innerHTML = `
     <div class="qr-results">
       <div class="qr-results-bar">
         <button class="qr-mini-logo" id="qrHomeLogo" title="New search"><img src="assets/queree-logo.png" alt="Queree"></button>
         ${searchBox({ value: s.query })}
+        ${!me.is_admin ? '<button class="qr-dice" id="qrDice" title="Roll a trait">🎲</button>' : ''}
       </div>
+      ${dice.html}
       <p class="qr-count">${total
         ? `About ${total} result${total === 1 ? '' : 's'} (${secs} seconds)` : isDeadNow ? `About 0 results (${secs} seconds)` : ''}</p>
 
@@ -375,6 +379,9 @@ async function viewSearch(id) {
     go('result', { source, id: rid, searchId: id });
   }));
   $('#qrAnswerThis')?.addEventListener('click', () => go('answer', { searchId: id }));
+  wireRequestButtons(main, { me, reqs: dice.reqs, onDone: () => go('search', { searchId: id }) });
+  $('#qrDice')?.addEventListener('click', () =>
+    openRoller({ me, kind: 'queree', ctx: id, title: 'Roll a trait', onDone: () => go('search', { searchId: id }) }));
   $$('[data-dym]', main).forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); runSearch(a.dataset.dym); }));
   wireAi(main, { onSearch: runSearch });
 }
@@ -388,7 +395,7 @@ function viewHistory() {
         <div class="qr-hist-row">
           <button class="qr-hist-q" data-open="${esc(s.id)}">
             <i class="qr-tab-dot ${s.status}"></i>${esc(s.query)}
-            <small>${new Date(s.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+            <small>${icStamp(s, { fmt: 'short' })}
               · ${s.status === 'pending' ? 'waiting on results' : 'answered'}${s.closed ? '' : ' · open tab'}</small>
           </button>
           <button class="icon-btn" data-del="${esc(s.id)}" title="Delete">🗑</button>
@@ -504,6 +511,22 @@ function renderBody(r) {
 /* ------------------------------------------------------------------ */
 
 let names = new Map();
+/* Roll requests + rolls attached to one search. */
+async function diceFor(searchId) {
+  if (me.is_admin && !names.size) await loadNames();
+  const { reqs, rolls } = await loadRequests('queree', searchId);
+  const { data: free } = await supa.from('sw_rolls').select('*')
+    .eq('context_kind', 'queree').eq('context_id', searchId).is('request_id', null).order('created_at');
+  const latestFree = (free || []).filter(r => !(free || []).some(x => x.rerolled_from === r.id));
+  const html = [
+    ...reqs.map(q => me.is_admin
+      ? requestResultsHtml(q, rolls.get(q.id) || [], names)
+      : requestCard(q, { mine: (rolls.get(q.id) || []).filter(r => r.user_id === me.id), canRoll: q.targets.includes(me.id) })),
+    ...latestFree.map(r => rollCard(r, { who: me.is_admin ? names.get(r.user_id) : 'You', compact: true }))
+  ].join('');
+  return { reqs, html: html ? `<div class="qr-rolls">${html}</div>` : '' };
+}
+
 async function loadNames() {
   const { data } = await supa.from('profiles').select('id, username');
   names = new Map((data || []).map(p => [p.id, p.username]));
@@ -529,7 +552,7 @@ async function viewInbox() {
       <input type="checkbox" class="qr-pick" value="${esc(s.id)}" aria-label="Select “${esc(s.query)}”">
       <button class="qr-hist-q qr-inbox-row" data-ans="${esc(s.id)}">
         <i class="qr-tab-dot ${s.status}"></i>${esc(s.query)}
-        <small>${esc(names.get(s.user_id) || 'someone')} · ${new Date(s.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</small>
+        <small>${esc(names.get(s.user_id) || 'someone')} · ${icStamp(s, { fmt: 'short' })}</small>
       </button>
       <button class="icon-btn" data-delsearch="${esc(s.id)}" title="Delete this search">🗑</button>
     </div>`;
@@ -590,6 +613,7 @@ async function viewAnswer(searchId) {
   if (!s) { main.innerHTML = '<div class="ig-empty">That search is gone.</div>'; return; }
   const { data: results } = await supa.from('qr_results').select('*').eq('search_id', searchId).order('created_at');
   const suggested = matchPages(pages, s.query);
+  const dice = await diceFor(searchId);
 
   main.innerHTML = `
     <div class="qr-history">
@@ -612,6 +636,10 @@ async function viewAnswer(searchId) {
         ${suggested.map(p => `<div class="qr-hist-row"><span class="qr-hist-q static">${KINDS[p.kind].icon} ${esc(p.title)}</span>
           <button class="btn btn-sm btn-ghost" data-send="${esc(p.id)}">Preview &amp; send</button></div>`).join('')}` : ''}
 
+      <div class="fl-section-head" style="margin-top:18px"><h3>Rolls</h3>
+        <button class="btn btn-sm btn-ghost" id="qrAskRoll">🎲 Ask for a roll</button></div>
+      ${dice.html || '<div class="fl-empty">No rolls yet. Ask for one if the search needs a check — e.g. Research or Hacking.</div>'}
+
       <div class="fl-section-head" style="margin-top:18px"><h3>Results sent · ${results?.length || 0}</h3></div>
       ${(results || []).map(r => `<div class="qr-hist-row">
           <span class="qr-hist-q static">${kindOf(r.kind).icon} ${esc(r.kind === 'none' ? 'Dead end — no results' : (r.title || kindOf(r.kind).label))}<small>${esc(r.kind === 'none' ? (r.body?.suggest ? `Did you mean: ${r.body.suggest}` : 'did not match any documents') : snippet(r, 90))}</small></span>
@@ -622,6 +650,12 @@ async function viewAnswer(searchId) {
 
   $('#qrBackInbox').addEventListener('click', () => go('inbox'));
   $('#qrDelThis').addEventListener('click', () => deleteSearches([searchId], [s]));
+  wireRequestButtons(main, { me, reqs: dice.reqs, onDone: () => go('answer', { searchId }) });
+  $('#qrAskRoll').addEventListener('click', async () => {
+    const id = await openRequest({ kind: 'queree', ctx: searchId, preselect: [s.user_id],
+      title: `Ask ${names.get(s.user_id) || 'them'} for a roll` });
+    if (id) go('answer', { searchId });
+  });
   $$('[data-kind]', main).forEach(b => b.addEventListener('click',
     () => openComposer({ kind: b.dataset.kind, target: 'result', searchId, query: s.query })));
   $$('[data-send]', main).forEach(b => b.addEventListener('click', () => {

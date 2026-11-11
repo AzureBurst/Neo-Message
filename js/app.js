@@ -5,10 +5,11 @@
 import {
   supa, requireProfile, ungate, signOut, mountCarrier, paintAvatar, setClockSource, startPresence,
   formatNumber, shortTime, dayLabel, isJumboEmoji, esc, toast,
-  lightbox, uploadFile, shrinkImage, $, $$
+  lightbox, uploadFile, shrinkImage, $, $$, icStamp, icAt
 } from './supa.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
+import { openRoller, openRequest, rollCard, requestCard } from './dice.js';
 import { playSent, playReceived, isMuted, toggleMute } from './sfx.js';
 import { EMOJI } from './emoji.js';
 
@@ -137,7 +138,7 @@ async function loadThreads() {
     supa.from('conversations').select('*').in('id', ids),
     supa.from('conversation_members').select('conversation_id, user_id').in('conversation_id', ids),
     supa.from('messages')
-        .select('conversation_id, body, image_url, created_at, sender_id, kind')
+        .select('conversation_id, body, image_url, created_at, story_at, sender_id, kind')
         .in('conversation_id', ids)
         .order('created_at', { ascending: false })
         .limit(400)
@@ -209,7 +210,7 @@ function renderThreads() {
         <div class="thread-main">
           <div class="thread-top">
             <span class="thread-name">${esc(t.name)}</span>
-            <span class="thread-time">${t.last ? shortTime(t.last.created_at) : ''}</span>
+            <span class="thread-time">${t.last ? icStamp(t.last) : ''}</span>
           </div>
           <div class="thread-preview">${preview}</div>
         </div>
@@ -341,11 +342,29 @@ function renderStream({ keepScroll = false } = {}) {
   let lastSender = null;
 
   state.messages.forEach((m, i) => {
-    const day = dayLabel(m.created_at);
+    const day = dayLabel(icAt(m));
     if (day !== lastDay) {
       html += `<div class="daystamp">${esc(day)}</div>`;
       lastDay = day;
       lastSender = null;
+    }
+
+    // Dice: a roll result, or the GM asking for one.
+    if (m.kind === 'roll' || m.kind === 'roll_request') {
+      const fresh = !firstPaint && !seenIds.has(m.id) ? 'fresh' : '';
+      if (m.kind === 'roll') {
+        html += `<div class="roll-line ${fresh}" data-mid="${esc(m.id)}">${m.meta
+          ? rollCard(m.meta, { who: m.sender_id === me.id ? 'You' : personName(m.sender_id) })
+          : `<div class="sysline">${esc(m.body)}</div>`}${icStamp(m)}</div>`;
+      } else {
+        const q = m.meta || {};
+        const mine = state.messages.filter(x => x.kind === 'roll' && x.sender_id === me.id && x.meta?.request_id === q.id).map(x => x.meta);
+        const names = new Map((q.targets || []).map(id => [id, id === me.id ? 'you' : personName(id)]));
+        html += `<div class="roll-line ${fresh}" data-mid="${esc(m.id)}">${requestCard(q, {
+          mine, canRoll: (q.targets || []).includes(me.id), gm: me.is_admin, names })}${icStamp(m)}</div>`;
+      }
+      lastSender = null;
+      return;
     }
 
     // "robin added vale" — a small centred line, nobody's bubble.
@@ -401,7 +420,7 @@ function renderStream({ keepScroll = false } = {}) {
           <div class="bubble ${jumbo ? 'jumbo' : ''}">${parts.join('')}</div>
           ${chips ? `<div class="reacts">${chips}</div>` : ''}
         </div>
-        <span class="stamp">${shortTime(m.created_at)}</span>
+        <span class="stamp">${icStamp(m)}</span>
         <div class="msg-actions" role="toolbar" aria-label="Message actions">
           <button type="button" data-act="reply" title="Reply">↩</button>
           <button type="button" data-act="react" title="React">☺</button>
@@ -1294,6 +1313,38 @@ const wantConvo = new URLSearchParams(location.search).get('c');
 if (wantConvo && state.threads.some(t => t.id === wantConvo)) {
   openThread(wantConvo);
 }
+
+/* Dice: players roll into the chat; the GM asks for rolls (js/dice.js). */
+$('#stream').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-rollreq]');
+  if (!b) return;
+  const m = state.messages.find(x => x.kind === 'roll_request' && x.meta?.id === b.dataset.rollreq);
+  if (m) openRoller({ me, request: m.meta });
+});
+$('#diceBtn').addEventListener('click', (e) => {
+  const id = state.openId;
+  if (!id) return;
+  if (!me.is_admin) return openRoller({ me, kind: 'message', ctx: id, title: 'Roll into this chat' });
+  // GM: ask the players, or roll yourself.
+  document.querySelector('.dice-pop')?.remove();
+  const pop = document.createElement('div');
+  pop.className = 'dice-pop';
+  pop.innerHTML = '<button type="button" data-a="ask">🎯 Ask for a roll</button><button type="button" data-a="me">🎲 Roll it myself</button>';
+  e.currentTarget.closest('.composer').appendChild(pop);
+  const off = (ev) => { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', off, true); } };
+  setTimeout(() => document.addEventListener('click', off, true));
+  pop.addEventListener('click', (ev) => {
+    const a = ev.target.closest('[data-a]')?.dataset.a;
+    if (!a) return;
+    pop.remove();
+    const t = state.threads.find(x => x.id === id);
+    if (a === 'me') return openRoller({ me, kind: 'message', ctx: id, title: 'Roll into this chat' });
+    const people = (t?.others || []).map(pid => state.people.get(pid)).filter(p => p && !p.is_admin)
+      .map(p => ({ id: p.id, username: p.username }));
+    if (!people.length) return toast('Nobody in this chat can roll yet.', 'info');
+    openRequest({ kind: 'message', ctx: id, people });
+  });
+});
 
 /* GM: add or remove anyone in the open chat (js/members.js). */
 $('#membersBtn').addEventListener('click', async () => {
