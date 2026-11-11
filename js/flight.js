@@ -667,7 +667,7 @@ async function paintFlightRolls() {
       <div class="fl-section-head"><h3>Checks</h3>
         <button class="btn btn-ghost btn-sm" id="flDice">🎲 Roll a trait</button></div>
       ${open.map(q => requestCard(q, { mine: (rolls.get(q.id) || []).filter(r => r.user_id === me.id), canRoll: true })).join('')
-        || '<div class="fl-empty">No checks requested. Use 🎲 when a scene calls for a roll.</div>'}
+        || '<div class="fl-empty">No rolls requested.</div>'}
     </section>`;
   wireRequestButtons(box, { me, reqs, onDone: paintFlightRolls });
   $('#flDice', box).addEventListener('click', () => openRoller({ me, kind: 'flight', onDone: paintFlightRolls }));

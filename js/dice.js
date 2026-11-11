@@ -318,11 +318,11 @@ export function openRequest({ kind, ctx = null, people = [], preselect = null, t
           <input type="text" id="srTrait" list="srList" placeholder="Notice · or “Smarts or Common Knowledge”">
           <datalist id="srList">${[...ATTRS.map(cap), ...Object.keys(SKILLS)].map(s => `<option value="${esc(s)}">`).join('')}</datalist>
           <div class="sw-quick">${QUICK.map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
-          <small class="muted">Use “or” to let them pick, e.g. “Vigor or Athletics”.</small></div>
+          <small class="muted">Use “or” to give a choice, like “Vigor or Athletics”.</small></div>
         <div class="sw-modrow"><span>Modifier</span>
           <button type="button" class="sw-step" data-step="-1">−</button><strong class="sw-modval" id="srMod">±0</strong><button type="button" class="sw-step" data-step="1">+</button></div>
         <div class="field"><label for="srNote">Note for them (optional)</label>
-          <input type="text" id="srNote" maxlength="200" placeholder="e.g. You hear footsteps behind the lockers…"></div>
+          <input type="text" id="srNote" maxlength="200" placeholder="Optional"></div>
         ${people.length ? `<div class="field"><label>Who rolls</label>
           <div class="sw-who">${people.map(p => `<label><input type="checkbox" value="${esc(p.id)}" ${pre.has(p.id) ? 'checked' : ''}> ${esc(p.username)}</label>`).join('')}</div></div>` : ''}
       </div>

@@ -85,6 +85,7 @@ const REPUTATION = [
   ['Promising', 'better assignments'], ['Rising Star', 'internships, gear budget'],
   ['Household Name', 'villains come looking']
 ];
+const DEFAULT_HEADLINE = 'Together we are Neo Heroes';
 const repSlug = l => String(l || 'Unknown').toLowerCase().replace(/\s+/g, '-');
 
 /* ------------------------------------------------------------------ */
@@ -149,11 +150,10 @@ window.addEventListener('hashchange', route);
 
 async function viewProfile(uid) {
   const own = uid === me.id;
-  const [{ data: p, error }, { data: rep }, { data: comments }, priv] = await Promise.all([
+  const [{ data: p, error }, { data: rep }, { data: comments }] = await Promise.all([
     supa.from('mt_profiles').select('*').eq('user_id', uid).maybeSingle(),
     supa.from('ft_reputation').select('level').eq('user_id', uid).maybeSingle(),
-    supa.from('mt_comments').select('*').eq('profile_id', uid).order('created_at', { ascending: false }).limit(40),
-    canSeePrivate(uid) ? supa.from('mt_private').select('secret').eq('user_id', uid).maybeSingle() : Promise.resolve({ data: null })
+    supa.from('mt_comments').select('*').eq('profile_id', uid).order('created_at', { ascending: false }).limit(40)
   ]);
   if (error) throw error;
   const v = p || {};
@@ -162,9 +162,9 @@ async function viewProfile(uid) {
   const top8 = (v.top8 || []).filter(id => people.has(id)).slice(0, 8);
   const level = rep?.level || 'Unknown';
   const row = (k, val) => val ? `<tr><th>${k}</th><td>${esc(val)}</td></tr>` : '';
-  const interests = [row('Likes', v.likes), row('Dislikes', v.dislikes), row('Favorite Hero', v.favorite_hero), row('Languages', v.languages)].join('');
+  const interests = [row('Likes', v.likes), row('Dislikes', v.dislikes), row('Favorite Hero', v.favorite_hero)].join('');
   const details = [row('Status', v.status), row('Height / Weight', v.height_weight), row('Birthday', v.birthday),
-    row('Birthplace', v.birthplace), row('Social Class', v.social_class)].join('');
+    row('Birthplace', v.birthplace)].join('');
   const myTop = mtRows.get(me.id)?.top8 || [];
 
   main.innerHTML = `
@@ -174,7 +174,7 @@ async function viewProfile(uid) {
         <div class="mt-idcard">
           <button class="mt-photo" type="button" ${photoOf(uid) ? 'data-zoom' : ''}>${pic(uid, 'xl')}</button>
           <div class="mt-idinfo">
-            ${v.headline ? `<q>${esc(v.headline)}</q>` : own ? '<q class="muted">Add a headline…</q>' : ''}
+            <q>${esc(v.headline || DEFAULT_HEADLINE)}</q>
             ${v.status ? `<span>${esc(v.status)}</span>` : ''}
             ${v.birthplace ? `<span>${esc(v.birthplace)}</span>` : ''}
             <span class="mt-rep rep-${repSlug(level)}" title="${esc(REPUTATION.find(r => r[0] === level)?.[1] || '')}">★ ${esc(level)}</span>
@@ -206,16 +206,10 @@ async function viewProfile(uid) {
           <h3>${esc(name)}'s Details</h3>
           ${details ? `<table class="mt-table">${details}</table>` : '<p class="mt-none">Nothing here yet.</p>'}
         </section>
-        ${canSeePrivate(uid) ? `
-        <section class="mt-box mt-secret">
-          <h3>🔒 Fears / Biggest Secret</h3>
-          <p>${priv?.data?.secret ? esc(priv.data.secret) : '<span class="mt-none">Nothing written.</span>'}</p>
-          <small>Only ${own ? 'you' : esc(first)} and the GM can see this.</small>
-        </section>` : ''}
       </aside>
 
       <section class="mt-col mt-right">
-        <div class="mt-network"><b>${esc(name)}</b> ${own ? 'is you. Looking good.' : 'is in your extended network'}</div>
+        <div class="mt-network"><b>${esc(name)}</b> ${own ? 'is you.' : 'is in your extended network'}</div>
 
         <section class="mt-box">
           <h3>${esc(name)}'s Blurbs</h3>
@@ -256,12 +250,12 @@ async function viewProfile(uid) {
     </div>`;
 
   $('[data-zoom]', main)?.addEventListener('click', () => lightbox(photoOf(uid)));
-  $('#mtEdit')?.addEventListener('click', () => openProfileEditor(uid, v, priv?.data?.secret || ''));
+  $('#mtEdit')?.addEventListener('click', () => openProfileEditor(uid, v));
   $('#mtToComment').addEventListener('click', () => { $('#mtCommentText').focus(); $('#mtComments').scrollIntoView({ behavior: 'smooth' }); });
   $('#mtAddFriend')?.addEventListener('click', async () => {
     const cur = mtRows.get(me.id)?.top8 || [];
     const next = cur.includes(uid) ? cur.filter(x => x !== uid) : [...cur, uid];
-    if (next.length > 8) return toast('Your Top 8 is full — edit your profile to swap someone out.', 'info');
+    if (next.length > 8) return toast('Your Top 8 is full. Edit your profile to swap someone out.', 'info');
     const { error } = await supa.from('mt_profiles').upsert({ user_id: me.id, top8: next, updated_at: new Date().toISOString() });
     if (error) return toast(sqlMsg(error), 'error');
     mtRows.set(me.id, { ...(mtRows.get(me.id) || {}), top8: next });
@@ -286,7 +280,7 @@ async function viewProfile(uid) {
 
 const paras = t => String(t || '').split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
 
-function openProfileEditor(uid, v, secret) {
+function openProfileEditor(uid, v) {
   const root = $('#modalRoot');
   const f = (id, label, val, ph = '', type = 'input') => `
     <div class="field"><label for="${id}">${label}</label>
@@ -304,7 +298,7 @@ function openProfileEditor(uid, v, secret) {
             <div class="field"><label>Picture <span class="muted">(character skin)</span></label>
               <div class="mt-photo-edit">${pic(uid, 'lg')}<input type="file" id="ePhoto" accept="image/*">
               <input type="text" id="ePhotoUrl" value="${esc(v.photo_url || '')}" placeholder="…or paste an image link"></div></div>
-            ${f('eHead', 'Headline', v.headline, '“Fly first, ask questions later.”')}
+            ${f('eHead', 'Headline', v.headline, DEFAULT_HEADLINE)}
             ${f('eMood', 'Mood', v.mood, 'caffeinated')}
             ${f('eSong', 'Profile song', v.song, 'Artist – Song')}
             <h5 class="mt-edit-h">Details</h5>
@@ -312,8 +306,7 @@ function openProfileEditor(uid, v, secret) {
             ${f('eHW', 'Height / Weight', v.height_weight, '5\'9" / 150 lbs')}
             ${f('eBday', 'Birthday', v.birthday)}
             ${f('eBplace', 'Birthplace', v.birthplace)}
-            ${f('eClass', 'Familial social class', v.social_class)}
-            ${f('eLang', 'Languages', v.languages)}
+            <p class="muted small">Social class, languages and your biggest secret are on your Transcript, where only you and the GM can see them.</p>
           </div>
           <div>
             <h5 class="mt-edit-h">Interests</h5>
@@ -324,8 +317,6 @@ function openProfileEditor(uid, v, secret) {
             ${f('eAbout', 'About me', v.about_me, '', 'area')}
             ${f('eMeet', 'Who I\'d like to meet', v.want_to_meet, '', 'area')}
             ${f('eRel', 'Relationships', v.relationships, 'Who matters to your character, and how.', 'area')}
-            <div class="field mt-secret-field"><label for="eSecret">🔒 Fears / biggest secret <span class="muted">(only you + the GM)</span></label>
-              <textarea id="eSecret" rows="3">${esc(secret || '')}</textarea></div>
           </div>
         </div>
         <h5 class="mt-edit-h">Top 8 <small class="muted" id="eTopN"></small></h5>
@@ -355,18 +346,15 @@ function openProfileEditor(uid, v, secret) {
     const row = {
       user_id: uid, char_name: val('#eName'), photo_url: photo, headline: val('#eHead'), mood: val('#eMood'),
       song: val('#eSong'), status: val('#eStatus'), height_weight: val('#eHW'), birthday: val('#eBday'),
-      birthplace: val('#eBplace'), social_class: val('#eClass'), languages: val('#eLang'),
+      birthplace: val('#eBplace'),
       favorite_hero: val('#eHero'), likes: val('#eLikes'), dislikes: val('#eDislikes'), about_me: val('#eAbout'),
       want_to_meet: val('#eMeet'), relationships: val('#eRel'),
       top8: $$('.mt-top-pick input:checked', root).map(i => i.value), updated_at: new Date().toISOString()
     };
-    const [{ error }, { error: e2 }] = await Promise.all([
-      supa.from('mt_profiles').upsert(row),
-      supa.from('mt_private').upsert({ user_id: uid, secret: val('#eSecret'), updated_at: new Date().toISOString() })
-    ]);
-    if (error || e2) {
+    const { error } = await supa.from('mt_profiles').upsert(row);
+    if (error) {
       btn.disabled = false; btn.textContent = 'Save profile';
-      $('#eMsg', root).innerHTML = `<div class="notice notice-error">${esc(sqlMsg(error || e2))}</div>`;
+      $('#eMsg', root).innerHTML = `<div class="notice notice-error">${esc(sqlMsg(error))}</div>`;
       return;
     }
     mtRows.set(uid, row);
@@ -391,6 +379,7 @@ async function viewBrowse() {
           ${pic(p.id, 'lg')}
           <strong>${esc(nameOf(p.id))}</strong>
           <small>@${esc(p.username)}</small>
+          <q class="mt-card-head">${esc(mtRows.get(p.id)?.headline || DEFAULT_HEADLINE)}</q>
           ${mtRows.get(p.id)?.mood ? `<em>Mood: ${esc(mtRows.get(p.id).mood)}</em>` : ''}
           <span class="mt-rep rep-${repSlug(rep.get(p.id))}">★ ${esc(rep.get(p.id) || 'Unknown')}</span>
         </a>`).join('') || '<p class="mt-none">Nobody here yet.</p>'}</div>
@@ -432,7 +421,10 @@ function derivedOf(s) {
 }
 
 async function viewTranscript(uid) {
+  if (!canSeePrivate(uid)) uid = me.id;          // transcripts are private
   const sheet = await getSheet(uid);
+  const { data: priv } = await supa.from('mt_private').select('*').eq('user_id', uid).maybeSingle();
+  const pv = priv || {};
   const s = sheet || blankSheet(uid);
   const { data: rep } = await supa.from('ft_reputation').select('level').eq('user_id', uid).maybeSingle();
   const d = derivedOf(s);
@@ -453,6 +445,13 @@ async function viewTranscript(uid) {
 
   const tabs = {
     education: `
+      <div class="tr-personal-head"><h4 class="tr-h">Personal record</h4>
+        <button type="button" class="tr-editlink" id="trPersonal">✎ Edit</button></div>
+      <table class="tr-table tr-kv tr-personal">
+        <tr><th>Familial Social Class</th><td>${esc(pv.social_class || '')}</td></tr>
+        <tr><th>Languages</th><td>${esc(pv.languages || '')}</td></tr>
+        <tr><th>Fears / Biggest Secret</th><td>${esc(pv.secret || '')}</td></tr>
+      </table>
       <table class="tr-table tr-derived">
         <tr><th>Parry <small>(2 + Fighting/2)</small></th><td>${d.parry}</td><th>Toughness <small>(2 + Vigor/2)</small></th><td>${d.toughness}${d.armor ? ` (${d.armor})` : ''}</td></tr>
         <tr><th>Pace</th><td>${esc(d.pace)} Blocks</td><th>Dash</th><td>${esc(d.dash)}</td></tr>
@@ -518,7 +517,7 @@ async function viewTranscript(uid) {
             <span>@${esc(userOf(uid))}</span></div>
           <span class="tr-seal">OFFICIAL<br>RECORD</span>
         </header>
-        ${!sheet && !me.is_admin ? '<p class="tr-empty">Your record hasn\'t been filed yet. The GM fills this in.</p>' : ''}
+        ${!sheet && !me.is_admin ? '<p class="tr-empty">No stats on file yet. The GM fills these in.</p>' : ''}
         <div class="tr-body">${tabs[transcriptTab]}</div>
       </div>
       <nav class="tr-tabs" aria-label="Sections">
@@ -536,6 +535,7 @@ async function viewTranscript(uid) {
         const { data, error } = await supa.rpc('sw_roll', { p_trait: b.dataset.rolltrait, p_mod: mod, p_kind: 'mytime' });
         if (error) throw error; return data;
       }, options: [b.dataset.rolltrait] })));
+  $('#trPersonal')?.addEventListener('click', () => openPersonalEditor(uid, pv));
   $('#trQuick')?.addEventListener('click', () => openQuickEntry(uid, s, !sheet));
   $('#trEdit')?.addEventListener('click', () => openSheetEditor(uid, s, !sheet));
   $$('[data-adj]', main).forEach(b => b.addEventListener('click', async () => {
@@ -545,6 +545,35 @@ async function viewTranscript(uid) {
     if (error) return toast(sqlMsg(error), 'error');
     viewTranscript(uid);
   }));
+}
+
+/** Social class, languages, secret — only the player and the GM see these. */
+function openPersonalEditor(uid, pv) {
+  const root = $('#modalRoot');
+  root.innerHTML = `
+    <div class="scrim"><div class="modal mt-modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Personal record</h3><button class="icon-btn" data-x>✕</button></div>
+      <div class="modal-body">
+        <p class="muted small">Only ${uid === me.id ? 'you' : esc(nameOf(uid))} and the GM can see these.</p>
+        <div class="field"><label for="pClass">Familial social class</label><input type="text" id="pClass" maxlength="200" value="${esc(pv.social_class || '')}"></div>
+        <div class="field"><label for="pLang">Languages</label><input type="text" id="pLang" maxlength="200" value="${esc(pv.languages || '')}"></div>
+        <div class="field"><label for="pSecret">Fears / biggest secret</label><textarea id="pSecret" rows="4">${esc(pv.secret || '')}</textarea></div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" id="pSave">Save</button></div>
+    </div></div>`;
+  const close = () => { root.innerHTML = ''; };
+  $$('[data-x]', root).forEach(b => b.addEventListener('click', close));
+  $('#pSave', root).addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
+    const v = id => $(id, root).value.trim() || null;
+    const { error } = await supa.from('mt_private').upsert({
+      user_id: uid, social_class: v('#pClass'), languages: v('#pLang'), secret: v('#pSecret'), updated_at: new Date().toISOString() });
+    if (error) {
+      e.currentTarget.disabled = false;
+      return toast(/social_class|languages|column/i.test(error.message) ? 'Run sql/mytime-private.sql in Supabase first.' : sqlMsg(error), 'error');
+    }
+    toast('Saved.', 'ok'); close(); viewTranscript(uid);
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -664,7 +693,7 @@ function openQuickEntry(uid, current, isNew) {
     const { sheet, found } = parseStatBlock(e.target.value, base);
     draft = sheet; paint();
     const bits = [...found.attrs, ...found.skills, ...found.other];
-    $('#qeFound', root).innerHTML = bits.length ? bits.map(b => `<span class="qe-tag">${esc(b)}</span>`).join('') : '<small class="muted">Nothing recognised yet — try “Agility d6”.</small>';
+    $('#qeFound', root).innerHTML = bits.length ? bits.map(b => `<span class="qe-tag">${esc(b)}</span>`).join('') : '<small class="muted">Nothing recognised yet. Try “Agility d6”.</small>';
   });
   root.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -751,7 +780,7 @@ function openSheetEditor(uid, current, isNew) {
               <label>Wounds <input type="number" id="seWou" min="0" max="6" value="${s.wounds}"></label>
               <label>Fatigue <input type="number" id="seFat" min="0" max="5" value="${s.fatigue}"></label>
             </div>
-            <h5 class="mt-edit-h">Derived <small class="muted">— leave blank to calculate</small></h5>
+            <h5 class="mt-edit-h">Derived <small class="muted">(leave blank to calculate)</small></h5>
             <div class="se-nums">
               ${[['parry', 'Parry'], ['toughness', 'Toughness'], ['armor', 'Armor'], ['pace', 'Pace'], ['dash', 'Dash'], ['encumbrance', 'Encumbrance'], ['carry', 'Max carry']]
                 .map(([k, l]) => `<label>${l} <input type="text" data-der="${k}" value="${esc(d[k] ?? '')}" placeholder="${esc(derivedOf({ ...s, derived: {} })[k] ?? '')}"></label>`).join('')}
@@ -874,8 +903,11 @@ function trackBoard(D, { gm = false } = {}) {
             <span class="ft-boxes">${Array.from({ length: st.size }, (_, j) => `<i class="${j < filled ? 'on' : ''}"></i>`).join('')}</span>
             <span class="ft-pen">${st.pen === 0 ? '−0' : '−' + Math.abs(st.pen)}</span>
           </div>
-          <strong>${locked ? '🔒 ' : done ? '✓ ' : ''}${esc(t.perks[i][0])}</strong>
-          <small>${esc(t.perks[i][1])}</small>
+          ${done || gm ? `
+          <strong>${done ? '✓ ' : ''}${esc(t.perks[i][0])}</strong>
+          <small>${esc(t.perks[i][1])}${!done ? ' <em class="ft-gmonly">(hidden from player)</em>' : ''}</small>` : `
+          <strong class="ft-hidden">${locked ? '🔒 ' : ''}Rank ${st.rank} reward</strong>
+          <small>${locked ? 'Locked' : `${filled} / ${st.size} boxes`}</small>`}
         </div>`;
       start += st.size;
       return html;
@@ -891,7 +923,7 @@ function trackBoard(D, { gm = false } = {}) {
         <div class="ft-stages">${stages}</div>
       </div>`;
   }).join('')}
-  <p class="ft-gate">Control: Rank 4 needs Conditioning 3 first. Rank 5 needs Heroism 3. Your body has to hold the power, and the school won't unlock the rest until it sees what you do with it.</p>
+  <p class="ft-gate">Control Rank 4 needs Conditioning Rank 3. Control Rank 5 needs Heroism Rank 3.</p>
   </div>`;
 }
 
@@ -929,9 +961,9 @@ async function viewFreeTime(uid) {
   else {
     const es = D.byWeek.get(thisWeek.id) || [];
     const head = {
-      submitted: ['Waiting for the GM', 'Your plan is in. You\'ll get a notification when it\'s approved.'],
-      approved: ['Approved — time to roll', 'Roll each 1-point track. Raise fills 2 boxes, success 1, failure none and earns a complication.'],
-      resolved: ['Week done', 'Points spent. See you next week.']
+      submitted: ['Submitted', 'The GM will review it. You\'ll get a notification.'],
+      approved: ['Approved', 'Roll each 1-point track below.'],
+      resolved: ['Done', 'All points for this week are spent.']
     }[thisWeek.status];
     weekCard = `
       <div class="ft-card ft-week ${thisWeek.status}">
@@ -950,16 +982,16 @@ async function viewFreeTime(uid) {
       <label class="mt-inline">Reputation <select id="ftRep">${REPUTATION.map(([l]) => `<option ${l === D.rep ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>` : ''}
     <div class="ft-wrap">
       <header class="ft-head">
-        <div><h2>Student Progress</h2><p>Spend your free time, fill boxes, climb the track. The reward is printed in the box you're filling toward.</p></div>
+        <div><h2>Student Progress</h2><p>Spend free time to fill boxes. Fill a whole stage to rank up and unlock its reward.</p></div>
         <div class="ft-meta"><span><small>Student</small><b>${esc(nameOf(uid))}</b></span>
           <span><small>Term</small><b>${esc(term?.name || '—')}</b></span>
           <span><small>Week</small><b>${term ? `${term.current_week} / ${term.weeks}` : '—'}</b></span></div>
       </header>
 
       <div class="ft-rules">
-        <div><b>Put 1 in</b><span>Roll the track's trait at the penalty shown. Raise fills 2 boxes, success fills 1, failure fills none and earns a complication.</span></div>
-        <div><b>Put 2 in</b><span>No roll, fill 1 box. Buys a sure thing while the stage is at −0 or −1.</span></div>
-        <div><b>Put 3 in</b><span>No roll, fill 1 box. What certainty costs once the stage reaches −2 or −3.</span></div>
+        <div><b>1 point</b><span>Roll the track's trait with the stage penalty. A raise fills 2 boxes and a success fills 1. A failure fills nothing and gives you a complication.</span></div>
+        <div><b>2 points</b><span>No roll, fill 1 box. Only at −0 or −1.</span></div>
+        <div><b>3 points</b><span>No roll, fill 1 box. For −2 and −3.</span></div>
       </div>
 
       ${weekCard}
@@ -969,7 +1001,7 @@ async function viewFreeTime(uid) {
       <div class="ft-two">
         <section class="ft-card">
           <div class="ft-card-head"><h3>Connections</h3>${own ? '<button class="mt-btn ghost" id="ftAddConn">＋ Add</button>' : ''}</div>
-          <p class="muted small">People who train you, cover for you, or believe in you. One box per point spent together, no roll. Clear the gate before you start.</p>
+          <p class="muted small">NPCs your character spends time with. Each point fills 1 box, no roll. The GM sets a gate you have to clear first.</p>
           ${D.conns.map(c => `
             <div class="ft-conn ${c.gate_cleared ? '' : 'gated'}">
               <div class="ft-conn-top"><strong>${esc(c.name)}</strong>
@@ -981,7 +1013,7 @@ async function viewFreeTime(uid) {
         </section>
         <section class="ft-card">
           <h3>Reputation</h3>
-          <p class="muted small">You don't spend points here. The GM moves it based on what the public sees you do.</p>
+          <p class="muted small">The GM sets this based on what the public sees you do. You can't spend points on it.</p>
           <div class="ft-rep">${REPUTATION.map(([l, d]) => `<div class="${l === D.rep ? 'on' : ''} rep-${repSlug(l)}"><i></i><b>${l}</b><span>${d}</span></div>`).join('')}</div>
         </section>
       </div>
@@ -996,7 +1028,7 @@ async function viewFreeTime(uid) {
       </section>
 
       <section class="ft-card">
-        <div class="ft-card-head"><h3>Semester</h3><small class="muted">${term ? `${term.weeks} weeks, ${term.weeks * 3} points — not enough for everything.` : ''}</small></div>
+        <div class="ft-card-head"><h3>Semester</h3><small class="muted">${term ? `${term.weeks} weeks, ${term.weeks * 3} points` : ''}</small></div>
         <div class="ft-semester">${term ? Array.from({ length: term.weeks }, (_, i) => {
           const w = i + 1, n = spentByWeek.get(w) || 0;
           return `<div class="ft-wk ${w === term.current_week ? 'now' : ''} ${w < term.current_week ? 'past' : ''}"><b>${w}</b>
@@ -1008,7 +1040,7 @@ async function viewFreeTime(uid) {
         <details class="ft-past"><summary>Week ${w.week} · ${esc(w.status)}</summary>
           ${(D.byWeek.get(w.id) || []).map(e => entryLine(e, D)).join('')}</details>`).join('')}</section>` : ''}
 
-      <p class="ft-foot">Say what you actually did with the time before anything is rolled or filled. A track you never describe doesn't move. Everyone starts every track at Rank 1.</p>
+      <p class="ft-foot">Every entry needs a note on what your character did. Everyone starts each track at Rank 1.</p>
     </div>`;
 
   wirePlanner(D, uid);
@@ -1047,7 +1079,7 @@ async function viewFreeTime(uid) {
     toast('Reputation updated.', 'ok'); viewFreeTime(uid);
   });
   $('#ftAddConn')?.addEventListener('click', async () => {
-    const name = prompt('Who is it? (a named NPC — a coach, a mentor, a friend who covers for you)');
+    const name = prompt('Connection name (an NPC):');
     if (!name?.trim()) return;
     const about = prompt('How do you know them? (optional)') || '';
     const { error } = await supa.rpc('ft_add_connection', { p_name: name, p_about: about });
@@ -1078,13 +1110,13 @@ function plannerHtml(D, returned) {
           const why = opts.block?.(n);
           return `<button type="button" data-pts="${n}" class="${cur.points === n ? 'on' : ''}" ${why ? `disabled title="${esc(why)}"` : ''}>${n || '–'}</button>`;
         }).join('')}</div>
-        <textarea class="ft-note" rows="2" placeholder="What did your character actually do?" ${cur.points ? '' : 'hidden'}>${esc(cur.note || '')}</textarea>
+        <textarea class="ft-note" rows="2" placeholder="What did your character do?" ${cur.points ? '' : 'hidden'}>${esc(cur.note || '')}</textarea>
       </div>`;
   };
   const trackRows = TRACKS.map(t => {
     const b = D.progress[t.key] || 0, pen = penaltyOf(b), full = b >= capOf(D.progress, t.key);
-    return row(t.key, t.name, full ? (b >= 18 ? 'Complete' : '🔒 Gated — see Control') : `Rank ${rankOf(b)} · stage ${pen === 0 ? '−0' : '−' + Math.abs(pen)} · ${t.traits.map(x => traitDie(D.sheet, x)).join('/')}`,
-      t.color, { block: n => (n && full ? 'This track can\'t move right now.' : n === 2 && pen < -1 ? '2 points only works at −0 or −1.' : n === 3 && pen > -2 ? '3 points is meant for −2 and −3 — use 2 here.' : null) });
+    return row(t.key, t.name, full ? (b >= 18 ? 'Complete' : '🔒 Locked') : `Rank ${rankOf(b)} · stage ${pen === 0 ? '−0' : '−' + Math.abs(pen)} · ${t.traits.map(x => traitDie(D.sheet, x)).join('/')}`,
+      t.color, { block: n => (n && full ? 'This track can\'t move right now.' : n === 2 && pen < -1 ? '2 points only works at −0 or −1.' : n === 3 && pen > -2 ? '3 points is for −2 and −3. Use 2 here.' : null) });
   }).join('');
   const connRows = D.conns.filter(c => c.gate_cleared && c.boxes < 5).map(c =>
     row(c.id, c.name, `Connection · ${c.boxes}/5 · 1 box per point`, '#6b7280', { block: n => (n > 5 - c.boxes ? 'Not enough boxes left.' : null) })).join('');
@@ -1093,7 +1125,7 @@ function plannerHtml(D, returned) {
       <div class="ft-card-head"><h3>Week ${D.term.current_week} · plan your free time</h3>
         <span class="ft-left" id="ftLeft"></span></div>
       ${returned?.gm_note ? `<p class="ft-gmnote"><b>GM sent it back:</b> ${esc(returned.gm_note)}</p>` : ''}
-      <p class="muted small">Up to 3 points, at most one entry per track. Points don't carry over — a quiet week you never use is just gone.</p>
+      <p class="muted small">Up to 3 points, one entry per track. Unspent points don't carry over.</p>
       ${trackRows}
       ${connRows ? `<h4 class="ft-sub">Connections</h4>${connRows}` : ''}
       <div class="ft-plan-foot"><span class="muted small" id="ftWhy"></span><button class="mt-btn" id="ftSubmit" disabled>Submit to the GM</button></div>
@@ -1109,7 +1141,7 @@ function wirePlanner(D, uid) {
     const t = total();
     $('#ftLeft').innerHTML = `${[0, 1, 2].map(i => `<i class="${i < t ? 'on' : ''} ${t > 3 && i === 2 ? 'over' : ''}"></i>`).join('')} <b>${Math.max(0, 3 - t)}</b> left`;
     const missing = Object.entries(draftWeek).filter(([, x]) => x.points && (x.note || '').trim().length < 3);
-    const why = !t ? 'Spend at least one point.' : t > 3 ? 'That\'s more than 3 points.' : missing.length ? 'Every entry needs a note on what your character did.' : '';
+    const why = !t ? 'Spend at least one point.' : t > 3 ? 'That\'s more than 3 points.' : missing.length ? 'Add a note to every entry.' : '';
     $('#ftWhy').textContent = why;
     $('#ftSubmit').disabled = !!why;
   };
@@ -1145,12 +1177,12 @@ async function reviewWeek(weekId, approve, after) {
   }
   const { error } = await supa.rpc('ft_review', { p_week: weekId, p_approve: approve, p_note: note });
   if (error) return toast(sqlMsg(error), 'error');
-  toast(approve ? 'Approved — they\'ve been told to roll.' : 'Sent back.', 'ok');
+  toast(approve ? 'Approved.' : 'Sent back.', 'ok');
   after?.();
 }
 
 async function editGate(c, after) {
-  const gate = prompt(`Gate for ${c.name} — what does it take before they can start?`, c.gate || '');
+  const gate = prompt(`Gate for ${c.name}: what do they need to do first?`, c.gate || '');
   if (gate === null) return;
   const cleared = confirm(`Has ${nameOf(c.user_id)} cleared it?\n\nOK = cleared (they can spend points)\nCancel = still locked`);
   const { error } = await supa.from('ft_connections').update({ gate: gate.trim() || null, gate_cleared: cleared }).eq('id', c.id);
@@ -1196,7 +1228,7 @@ async function viewGM() {
           <div class="gm-week"><button class="mt-btn ghost" id="gmPrev" ${term.current_week <= 1 ? 'disabled' : ''}>‹</button>
             <div><small>${esc(term.name)}</small><b>Week ${term.current_week}</b><small>of ${term.weeks}</small></div>
             <button class="mt-btn" id="gmNext" ${term.current_week >= term.weeks ? 'disabled' : ''}>Next week ›</button></div>
-          <p class="muted small">Moving to the next week opens a fresh 3 points for everyone. Anything unspent is gone.</p>` : '<p>No term running.</p>'}
+          <p class="muted small">Next week gives everyone 3 new points. Unspent points are lost.</p>` : '<p>No term running.</p>'}
       </section>
 
       <section class="ft-card gm-queue">
@@ -1214,7 +1246,7 @@ async function viewGM() {
                 `</strong>${e.track ? `<small class="gm-stage">Rank ${rankOf(b)} · ${penaltyOf(b) === 0 ? '−0' : '−' + Math.abs(penaltyOf(b) ?? 3)}</small>` : ''}`);
             }).join('')}
           </div>`;
-        }).join('') || '<p class="mt-none">Nothing waiting. 🎉</p>'}
+        }).join('') || '<p class="mt-none">Nothing to review.</p>'}
         ${rolling.length ? `<h4 class="ft-sub">Approved, waiting on rolls</h4>${rolling.map(w =>
           `<div class="gm-mini">${pic(w.user_id)} ${esc(nameOf(w.user_id))} · week ${w.week} · ${(byWeek.get(w.id) || []).filter(e => e.status === 'to_roll').map(e => TRACK[e.track]?.name).join(', ')}</div>`).join('')}` : ''}
       </section>
@@ -1283,7 +1315,7 @@ async function viewGM() {
     const name = prompt('Name the new term:', `Term ${(terms || []).length + 1}`);
     if (!name?.trim()) return;
     const weeksN = +(prompt('How many weeks?', '16') || 16);
-    if (!confirm(`Start “${name}”? Track progress carries over; the week resets to 1.`)) return;
+    if (!confirm(`Start “${name}”? Track progress carries over and the week resets to 1.`)) return;
     if (term) await supa.from('ft_terms').update({ active: false }).eq('id', term.id);
     const { error } = await supa.from('ft_terms').insert({ name: name.trim(), weeks: Math.max(1, Math.min(52, weeksN || 16)) });
     if (error) return toast(sqlMsg(error), 'error');

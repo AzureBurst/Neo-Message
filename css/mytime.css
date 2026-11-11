@@ -452,3 +452,18 @@ body.mt-page #modalRoot, body.mt-page .sw-host { color: var(--text); }
 body.mt-page .modal-head h3 { color: var(--text); }
 .gm-table thead th, .gm-table thead tr { background: none !important; border: 0 !important; }
 .gm-table td { background: none !important; }
+
+/* Browse: headline preview on each wall card */
+.mt-card .mt-card-head { display: block; font-style: italic; font-size: 12.5px; line-height: 1.35; color: #2b4a85; margin: 2px 0 4px; }
+.mt-card .mt-card-head::before { content: "“"; } .mt-card .mt-card-head::after { content: "”"; }
+
+/* Transcript: personal record */
+.tr-personal-head { display: flex; align-items: baseline; justify-content: space-between; }
+.tr-editlink { background: none; border: 0; color: #1d4fa8; font: 600 12px var(--font-ui, sans-serif); cursor: pointer; padding: 2px 4px; }
+.tr-editlink:hover { text-decoration: underline; }
+.tr-personal td { white-space: pre-wrap; }
+
+/* Free Time: rewards stay hidden until unlocked */
+.ft-stage .ft-hidden { opacity: .75; letter-spacing: .01em; }
+.ft-stage:not(.done) .ft-hidden + small { opacity: .7; }
+.ft-gmonly { font-style: normal; opacity: .65; }

@@ -638,7 +638,7 @@ async function viewAnswer(searchId) {
 
       <div class="fl-section-head" style="margin-top:18px"><h3>Rolls</h3>
         <button class="btn btn-sm btn-ghost" id="qrAskRoll">🎲 Ask for a roll</button></div>
-      ${dice.html || '<div class="fl-empty">No rolls yet. Ask for one if the search needs a check — e.g. Research or Hacking.</div>'}
+      ${dice.html || '<div class="fl-empty">No rolls yet.</div>'}
 
       <div class="fl-section-head" style="margin-top:18px"><h3>Results sent · ${results?.length || 0}</h3></div>
       ${(results || []).map(r => `<div class="qr-hist-row">

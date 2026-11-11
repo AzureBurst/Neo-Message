@@ -44,6 +44,8 @@ create table if not exists public.mt_profiles (
 create table if not exists public.mt_private (
   user_id  uuid primary key references public.profiles(id) on delete cascade,
   secret   text,
+  social_class text,
+  languages    text,
   updated_at timestamptz not null default now()
 );
 
