@@ -488,3 +488,11 @@ textarea.ft-rep-text { padding: 9px 11px; border-radius: 10px; border: 1px solid
 .mt-browse .cat-filter button[data-cat-filter="all"].on, .gm-players .cat-filter button[data-cat-filter="all"].on { background: #1d3f86; color: #fff; }
 .mt-browse .cat-filter { padding: 4px 0 12px; }
 .mt-card .player-tag, .gm-who .player-tag { background: #e3f6c4; color: #3b6a00; }
+.gm-table tr.gm-sect th { text-align: left; padding: 14px 8px 6px; font: 800 11px var(--font-ui, sans-serif); letter-spacing: .08em;
+  text-transform: uppercase; color: #33415c; border-bottom: 2px solid #c9d3e6; background: transparent; }
+.gm-table tr.gm-sect th span { color: #6b7891; font-weight: 600; margin-left: 4px; }
+.npc-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font: 800 9.5px/1.7 var(--font-ui, sans-serif);
+  letter-spacing: .06em; text-transform: uppercase; background: #ece4fb; color: #5b3aa6; vertical-align: middle; }
+.gm-table tbody tr:hover { background: #f4f7fc; }
+.gm-table tbody tr.gm-sect:hover { background: transparent; }
+.gm-who span.npc-tag, .gm-who span.player-tag { display: inline-block; align-self: flex-start; margin: 2px 0 1px; }

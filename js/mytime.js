@@ -1324,6 +1324,21 @@ async function viewGM() {
   const rolling = (weeks || []).filter(w => w.status === 'approved');
   const D0 = { conns: conns || [], latestRoll: new Map() };
 
+  function gmRow(p) {
+            const s = sheetOf.get(p.id);
+            return `<tr data-cat="${esc(p.category_id || 'none')}">
+              <td><a href="#profile/${esc(p.id)}" class="gm-who">${pic(p.id)}<span>${esc(nameOf(p.id))}${npcIds.has(p.id) ? '<span class="npc-tag">NPC</span>' : playerTag(p.id)}<small>@${esc(p.username)}</small></span></a></td>
+              <td>${s ? `<span class="gm-ok">✓</span> ● ${s.bennies}${s.wounds ? ` · 🩸${s.wounds}` : ''}` : '<span class="muted">—</span>'}</td>
+              <td><input type="text" class="gm-rep" data-rep="${esc(p.id)}" value="${esc(repOf.get(p.id) || '')}" placeholder="How they're seen" maxlength="200"></td>
+              <td class="gm-acts"><button class="mt-btn" data-quick="${esc(p.id)}">⚡ Stats</button>
+                <a class="mt-btn ghost" href="#transcript/${esc(p.id)}">Sheet</a><a class="mt-btn ghost" href="#freetime/${esc(p.id)}">Free time</a></td>
+            </tr>`;
+  }
+  const gmBody = (() => {
+            const all = players(), pl = all.filter(p => !npcIds.has(p.id)), np = all.filter(p => npcIds.has(p.id));
+            const sect = (label, n) => n ? `<tr class="gm-sect"><th colspan="4">${label} <span>${n}</span></th></tr>` : '';
+            return sect('Players', pl.length) + pl.map(gmRow).join('') + sect('NPCs', np.length) + np.map(gmRow).join('');
+          });
   main.innerHTML = `
     <div class="gm-grid">
       <section class="ft-card gm-term">
@@ -1374,16 +1389,7 @@ async function viewGM() {
         ${filterBar(players(), catOf, 'mytime-gm', cats)}
         <table class="gm-table">
           <thead><tr><th>Character</th><th>Sheet</th><th>Reputation</th><th></th></tr></thead>
-          <tbody>${players().map(p => {
-            const s = sheetOf.get(p.id);
-            return `<tr data-cat="${esc(p.category_id || 'none')}">
-              <td><a href="#profile/${esc(p.id)}" class="gm-who">${pic(p.id)}<span>${esc(nameOf(p.id))}${playerTag(p.id)}<small>@${esc(p.username)}</small></span></a></td>
-              <td>${s ? `<span class="gm-ok">✓</span> ● ${s.bennies}${s.wounds ? ` · 🩸${s.wounds}` : ''}` : '<span class="muted">—</span>'}</td>
-              <td><input type="text" class="gm-rep" data-rep="${esc(p.id)}" value="${esc(repOf.get(p.id) || '')}" placeholder="How they're seen" maxlength="200"></td>
-              <td class="gm-acts"><button class="mt-btn" data-quick="${esc(p.id)}">⚡ Stats</button>
-                <a class="mt-btn ghost" href="#transcript/${esc(p.id)}">Sheet</a><a class="mt-btn ghost" href="#freetime/${esc(p.id)}">Free time</a></td>
-            </tr>`;
-          }).join('')}</tbody>
+          <tbody>${gmBody()}</tbody>
         </table>
       </section>
 
@@ -1395,7 +1401,13 @@ async function viewGM() {
     </div>`;
 
   wireVerdicts(main, viewGM);
-  wireFilter(main, 'mytime-gm', { items: '.gm-table tbody tr' });
+  wireFilter(main, 'mytime-gm', { items: '.gm-table tbody tr[data-cat]', onChange: () => {
+    $$('.gm-table tbody tr.gm-sect', main).forEach(h => {
+      let n = h.nextElementSibling, any = false;
+      while (n && !n.classList.contains('gm-sect')) { if (!n.classList.contains('cat-out')) any = true; n = n.nextElementSibling; }
+      h.classList.toggle('cat-out', !any);
+    });
+  } });
   $$('[data-approve]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.approve, true, viewGM)));
   $$('[data-return]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.return, false, viewGM)));
   $$('[data-gate]', main).forEach(b => b.addEventListener('click', () => editGate((conns || []).find(c => c.id === b.dataset.gate), viewGM)));
