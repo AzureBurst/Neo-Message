@@ -12,8 +12,8 @@
 --  Sheets: attributes, skills, power, Edges, Hindrances, gear and the
 --          like are replaced with what's in the transcript. Bennies,
 --          wounds, fatigue and your GM notes are kept.
---  Profiles + personal record: only empty fields are filled, so
---          nothing a player already wrote is overwritten.
+--  Personal record (social class, languages, secret): only empty
+--          fields are filled. MyTime profiles (walls) are not touched.
 --  Needs mytime.sql and mytime-private.sql. Safe to run more than once.
 -- =====================================================================
 
@@ -190,21 +190,6 @@ begin
       edges = excluded.edges, hindrances = excluded.hindrances, gear = excluded.gear, suits = excluded.suits,
       attr_points = excluded.attr_points, skill_points = excluded.skill_points,
       derived = excluded.derived, updated_at = now();
-
-    insert into public.mt_profiles (user_id) values (uid) on conflict (user_id) do nothing;
-    update public.mt_profiles m set
-      char_name     = coalesce(nullif(trim(m.char_name), ''),     t.profile->>'char_name'),
-      height_weight = coalesce(nullif(trim(m.height_weight), ''), t.profile->>'height_weight'),
-      status        = coalesce(nullif(trim(m.status), ''),        t.profile->>'status'),
-      birthday      = coalesce(nullif(trim(m.birthday), ''),      t.profile->>'birthday'),
-      birthplace    = coalesce(nullif(trim(m.birthplace), ''),    t.profile->>'birthplace'),
-      favorite_hero = coalesce(nullif(trim(m.favorite_hero), ''), t.profile->>'favorite_hero'),
-      likes         = coalesce(nullif(trim(m.likes), ''),         t.profile->>'likes'),
-      dislikes      = coalesce(nullif(trim(m.dislikes), ''),      t.profile->>'dislikes'),
-      about_me      = coalesce(nullif(trim(m.about_me), ''),      t.profile->>'about_me'),
-      relationships = coalesce(nullif(trim(m.relationships), ''), t.profile->>'relationships'),
-      updated_at = now()
-     where m.user_id = uid;
 
     insert into public.mt_private (user_id) values (uid) on conflict (user_id) do nothing;
     update public.mt_private v set
