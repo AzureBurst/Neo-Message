@@ -6,6 +6,7 @@
 // =====================================================================
 
 import { supa, esc, toast, initials, $, $$ } from './supa.js';
+import { loadCategoryList, filterBar, wireFilter } from './directory.js';
 
 /**
  * Opens the members panel for a conversation.
@@ -15,7 +16,7 @@ export async function openMembers(convId) {
   const [{ data: conv }, { data: mem }, { data: people }, { data: npcRows }] = await Promise.all([
     supa.from('conversations').select('id, is_group, title').eq('id', convId).maybeSingle(),
     supa.from('conversation_members').select('user_id').eq('conversation_id', convId),
-    supa.from('profiles').select('id, username, avatar_url, is_admin'),
+    supa.from('profiles').select('*'),
     supa.from('npcs').select('id')            // only works once npc.sql is run; fine if not
   ]);
   if (!conv) { toast('That conversation no longer exists.', 'error'); return false; }
@@ -23,12 +24,16 @@ export async function openMembers(convId) {
   const { data: { user } } = await supa.auth.getUser();
   const npcIds = new Set((npcRows || []).map(n => n.id));
   const before = new Set((mem || []).map(m => m.user_id));
+  // In the chat first, then players, then by category, then by name.
+  const cats = await loadCategoryList();
+  const order = new Map(cats.map((c, i) => [c.id, i]));
   const list = (people || []).sort((a, b) =>
-    (before.has(b.id) - before.has(a.id)) || a.username.localeCompare(b.username));
+    (before.has(b.id) - before.has(a.id)) || (npcIds.has(a.id) - npcIds.has(b.id)) ||
+    ((order.get(a.category_id) ?? 99) - (order.get(b.category_id) ?? 99)) || a.username.localeCompare(b.username));
 
   const tag = p => p.id === user?.id ? '<i class="mb-tag">You</i>'
     : p.is_admin ? '<i class="mb-tag">GM</i>'
-    : npcIds.has(p.id) ? '<i class="mb-tag npc">NPC</i>' : '';
+    : npcIds.has(p.id) ? '<i class="mb-tag npc">NPC</i>' : '<i class="mb-tag">Player</i>';
   const av = p => `<span class="mb-av">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : esc(initials(p.username))}</span>`;
 
   const host = document.createElement('div');
@@ -42,8 +47,9 @@ export async function openMembers(convId) {
           <input type="search" id="mbFind" placeholder="Search everyone">
           <span class="mb-count" id="mbCount"></span>
         </div>
+        ${filterBar(list.filter(p => !p.is_admin), p => p.category_id, 'members', cats)}
         <div class="mb-list" id="mbList">${list.map(p => `
-          <label class="mb-row" data-name="${esc(p.username.toLowerCase())}">
+          <label class="mb-row" data-cat="${esc(p.is_admin ? 'gm-row' : (p.category_id || 'none'))}" data-name="${esc(p.username.toLowerCase())}">
             <input type="checkbox" value="${esc(p.id)}" ${before.has(p.id) ? 'checked' : ''}>
             ${av(p)}<span class="mb-name">${esc(p.username)}</span>${tag(p)}
             <span class="mb-change"></span>
@@ -87,6 +93,7 @@ export async function openMembers(convId) {
       $('#mbNote', host).textContent = notes.join(' ');
       $('#mbSave', host).disabled = !d.add.length && !d.remove.length && d.title === (conv.title || '');
     };
+    wireFilter(host, 'members', { items: '.mb-row:not([data-cat="gm-row"])' });
     host.addEventListener('change', paint);
     $('#mbTitle', host).addEventListener('input', paint);
     $('#mbFind', host).addEventListener('input', (e) => {

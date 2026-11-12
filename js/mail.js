@@ -16,7 +16,7 @@ import {
 } from './supa.js';
 import { MAIL_DOMAIN } from './config.js';
 import { playSound } from './sfx.js';
-import { loadDirectory, categoryChip, byCategory } from './directory.js';
+import { loadDirectory, categoryChip, byCategory, loadCategoryList, sortPeople, filterBar, wireFilter } from './directory.js';
 import { loadClock, storyNow } from './clock.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 
@@ -219,12 +219,18 @@ function messageHtml(m) {
 /* ------------------------------------------------------------------ */
 
 async function renderDirectory() {
-  const dir = await loadDirectory({ fresh: true });
+  const [raw, cats] = await Promise.all([loadDirectory({ fresh: true }), loadCategoryList()]);
+  const dir = sortPeople(raw, { catOf: p => p.category_id, isNpc: p => p.is_npc, nameOf: p => p.username }, cats);
+  const groups = rows => {
+    const players = rows.filter(p => !p.is_npc);
+    return (players.length ? `<h4 class="dir-group" data-grp="players">Players</h4>${players.map(card).join('')}` : '') +
+      byCategory(rows.filter(p => p.is_npc)).map(g => `<h4 class="dir-group" data-grp="${esc(g.rows[0].category_id || 'none')}">${esc(g.name)}</h4>${g.rows.map(card).join('')}`).join('');
+  };
   const card = p => `
-    <div class="dir-card">
+    <div class="dir-card" data-cat="${esc(p.category_id || 'none')}">
       <span class="avatar" data-dav="${esc(p.id)}"></span>
       <div class="dir-main">
-        <strong>${esc(p.username)}</strong>
+        <strong>${esc(p.username)}${p.is_npc ? '' : '<span class="player-tag">Player</span>'}</strong>
         <span class="dir-meta">${categoryChip(p)}${p.about ? `<span class="muted">${esc(p.about)}</span>` : ''}</span>
         <span class="mono dir-addr">${esc(addrOf(p.username))}</span>
       </div>
@@ -233,9 +239,18 @@ async function renderDirectory() {
   main.innerHTML = dir.length ? `
     <div class="dir-wrap">
       <input type="search" id="dirFind" class="dir-find" placeholder="Search the directory">
-      <div id="dirList">${byCategory(dir).map(g => `<h4 class="dir-group">${esc(g.name)}</h4>${g.rows.map(card).join('')}`).join('')}</div>
+      ${filterBar(dir, p => p.category_id, 'maildir', cats)}
+      <div id="dirList">${groups(dir)}</div>
     </div>` : '<div class="ig-empty muted">Nobody in your directory yet.</div>';
+  // Hide a heading when none of its people are showing.
+  const tidy = () => $$('#dirList .dir-group', main).forEach(h => {
+    let n = h.nextElementSibling, any = false;
+    while (n && !n.classList.contains('dir-group')) { if (!n.classList.contains('cat-out')) any = true; n = n.nextElementSibling; }
+    h.classList.toggle('cat-out', !any);
+  });
+  const applyFilter = wireFilter(main, 'maildir', { items: '#dirList [data-cat]', onChange: tidy });
   const paint = () => {
+    applyFilter();
     dir.forEach(p => { const el = main.querySelector(`[data-dav="${p.id}"]`); if (el) paintAvatar(el, p.avatar_url, p.username); });
     $$('[data-mailto]', main).forEach(b => b.addEventListener('click', () => openWrite(b.dataset.mailto)));
   };
@@ -243,7 +258,7 @@ async function renderDirectory() {
   $('#dirFind')?.addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
     const rows = dir.filter(p => !q || p.username.toLowerCase().includes(q) || (p.about || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q));
-    $('#dirList').innerHTML = byCategory(rows).map(g => `<h4 class="dir-group">${esc(g.name)}</h4>${g.rows.map(card).join('')}`).join('') || '<div class="muted">No matches.</div>';
+    $('#dirList').innerHTML = groups(rows) || '<div class="muted">No matches.</div>';
     paint();
   });
 }

@@ -481,3 +481,10 @@ textarea.ft-rep-text { padding: 9px 11px; border-radius: 10px; border: 1px solid
 .mt-modal .ft-plan-row.on { background: color-mix(in srgb, var(--tc) 24%, #15171f); background-image: none; }
 .mt-modal .ft-plan-row strong { color: #fff; }
 .mt-modal .ft-plan-row small { color: #aab4c8; }
+
+/* Category chips on MyTime's light pages */
+.mt-browse .cat-filter button, .gm-players .cat-filter button { border-color: #c9d3e6; color: #1d3f86; background: #fff; }
+.mt-browse .cat-filter button.on, .gm-players .cat-filter button.on { color: #fff; background: var(--cc, #1d3f86); border-color: transparent; }
+.mt-browse .cat-filter button[data-cat-filter="all"].on, .gm-players .cat-filter button[data-cat-filter="all"].on { background: #1d3f86; color: #fff; }
+.mt-browse .cat-filter { padding: 4px 0 12px; }
+.mt-card .player-tag, .gm-who .player-tag { background: #e3f6c4; color: #3b6a00; }

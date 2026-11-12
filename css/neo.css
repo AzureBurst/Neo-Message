@@ -4274,3 +4274,20 @@ html.calm .sw-dice .sw-die.ace-ready { animation: none !important; }
 .sw-die .sw-sofar { display: none; }
 .sw-dice.tapping .sw-die .sw-sofar { display: block; top: auto; bottom: -44px; color: #ffcc33; }
 .sw-dice.tapping { padding-bottom: 50px; }
+
+/* ---------- Category filter chips ---------- */
+.cat-filter { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; margin-bottom: 4px; scrollbar-width: thin; }
+.cat-filter button { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--line, rgba(255,255,255,.16)); background: transparent; color: inherit; cursor: pointer;
+  font: 700 12.5px var(--font-ui); white-space: nowrap; }
+.cat-filter button::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--cc, transparent); }
+.cat-filter button[data-cat-filter="all"]::before { display: none; }
+.cat-filter button i { font-style: normal; opacity: .6; font-weight: 600; }
+.cat-filter button.on { background: var(--cc, var(--accent, #c8ff3d)); border-color: transparent; color: #fff; }
+.cat-filter button[data-cat-filter="all"].on { background: var(--text, #fff); color: var(--bg, #111); }
+.cat-filter button.on::before { background: rgba(255,255,255,.85); }
+.cat-out { display: none !important; }
+.player-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font: 800 9.5px/1.7 var(--font-ui);
+  letter-spacing: .06em; text-transform: uppercase; background: rgba(200,255,61,.18); color: #c8ff3d; vertical-align: middle; }
+.ns-cast-head { flex-wrap: wrap; gap: 10px; }
+.ns-find { flex: 1; min-width: 160px; max-width: 320px; }

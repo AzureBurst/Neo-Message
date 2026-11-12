@@ -10,7 +10,7 @@ import {
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
 import { openRoller, openRequest, rollCard, requestCard } from './dice.js';
-import { loadDirectory, categoryChip, byCategory } from './directory.js';
+import { loadDirectory, categoryChip, byCategory, loadCategoryList, sortPeople, filterBar, wireFilter } from './directory.js';
 import { playSent, playReceived, isMuted, toggleMute } from './sfx.js';
 import { EMOJI } from './emoji.js';
 
@@ -819,10 +819,14 @@ async function openContactsModal() {
 
   await cachePeople((rows ?? []).map(r => r.contact_id));
 
-  const list = (rows ?? []).map(r => {
+  // Categories + who's an NPC come from the directory (sql/categories.sql).
+  const [dir, cats] = await Promise.all([loadDirectory({ fresh: true }), loadCategoryList()]);
+  const dirOf = new Map(dir.map(d => [d.id, d]));
+  const list = sortPeople((rows ?? []).map(r => {
     const p = state.people.get(r.contact_id);
-    return { ...r, profile: p, label: r.nickname || p?.username || 'Unknown' };
-  }).sort((a, b) => a.label.localeCompare(b.label));
+    return { ...r, profile: p, label: r.nickname || p?.username || 'Unknown', d: dirOf.get(r.contact_id) };
+  }), { catOf: c => c.d?.category_id, isNpc: c => (c.d ? c.d.is_npc : true), nameOf: c => c.label }, cats);
+  const allPeople = [...list.map(c => ({ category_id: c.d?.category_id })), ...dir.filter(d => !list.some(c => c.contact_id === d.id))];
 
   const { root, close } = modal({
     title: 'Contacts',
@@ -835,18 +839,19 @@ async function openContactsModal() {
         </div>
         <div class="hint">Search the directory by name, or type a phone number. Some people can only be added by number.</div>
       </div>
+      ${filterBar(allPeople, r => r.category_id, 'contacts', cats)}
       <div id="addResults" class="find-results"></div>
       <div id="addMsg"></div>
       <div style="margin-top:16px" id="contactList">
         ${list.length ? list.map(c => `
-          <div class="contact-row" data-pid="${c.contact_id}">
+          <div class="contact-row" data-pid="${c.contact_id}" data-cat="${esc(c.d?.category_id || 'none')}">
             <span class="avatar avatar-sm">${
               c.profile?.avatar_url
                 ? `<img src="${esc(c.profile.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover">`
                 : esc(c.label.slice(0, 2).toUpperCase())
             }</span>
             <div class="info">
-              <div class="nm">${esc(c.label)}</div>
+              <div class="nm">${esc(c.label)}${c.d && !c.d.is_npc ? '<span class="player-tag">Player</span>' : ''}</div>
               <div class="nu">${esc(formatNumber(c.profile?.phone_number))}</div>
             </div>
             <span class="pill">Message</span>
@@ -877,21 +882,25 @@ async function openContactsModal() {
   }
 
   /* Directory search: only people you're allowed to see (sql/categories.sql). */
-  const dir = await loadDirectory({ fresh: true });
   const already = new Set(list.map(c => c.contact_id));
   const findRow = (p) => `
-    <${p.can_add && !already.has(p.id) ? 'button type="button"' : 'div'} class="find-row ${p.can_add ? '' : 'no-add'}" data-id="${esc(p.id)}" data-name="${esc(p.username)}">
+    <${p.can_add && !already.has(p.id) ? 'button type="button"' : 'div'} class="find-row ${p.can_add ? '' : 'no-add'}" data-id="${esc(p.id)}" data-name="${esc(p.username)}" data-cat="${esc(p.category_id || 'none')}">
       <span class="avatar avatar-sm" data-find-avatar="${esc(p.id)}"></span>
       <span class="find-id">
-        <strong>${esc(p.username)}</strong>
+        <strong>${esc(p.username)}${p.is_npc ? '' : '<span class="player-tag">Player</span>'}</strong>
         <span>${categoryChip(p)}${p.about ? ` <small class="muted">${esc(p.about)}</small>` : ''}</span>
       </span>
       <span class="find-add">${already.has(p.id) ? 'In contacts' : p.can_add ? 'Add' : 'By number only'}</span>
     </${p.can_add && !already.has(p.id) ? 'button' : 'div'}>`;
+  let applyFilter = () => {};
   const paintFind = (rows) => {
-    results.innerHTML = rows.length ? byCategory(rows).map(g =>
-      `<div class="find-group">${esc(g.name)}</div>${g.rows.map(findRow).join('')}`).join('')
+    rows = sortPeople(rows, { catOf: p => p.category_id, isNpc: p => p.is_npc, nameOf: p => p.username }, cats);
+    const players = rows.filter(p => !p.is_npc), npcs = rows.filter(p => p.is_npc);
+    results.innerHTML = rows.length
+      ? (players.length ? `<div class="find-group">Players</div>${players.map(findRow).join('')}` : '') +
+        byCategory(npcs).map(g => `<div class="find-group" data-group-of="${esc(g.rows[0].category_id || 'none')}">${esc(g.name)}</div>${g.rows.map(findRow).join('')}`).join('')
       : '<div class="find-none">Nobody by that name.</div>';
+    applyFilter();
     rows.forEach(p => paintAvatar(results.querySelector(`[data-find-avatar="${p.id}"]`), p.avatar_url, p.username));
     $$('button.find-row', results).forEach(r => r.addEventListener('click', () => addById(r.dataset.id, r.dataset.name)));
   };
@@ -900,6 +909,14 @@ async function openContactsModal() {
     if (/^[\d ()\-+.]+$/.test(q)) { results.innerHTML = ''; return; }
     paintFind(q ? dir.filter(p => p.username.toLowerCase().includes(q) || (p.about || '').toLowerCase().includes(q)) : dir);
   });
+  // Chips filter both lists; a group heading hides with its people.
+  applyFilter = wireFilter(root, 'contacts', { items: '#contactList [data-cat], #addResults [data-cat]', onChange: () => {
+    $$('#addResults .find-group', root).forEach(h => {
+      let n = h.nextElementSibling, any = false;
+      while (n && !n.classList.contains('find-group')) { if (!n.classList.contains('cat-out')) any = true; n = n.nextElementSibling; }
+      h.classList.toggle('cat-out', !any);
+    });
+  } });
   if (dir.length) paintFind(dir);
 
   $('#addGo', root).addEventListener('click', async () => {

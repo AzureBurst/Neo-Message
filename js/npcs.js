@@ -19,6 +19,7 @@ import {
   createNpc, signInAs, rollNumber, legacyRoster, forgetLegacy
 } from './npc.js';
 import { loadCategories, categorySelect } from './categories.js';
+import { sortPeople, filterBar, wireFilter } from './directory.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -385,8 +386,10 @@ function openCompose(presetNpc = null) {
 
 function viewCast() {
   view.conv = null;
-  const all = [...npcs.values()].filter(n => people.has(n.id))
-    .sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id)));
+  // Grouped by category (Group A, Faculty, …), then by name.
+  const catOf = n => people.get(n.id)?.category_id;
+  const all = sortPeople([...npcs.values()].filter(n => people.has(n.id)),
+    { catOf, isNpc: () => 1, nameOf: n => nameOf(n.id) }, cats || []);
   const live = all.filter(n => !n.archived), archived = all.filter(n => n.archived);
   const stats = id => {
     const rows = inbox.filter(r => (r.npc_ids || []).includes(id));
@@ -400,7 +403,7 @@ function viewCast() {
   const card = n => {
     const p = people.get(n.id), s = stats(n.id);
     return `
-      <article class="ns-card ${n.archived ? 'archived' : ''}" style="--c:${esc(n.color || '#CFF23A')}">
+      <article data-npc="${esc(n.id)}" data-cat="${esc(catOf(n) || 'none')}" class="ns-card ${n.archived ? 'archived' : ''}" style="--c:${esc(n.color || '#CFF23A')}">
         <div class="ns-card-top">
           ${avatar(n.id, 56, true)}
           <div class="ns-card-id">
@@ -431,9 +434,11 @@ function viewCast() {
         <button class="btn btn-sm btn-primary" id="nsImport">Move into Studio</button></div>` : ''}
       <div class="ns-cast-head">
         <h2>Your cast <span>${live.length}</span></h2>
+        <input type="search" id="nsFind" class="ns-find" placeholder="Find an NPC…">
         <button class="btn btn-sm btn-ghost" id="nsAdopt" title="Turn an account that already exists (e.g. an old puppet) into an NPC">Use an existing account</button>
       </div>
-      <div class="ns-grid">
+      ${cats ? filterBar(live, catOf, 'npc-cast', cats) : ''}
+      <div class="ns-grid" id="nsLive">
         ${live.map(card).join('')}
         <button class="ns-card ns-card-new" data-new-npc><span>＋</span>New NPC</button>
       </div>
@@ -441,6 +446,14 @@ function viewCast() {
         <div class="ns-grid">${archived.map(card).join('')}</div></details>` : ''}
     </div>`;
 
+  wireFilter(main, 'npc-cast', { items: '#nsLive > .ns-card[data-cat]' });
+  $('#nsFind')?.addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    $$('.ns-card[data-cat]', main).forEach(c => {
+      const n = npcs.get(c.dataset.npc) || {};
+      c.hidden = q && !(`${nameOf(c.dataset.npc)} ${n.role || ''} ${n.notes || ''}`.toLowerCase().includes(q));
+    });
+  });
   $$('[data-new-npc]', main).forEach(b => b.addEventListener('click', () => openEditor()));
   $$('[data-edit]', main).forEach(b => b.addEventListener('click', () => openEditor(b.dataset.edit)));
   $$('[data-msg]', main).forEach(b => b.addEventListener('click', () => openCompose(b.dataset.msg)));

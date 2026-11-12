@@ -20,7 +20,7 @@ import {
   openRoller, openRequest, rollCard, requestCard, loadRequests, wireRequestButtons, wireVerdicts,
   ATTRS, SKILLS, CORE_SKILLS, DIES, dieLabel, signed, blankSheet
 } from './dice.js';
-import { loadDirectory } from './directory.js';
+import { loadDirectory, loadCategoryList, sortPeople, filterBar, wireFilter } from './directory.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -99,16 +99,25 @@ let people = new Map();          // id -> profile
 let mtRows = new Map();          // id -> mt_profiles row
 async function loadPeople() {
   const [{ data: ppl }, { data: mts }] = await Promise.all([
-    supa.from('profiles').select('id, username, avatar_url, is_admin').order('username'),
+    supa.from('profiles').select('*').order('username'),
     supa.from('mt_profiles').select('user_id, char_name, photo_url, mood, headline')
   ]);
   people = new Map((ppl || []).map(p => [p.id, p]));
   mtRows = new Map((mts || []).map(m => [m.user_id, m]));
-  // Players only see who their category lets them see (sql/categories.sql).
-  if (!me.is_admin) visible = new Set((await loadDirectory({ fresh: true })).map(r => r.id).concat(me.id));
+  // Players only see who their category lets them see (sql/categories.sql);
+  // the directory also says who's an NPC, so real players can go first.
+  const [dir, c] = await Promise.all([loadDirectory({ fresh: true }), loadCategoryList()]);
+  cats = c;
+  npcIds = new Set(dir.filter(r => r.is_npc).map(r => r.id));
+  dir.forEach(r => { const p = people.get(r.id); if (p && !p.category_id) p.category_id = r.category_id; });
+  if (!me.is_admin) visible = new Set(dir.map(r => r.id).concat(me.id));
 }
-let visible = null;
-const players = () => [...people.values()].filter(p => !p.is_admin && (!visible || visible.has(p.id)));
+let visible = null, npcIds = new Set(), cats = [];
+const catOf = p => p.category_id;
+/** Everyone shown in MyTime lists: players first, then by group, then by name. */
+const players = () => sortPeople([...people.values()].filter(p => !p.is_admin && (!visible || visible.has(p.id))),
+  { catOf, isNpc: p => npcIds.has(p.id), nameOf: p => nameOf(p.id) }, cats);
+const playerTag = id => npcIds.has(id) ? '' : '<span class="player-tag">Player</span>';
 const nameOf = id => mtRows.get(id)?.char_name || people.get(id)?.username || 'someone';
 const userOf = id => people.get(id)?.username || '';
 const photoOf = id => mtRows.get(id)?.photo_url || people.get(id)?.avatar_url || null;
@@ -375,21 +384,23 @@ function openProfileEditor(uid, v) {
 async function viewBrowse() {
   const { data: reps } = await supa.from('ft_reputation').select('user_id, level');
   const rep = new Map((reps || []).map(r => [r.user_id, r.level]));
-  const list = players().sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id)));
+  const list = players();
   main.innerHTML = `
     <section class="mt-box mt-browse">
       <h3>Browse people</h3>
       <div class="mt-browse-bar"><input type="search" id="mtFind" placeholder="Search by name…"></div>
+      ${filterBar(list, catOf, 'mytime-browse', cats)}
       <div class="mt-browse-grid">${list.map(p => `
-        <a class="mt-card" href="#profile/${esc(p.id)}" data-name="${esc((nameOf(p.id) + ' ' + p.username).toLowerCase())}">
+        <a class="mt-card" href="#profile/${esc(p.id)}" data-cat="${esc(p.category_id || 'none')}" data-name="${esc((nameOf(p.id) + ' ' + p.username).toLowerCase())}">
           ${pic(p.id, 'lg')}
           <strong>${esc(nameOf(p.id))}</strong>
-          <small>@${esc(p.username)}</small>
+          <small>@${esc(p.username)}${playerTag(p.id)}</small>
           <q class="mt-card-head">${esc(mtRows.get(p.id)?.headline || DEFAULT_HEADLINE)}</q>
           ${mtRows.get(p.id)?.mood ? `<em>Mood: ${esc(mtRows.get(p.id).mood)}</em>` : ''}
           ${repPill(rep.get(p.id))}
         </a>`).join('') || '<p class="mt-none">Nobody here yet.</p>'}</div>
     </section>`;
+  wireFilter(main, 'mytime-browse', { items: '.mt-card' });
   $('#mtFind').addEventListener('input', e => {
     const q = e.target.value.trim().toLowerCase();
     $$('.mt-card', main).forEach(c => { c.hidden = q && !c.dataset.name.includes(q); });
@@ -1359,13 +1370,14 @@ async function viewGM() {
       </section>
 
       <section class="ft-card gm-players">
-        <div class="ft-card-head"><h3>Players</h3><button class="mt-btn ghost" id="gmAsk">🎲 Ask for a roll</button></div>
+        <div class="ft-card-head"><h3>Characters</h3><button class="mt-btn ghost" id="gmAsk">🎲 Ask for a roll</button></div>
+        ${filterBar(players(), catOf, 'mytime-gm', cats)}
         <table class="gm-table">
           <thead><tr><th>Character</th><th>Sheet</th><th>Reputation</th><th></th></tr></thead>
           <tbody>${players().map(p => {
             const s = sheetOf.get(p.id);
-            return `<tr>
-              <td><a href="#profile/${esc(p.id)}" class="gm-who">${pic(p.id)}<span>${esc(nameOf(p.id))}<small>@${esc(p.username)}</small></span></a></td>
+            return `<tr data-cat="${esc(p.category_id || 'none')}">
+              <td><a href="#profile/${esc(p.id)}" class="gm-who">${pic(p.id)}<span>${esc(nameOf(p.id))}${playerTag(p.id)}<small>@${esc(p.username)}</small></span></a></td>
               <td>${s ? `<span class="gm-ok">✓</span> ● ${s.bennies}${s.wounds ? ` · 🩸${s.wounds}` : ''}` : '<span class="muted">—</span>'}</td>
               <td><input type="text" class="gm-rep" data-rep="${esc(p.id)}" value="${esc(repOf.get(p.id) || '')}" placeholder="How they're seen" maxlength="200"></td>
               <td class="gm-acts"><button class="mt-btn" data-quick="${esc(p.id)}">⚡ Stats</button>
@@ -1383,6 +1395,7 @@ async function viewGM() {
     </div>`;
 
   wireVerdicts(main, viewGM);
+  wireFilter(main, 'mytime-gm', { items: '.gm-table tbody tr' });
   $$('[data-approve]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.approve, true, viewGM)));
   $$('[data-return]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.return, false, viewGM)));
   $$('[data-gate]', main).forEach(b => b.addEventListener('click', () => editGate((conns || []).find(c => c.id === b.dataset.gate), viewGM)));
