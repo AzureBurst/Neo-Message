@@ -6,15 +6,18 @@
 //  the replies. Each recipient has a private thread, so replies never
 //  leak between players.
 //
-//  Addresses are cosmetic, built from usernames + MAIL_DOMAIN, so nothing
-//  real is ever sent anywhere.
+//  Addresses are cosmetic, built from usernames + MAIL_DOMAIN (the
+//  school's, juniversity.edu), so nothing real is ever sent anywhere.
 // =====================================================================
 
 import {
   supa, requireProfile, ungate, mountCarrier, setClockSource,
   startPresence, paintAvatar, esc, toast, fullStamp, shortTime, $, $$, icStamp, icAt
 } from './supa.js';
-import { MAIL_DOMAIN } from './config.js';
+
+// Everyone's address is name@juniversity.edu (sql/mail-domain.sql moves
+// the old @neo.mail / @neo.com ones over). Set here, not in config.js.
+const MAIL_DOMAIN = 'juniversity.edu';
 import { playSound } from './sfx.js';
 import { loadDirectory, categoryChip, byCategory, loadCategoryList, sortPeople, filterBar, wireFilter } from './directory.js';
 import { loadClock, storyNow } from './clock.js';
@@ -37,7 +40,7 @@ else $('#mailWrite').hidden = false;
 const main = $('#mailMain');
 let box = 'inbox';
 
-/* An address from a username: azure@neo.mail. */
+/* An address from a username: azure@juniversity.edu. */
 export function addrOf(username) {
   return String(username || 'unknown').toLowerCase().replace(/[^a-z0-9._]/g, '') + '@' + MAIL_DOMAIN;
 }
