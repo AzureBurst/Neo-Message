@@ -496,3 +496,43 @@ textarea.ft-rep-text { padding: 9px 11px; border-radius: 10px; border: 1px solid
 .gm-table tbody tr:hover { background: #f4f7fc; }
 .gm-table tbody tr.gm-sect:hover { background: transparent; }
 .gm-who span.npc-tag, .gm-who span.player-tag { display: inline-block; align-self: flex-start; margin: 2px 0 1px; }
+
+/* ---------- Free time: GM judging ---------- */
+.ft-judge { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding: 8px 10px;
+  border-radius: 10px; background: #fff7e8; border: 1px dashed #e0a43a; }
+.ft-judge.done { background: #f3f6fb; border-color: #c6d0e0; }
+.ft-judge-label { font: 800 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: #8a5a00; margin-right: 4px; }
+.ft-judge.done .ft-judge-label { color: var(--mt-mute); }
+.ft-judge .mt-btn { padding: 5px 10px; font-size: 12px; }
+.ft-judge-comp { display: inline-flex; align-items: center; gap: 5px; font: 600 12px var(--font-ui); color: #b42318; margin-left: 4px; }
+
+/* ---------- Transcript: shop ---------- */
+.tr-shop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.tr-shop-intro { font: 400 12.5px Arial; color: #4b4237; margin: 0 0 10px; max-width: 620px; }
+.tr-shop-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.tr-shop-item { background: #fffdf7; border: 1px solid #111; border-radius: 4px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
+  border-top: 5px solid #b341e0; }
+.tr-shop-item.k-trait { border-top-color: #2f6bd9; }
+.tr-shop-item.k-edge  { border-top-color: #f37d2a; }
+.tr-shop-item.off { opacity: .55; }
+.tr-shop-item p { margin: 0; font: 400 12.5px Arial; color: #333; white-space: pre-wrap; }
+.tr-shop-top { display: flex; flex-direction: column; gap: 2px; }
+.tr-shop-top strong { font: 700 14.5px Arial; }
+.tr-shop-kind { font: 700 10px Arial; text-transform: uppercase; letter-spacing: .08em; color: #6b5d48; }
+.tr-shop-cost { font: 700 11.5px Arial; color: #8a3cb0; }
+.tr-shop-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+.tr-shop-acts small { font: 400 11px Arial; color: #6b5d48; margin-right: auto; }
+.tr-shop-acts button, .tr-shop-st button { border: 1px solid #111; background: #fff; border-radius: 3px; padding: 3px 8px; font: 600 11.5px Arial; cursor: pointer; color: #111; }
+.tr-shop-acts button:hover, .tr-shop-st button:hover { background: #f2c14e; }
+.tr-shop-acts .tr-shop-pick { background: #b341e0; color: #fff; border-color: #6a1f8a; padding: 5px 12px; margin-left: auto; }
+.tr-shop-acts .tr-shop-pick:hover { background: #9a2fc4; }
+.tr-shop-wait { margin-left: auto; font: 700 11.5px Arial; color: #8a5a00; }
+.tr-shop-reqs { width: 100%; max-width: 720px; }
+.tr-shop-reqs th { width: 34%; text-align: left; }
+.tr-shop-reqs th small { display: block; font-weight: 400; color: #4b4237; }
+.tr-shop-note, .tr-shop-gm { display: block; font: 400 12px Arial; }
+.tr-shop-gm { color: #6a1f8a; }
+.tr-shop-st { width: 32%; font: 700 12px Arial; color: #8a5a00; }
+.tr-shop-st.ok { color: #157347; }
+.tr-shop-st.no { color: #b42318; }
+.tr-shop-decide { display: flex; gap: 5px; margin-top: 4px; }

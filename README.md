@@ -347,3 +347,19 @@ first, so get help with that step rather than running the files over live
 data.
 `5-uploaded-files.txt` lists the uploaded files; the files themselves live
 in Supabase Storage and aren't part of the backup.
+
+## MyTime: judging free time rolls, and the shop
+
+Run `sql/mytime-judge-shop.sql`.
+
+- **Free time rolls wait for you.** A 1-point roll no longer fills boxes by
+  itself. It shows up in **MyTime → GM → Rolls to judge** (and you get a
+  notification) with buttons for +2 boxes, +1 box or no boxes and a
+  Complication tick. The buttons start on what the dice suggest; the call is
+  yours. You can change a decision later from the player's Free Time page.
+  Players can spend a Benny to reroll until you've decided.
+- **The shop** is a new tab on the transcript. Offer upgrades (a trait or
+  skill increase, an edge, anything) to everyone or to one character, with an
+  optional cost. Players pick one (saying which trait, if it's an increase);
+  you're notified, update their sheet with ✎ Edit sheet, then press ✓ Done
+  (or Decline), and they're told.

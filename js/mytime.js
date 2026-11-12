@@ -449,6 +449,7 @@ async function viewTranscript(uid) {
   const own = uid === me.id;
   const pw = s.power || {};
   const canRoll = own && !!sheet;
+  const shop = transcriptTab === 'shop' ? await loadShop(uid) : null;
   const dieRow = (label, t, key) => `
     <tr class="tr-die">
       <td class="tr-d">D</td><td class="tr-n">${t.die || 4}</td><td class="tr-d">+</td><td class="tr-m">${t.mod ? t.mod : ''}</td>
@@ -512,7 +513,8 @@ async function viewTranscript(uid) {
       ${list(s.gear || [], '', 6)}
       <h4 class="tr-h">Suits</h4>
       ${list(s.suits || [], '', 3)}
-      ${me.is_admin && s.gm_notes ? `<h4 class="tr-h">GM notes <small>(only you see these)</small></h4><div class="tr-note">${paras(s.gm_notes)}</div>` : ''}`
+      ${me.is_admin && s.gm_notes ? `<h4 class="tr-h">GM notes <small>(only you see these)</small></h4><div class="tr-note">${paras(s.gm_notes)}</div>` : ''}`,
+    shop: shop ? shopHtml(uid, shop) : ''
   };
 
   main.classList.add('mt-wide');
@@ -542,6 +544,7 @@ async function viewTranscript(uid) {
         <button type="button" data-ttab="education" class="${transcriptTab === 'education' ? 'on' : ''}">Education</button>
         <button type="button" data-ttab="activities" class="${transcriptTab === 'activities' ? 'on' : ''}">Activities</button>
         <button type="button" data-ttab="finaid" class="${transcriptTab === 'finaid' ? 'on' : ''}">Fin-Aid</button>
+        <button type="button" data-ttab="shop" class="${transcriptTab === 'shop' ? 'on' : ''}">Shop</button>
       </nav>
       <span class="tr-rings"><i></i><i></i></span>
     </div>`;
@@ -554,6 +557,7 @@ async function viewTranscript(uid) {
         if (error) throw error; return data;
       }, options: [b.dataset.rolltrait] })));
   $('#trPersonal')?.addEventListener('click', () => openPersonalEditor(uid, pv));
+  if (shop) wireShop(uid, s, shop);
   $('#trQuick')?.addEventListener('click', () => openQuickEntry(uid, s, !sheet));
   $('#trEdit')?.addEventListener('click', () => openSheetEditor(uid, s, !sheet));
   $$('[data-adj]', main).forEach(b => b.addEventListener('click', async () => {
@@ -563,6 +567,179 @@ async function viewTranscript(uid) {
     if (error) return toast(sqlMsg(error), 'error');
     viewTranscript(uid);
   }));
+}
+
+/* ------------------------------------------------------------------ */
+/*  The shop (sql/mytime-judge-shop.sql): the GM offers upgrades, the  */
+/*  player picks one, the GM adds it to the transcript by hand.        */
+/* ------------------------------------------------------------------ */
+
+const SHOP_KIND = { trait: 'Trait increase', edge: 'Edge', other: 'Upgrade' };
+
+async function loadShop(uid) {
+  const [it, rq] = await Promise.all([
+    supa.from('mt_shop_items').select('*').order('created_at'),
+    supa.from('mt_shop_requests').select('*').eq('user_id', uid).order('created_at', { ascending: false })
+  ]);
+  if (it.error || rq.error) return { missing: true, items: [], reqs: [] };
+  const items = (it.data || []).filter(i => (!i.for_user || i.for_user === uid) && (me.is_admin || i.active));
+  return { items, reqs: rq.data || [] };
+}
+
+function shopHtml(uid, shop) {
+  if (shop.missing) return me.is_admin
+    ? '<p class="tr-empty">Run sql/mytime-judge-shop.sql in Supabase to open the shop.</p>'
+    : '<p class="tr-empty">The shop isn\'t open yet.</p>';
+  const own = uid === me.id;
+  const waiting = new Set(shop.reqs.filter(q => q.status === 'requested').map(q => q.item_id));
+  const item = i => `
+    <div class="tr-shop-item k-${esc(i.kind)} ${i.active ? '' : 'off'}">
+      <div class="tr-shop-top">
+        <span class="tr-shop-kind">${esc(SHOP_KIND[i.kind] || 'Upgrade')}</span>
+        <strong>${esc(i.name)}</strong>
+        ${i.cost ? `<span class="tr-shop-cost">${esc(i.cost)}</span>` : ''}
+      </div>
+      ${i.description ? `<p>${esc(i.description)}</p>` : ''}
+      <div class="tr-shop-acts">
+        ${me.is_admin ? `<small>${i.for_user ? `Only ${esc(nameOf(i.for_user))}` : 'Everyone'}${i.active ? '' : ' · hidden'}</small>
+          <button type="button" data-shopedit="${esc(i.id)}">✎ Edit</button>
+          <button type="button" data-shopdel="${esc(i.id)}">Remove</button>` : ''}
+        ${own ? (waiting.has(i.id) ? '<span class="tr-shop-wait">Picked · waiting for the GM</span>'
+          : `<button type="button" class="tr-shop-pick" data-shoppick="${esc(i.id)}">Choose this</button>`) : ''}
+      </div>
+    </div>`;
+  const STATUS = { requested: ['Waiting for the GM', ''], done: ['Added to the transcript', 'ok'], declined: ['Not this time', 'no'] };
+  const pick = q => { const st = STATUS[q.status] || STATUS.requested; return `
+    <tr class="tr-shop-req">
+      <th>${esc(q.item_name)}${q.choice ? `<small>${esc(q.choice)}</small>` : ''}</th>
+      <td>${q.note ? `<span class="tr-shop-note">“${esc(q.note)}”</span>` : ''}${q.gm_note ? `<span class="tr-shop-gm">GM: ${esc(q.gm_note)}</span>` : ''}</td>
+      <td class="tr-shop-st ${st[1]}">${st[0]}
+        ${q.status === 'requested' && me.is_admin ? `<span class="tr-shop-decide">
+          <button type="button" data-shopdone="${esc(q.id)}">✓ Done</button>
+          <button type="button" data-shopno="${esc(q.id)}">Decline</button></span>` : ''}
+        ${q.status === 'requested' && own && !me.is_admin ? `<button type="button" data-shopcancel="${esc(q.id)}">Take back</button>` : ''}
+      </td>
+    </tr>`; };
+  return `
+    <div class="tr-shop-head"><h4 class="tr-h">Shop</h4>
+      ${me.is_admin ? '<button type="button" class="tr-editlink" id="shopNew">＋ Offer an upgrade</button>' : ''}</div>
+    <p class="tr-shop-intro">${me.is_admin
+      ? `Upgrades on offer to ${esc(nameOf(uid))}. When they pick one, update the sheet (✎ Edit sheet above), then press ✓ Done.`
+      : 'Upgrades the GM is offering you. Pick one and the GM will add it to your transcript.'}</p>
+    <div class="tr-shop-list">${shop.items.map(item).join('') || '<p class="tr-empty">Nothing on offer right now.</p>'}</div>
+    ${shop.reqs.length ? `<h4 class="tr-h">${own ? 'Your picks' : 'Their picks'}</h4>
+      <table class="tr-table tr-shop-reqs">${shop.reqs.map(pick).join('')}</table>` : ''}`;
+}
+
+function mtModal(title, body, foot) {
+  const root = $('#modalRoot');
+  root.innerHTML = `
+    <div class="scrim"><div class="modal mt-modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>${esc(title)}</h3><button class="icon-btn" data-x>✕</button></div>
+      <div class="modal-body">${body}</div>
+      <div class="modal-foot">${foot}</div>
+    </div></div>`;
+  const close = () => { root.innerHTML = ''; };
+  $$('[data-x]', root).forEach(b => b.addEventListener('click', close));
+  return { root, close };
+}
+
+function wireShop(uid, s, shop) {
+  const again = () => viewTranscript(uid);
+  const fail = e => toast(/mt_shop/.test(e.message) ? 'Run sql/mytime-judge-shop.sql in Supabase first.' : sqlMsg(e), 'error');
+
+  // GM: offer / edit / remove.
+  const editItem = (i = {}) => {
+    const { root, close } = mtModal(i.id ? 'Edit offer' : 'Offer an upgrade', `
+      <div class="field"><label for="shName">What is it?</label>
+        <input type="text" id="shName" maxlength="120" value="${esc(i.name || '')}" placeholder="e.g. Raise a skill one die, Quick (edge)"></div>
+      <div class="field"><label for="shKind">Kind</label>
+        <select id="shKind">${Object.entries(SHOP_KIND).map(([k, l]) => `<option value="${k}" ${(i.kind || 'trait') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label for="shCost">Cost <span class="muted">(optional)</span></label>
+        <input type="text" id="shCost" maxlength="80" value="${esc(i.cost || '')}" placeholder="e.g. 1 advance"></div>
+      <div class="field"><label for="shDesc">Details <span class="muted">(optional)</span></label>
+        <textarea id="shDesc" rows="3">${esc(i.description || '')}</textarea></div>
+      <div class="field"><label for="shFor">Offered to</label>
+        <select id="shFor"><option value="">Everyone</option>
+          <option value="${esc(uid)}" ${i.for_user === uid ? 'selected' : ''}>Only ${esc(nameOf(uid))}</option></select></div>
+      <label class="check"><input type="checkbox" id="shOn" ${i.active === false ? '' : 'checked'}> <span>Show it in the shop</span></label>`,
+      `<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" id="shSave">${i.id ? 'Save' : 'Offer it'}</button>`);
+    $('#shSave', root).addEventListener('click', async (e) => {
+      const name = $('#shName', root).value.trim();
+      if (!name) return toast('Give it a name.', 'error');
+      e.currentTarget.disabled = true;
+      const row = { name, kind: $('#shKind', root).value, cost: $('#shCost', root).value.trim() || null,
+        description: $('#shDesc', root).value.trim() || null, for_user: $('#shFor', root).value || null, active: $('#shOn', root).checked };
+      const { error } = i.id ? await supa.from('mt_shop_items').update(row).eq('id', i.id)
+                             : await supa.from('mt_shop_items').insert(row);
+      if (error) { e.currentTarget.disabled = false; return fail(error); }
+      close(); toast(i.id ? 'Saved.' : 'It\'s in the shop.', 'ok'); again();
+    });
+  };
+  $('#shopNew')?.addEventListener('click', () => editItem());
+  $$('[data-shopedit]', main).forEach(b => b.addEventListener('click', () => editItem(shop.items.find(i => i.id === b.dataset.shopedit))));
+  $$('[data-shopdel]', main).forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Take this out of the shop? Picks already made stay listed.')) return;
+    const { error } = await supa.from('mt_shop_items').delete().eq('id', b.dataset.shopdel);
+    if (error) return fail(error);
+    again();
+  }));
+
+  // Player: pick one.
+  $$('[data-shoppick]', main).forEach(b => b.addEventListener('click', () => {
+    const i = shop.items.find(x => x.id === b.dataset.shoppick);
+    const traitOpts = [
+      ...ATTRS.map(a => `${cap(a)} (${dieLabel(s.attributes?.[a]?.die || 4, s.attributes?.[a]?.mod || 0)})`),
+      ...(s.skills || []).map(k => `${k.name} (${dieLabel(k.die || 4, k.mod || 0)})`)
+    ];
+    const { root, close } = mtModal(i.name, `
+      ${i.description ? `<p class="muted small">${esc(i.description)}</p>` : ''}
+      ${i.kind === 'trait' ? `
+        <div class="field"><label for="spWhich">Which one goes up?</label>
+          <select id="spWhich">${traitOpts.map(o => `<option>${esc(o)}</option>`).join('')}<option value="__other">A new skill / something else…</option></select></div>
+        <div class="field" id="spOtherWrap" hidden><label for="spOther">Which?</label><input type="text" id="spOther" maxlength="120"></div>`
+      : `<div class="field"><label for="spOther">Your choice <span class="muted">(if the offer lets you choose)</span></label>
+          <input type="text" id="spOther" maxlength="120" placeholder="${i.kind === 'edge' ? 'e.g. which edge' : ''}"></div>`}
+      <div class="field"><label for="spNote">Anything the GM should know? <span class="muted">(optional)</span></label>
+        <textarea id="spNote" rows="2" maxlength="500"></textarea></div>`,
+      `<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" id="spGo">Choose</button>`);
+    $('#spWhich', root)?.addEventListener('change', (e) => { $('#spOtherWrap', root).hidden = e.target.value !== '__other'; });
+    $('#spGo', root).addEventListener('click', async (e) => {
+      const which = $('#spWhich', root)?.value;
+      const choice = which && which !== '__other' ? which : ($('#spOther', root)?.value.trim() || null);
+      if (i.kind === 'trait' && !choice) return toast('Say which one goes up.', 'error');
+      e.currentTarget.disabled = true;
+      const { error } = await supa.from('mt_shop_requests').insert({
+        item_id: i.id, item_name: i.name, kind: i.kind, user_id: me.id, status: 'requested', choice, note: $('#spNote', root).value.trim() || null });
+      if (error) { e.currentTarget.disabled = false; return fail(error); }
+      close(); playSound('sent'); toast('Picked. The GM will add it to your transcript.', 'ok'); again();
+    });
+  }));
+  $$('[data-shopcancel]', main).forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Take back this pick?')) return;
+    const { error } = await supa.from('mt_shop_requests').delete().eq('id', b.dataset.shopcancel);
+    if (error) return fail(error);
+    again();
+  }));
+
+  // GM: done / decline, with an optional word to the player.
+  const decide = (id, status) => {
+    const q = shop.reqs.find(x => x.id === id);
+    const { root, close } = mtModal(status === 'done' ? `Done: ${q.item_name}` : `Decline: ${q.item_name}`, `
+      ${status === 'done' ? `<p class="muted small">Make sure the sheet is updated first (✎ Edit sheet). ${esc(nameOf(uid))} gets told it's been added.</p>` : ''}
+      <div class="field"><label for="dNote">Note to ${esc(nameOf(uid))} <span class="muted">(optional)</span></label>
+        <textarea id="dNote" rows="2" maxlength="500"></textarea></div>`,
+      `<button class="btn btn-ghost" data-x>Cancel</button><button class="btn ${status === 'done' ? 'btn-primary' : 'btn-danger'}" id="dGo">${status === 'done' ? '✓ Mark done' : 'Decline'}</button>`);
+    $('#dGo', root).addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      const { error } = await supa.from('mt_shop_requests').update({
+        status, gm_note: $('#dNote', root).value.trim() || null, decided_at: new Date().toISOString() }).eq('id', id);
+      if (error) { e.currentTarget.disabled = false; return fail(error); }
+      close(); toast('They\'ve been told.', 'ok'); again();
+    });
+  };
+  $$('[data-shopdone]', main).forEach(b => b.addEventListener('click', () => decide(b.dataset.shopdone, 'done')));
+  $$('[data-shopno]', main).forEach(b => b.addEventListener('click', () => decide(b.dataset.shopno, 'declined')));
 }
 
 /** Social class, languages, secret — only the player and the GM see these. */
@@ -964,6 +1141,7 @@ function entryLine(e, D, { roll = true } = {}) {
   const r = D.latestRoll.get(e.id);
   const t = e.track ? TRACK[e.track] : null;
   const result = e.status === 'to_roll' ? `<span class="ft-await">Waiting for a roll</span>`
+    : e.status === 'judging' ? `<span class="ft-await">Rolled · the GM is deciding</span>`
     : e.status === 'pending' ? '' :
     `<span class="ft-gain ${e.complication ? 'bad' : ''}">${e.boxes_gained ? `+${e.boxes_gained} box${e.boxes_gained === 1 ? '' : 'es'}` : 'no boxes'}${e.complication ? ' · complication' : ''}</span>`;
   return `
@@ -972,7 +1150,38 @@ function entryLine(e, D, { roll = true } = {}) {
       <p>${esc(e.note)}</p>
       ${roll && r ? rollCard(r, { compact: true }) : ''}
       ${e.status === 'to_roll' && e.user_id === me.id ? `<button class="mt-btn ft-roll-btn" data-ftroll="${esc(e.id)}">🎲 Roll ${esc(t.traits.join(' or '))}</button>` : ''}
+      ${me.is_admin && e.track && (e.status === 'judging' || e.status === 'rolled') ? judgeHtml(e, r) : ''}
     </div>`;
+}
+
+/* GM: decide a free time roll. The buttons start on what the dice suggest
+   (raise 2, success 1, otherwise 0; a critical failure ticks Complication)
+   but the call is yours. Already decided ones can be changed. */
+function judgeHtml(e, r) {
+  const decided = e.status === 'rolled';
+  const suggest = decided ? (e.boxes_gained || 0)
+    : ({ raise: 2, success: 1 }[r?.best_outcome || r?.outcome] ?? 0);
+  const comp = decided ? e.complication : (r?.best_outcome || r?.outcome) === 'crit_fail';
+  return `
+    <div class="ft-judge ${decided ? 'done' : ''}" data-judge="${esc(e.id)}">
+      <span class="ft-judge-label">${decided ? 'Decided · change it?' : 'Your call'}</span>
+      ${[2, 1, 0].map(n => `<button type="button" class="mt-btn ${n === suggest ? '' : 'ghost'}" data-jb="${n}">${n ? `+${n} box${n === 1 ? '' : 'es'}` : 'No boxes'}</button>`).join('')}
+      <label class="ft-judge-comp"><input type="checkbox" data-jcomp ${comp ? 'checked' : ''}> Complication</label>
+    </div>`;
+}
+
+function wireJudge(scope, after) {
+  $$('[data-judge]', scope).forEach(box => $$('[data-jb]', box).forEach(b => b.addEventListener('click', async () => {
+    $$('[data-jb]', box).forEach(x => { x.disabled = true; });
+    const { error } = await supa.rpc('ft_judge', {
+      p_entry: box.dataset.judge, p_boxes: +b.dataset.jb, p_complication: $('[data-jcomp]', box).checked });
+    if (error) {
+      $$('[data-jb]', box).forEach(x => { x.disabled = false; });
+      return toast(/ft_judge/.test(error.message) ? 'Run sql/mytime-judge-shop.sql in Supabase first.' : sqlMsg(error), 'error');
+    }
+    toast('Decided. They\'ve been told.', 'ok');
+    after();
+  })));
 }
 
 let draftWeek = null;   // the planner's state survives redraws
@@ -1082,7 +1291,7 @@ async function viewFreeTime(uid) {
       </header>
 
       <div class="ft-rules">
-        <div><b>1 point</b><span>Roll the track's trait with the stage penalty. A raise fills 2 boxes and a success fills 1. A failure fills nothing and gives you a complication.</span></div>
+        <div><b>1 point</b><span>Roll the track's trait with the stage penalty, then the GM looks at your roll and decides. An excellent roll fills 2 boxes and a success fills 1. A critical failure (a 1 on both dice) fills nothing and gives you a complication.</span></div>
         <div><b>2 points</b><span>No roll, fill 1 box. Only at −0 or −1.</span></div>
         <div><b>3 points</b><span>No roll, fill 1 box. For −2 and −3.</span></div>
       </div>
@@ -1159,6 +1368,7 @@ async function viewFreeTime(uid) {
       onDone: () => viewFreeTime(uid)
     });
   }));
+  wireJudge(main, () => viewFreeTime(uid));
   $$('[data-approve]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.approve, true, () => viewFreeTime(uid))));
   $$('[data-return]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.return, false, () => viewFreeTime(uid))));
   $$('[data-boxadj]', main).forEach(b => b.addEventListener('click', async () => {
@@ -1313,6 +1523,11 @@ async function viewGM() {
   const wIds = (weeks || []).map(w => w.id);
   const { data: entries } = wIds.length ? await supa.from('ft_entries').select('*').in('week_id', wIds) : { data: [] };
   const { data: comps } = await supa.from('ft_entries').select('*').eq('complication', true).order('created_at', { ascending: false }).limit(12);
+  const { data: toJudge } = await supa.from('ft_entries').select('*').eq('status', 'judging').order('created_at');
+  const jIds = (toJudge || []).map(e => e.roll_id).filter(Boolean);
+  const { data: jRolls } = jIds.length ? await supa.from('sw_rolls').select('*').in('id', jIds) : { data: [] };
+  const jRoll = new Map((jRolls || []).map(r => [r.context_id, r]));
+  const { data: picks, error: pickErr } = await supa.from('mt_shop_requests').select('*').eq('status', 'requested').order('created_at');
   const { data: progRows } = await supa.from('ft_progress').select('*');
   const prog = new Map();
   (progRows || []).forEach(p => { if (!prog.has(p.user_id)) prog.set(p.user_id, {}); prog.get(p.user_id)[p.track] = p.boxes; });
@@ -1371,6 +1586,20 @@ async function viewGM() {
           `<div class="gm-mini">${pic(w.user_id)} ${esc(nameOf(w.user_id))} · week ${w.week} · ${(byWeek.get(w.id) || []).filter(e => e.status === 'to_roll').map(e => TRACK[e.track]?.name).join(', ')}</div>`).join('')}` : ''}
       </section>
 
+      <section class="ft-card gm-judge">
+        <h3>Rolls to judge · ${(toJudge || []).length}</h3>
+        ${(toJudge || []).map(e => `<div class="gm-sub"><div class="gm-sub-head">${pic(e.user_id)}<strong>${esc(nameOf(e.user_id))}</strong></div>
+          ${entryLine(e, { ...D0, latestRoll: jRoll }, { roll: true })}</div>`).join('')
+          || '<p class="mt-none">Nothing waiting.</p>'}
+      </section>
+
+      ${pickErr ? '' : `<section class="ft-card gm-picks">
+        <h3>Shop picks · ${(picks || []).length}</h3>
+        ${(picks || []).map(q => `<div class="gm-mini">${pic(q.user_id)} <b>${esc(nameOf(q.user_id))}</b> · ${esc(q.item_name)}${q.choice ? ` <small>(${esc(q.choice)})</small>` : ''}
+          <a class="mt-link" href="#transcript/${esc(q.user_id)}" data-toshop>open</a></div>`).join('')
+          || '<p class="mt-none">No picks waiting.</p>'}
+      </section>`}
+
       <section class="ft-card">
         <h3>Complications</h3>
         ${(comps || []).map(e => `<div class="gm-mini bad">${pic(e.user_id)} <b>${esc(nameOf(e.user_id))}</b> · ${esc(TRACK[e.track]?.name || '')} — <span>${esc(e.note)}</span></div>`).join('')
@@ -1408,6 +1637,8 @@ async function viewGM() {
       h.classList.toggle('cat-out', !any);
     });
   } });
+  wireJudge(main, viewGM);
+  $$('[data-toshop]', main).forEach(a => a.addEventListener('click', () => { transcriptTab = 'shop'; }));
   $$('[data-approve]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.approve, true, viewGM)));
   $$('[data-return]', main).forEach(b => b.addEventListener('click', () => reviewWeek(b.dataset.return, false, viewGM)));
   $$('[data-gate]', main).forEach(b => b.addEventListener('click', () => editGate((conns || []).find(c => c.id === b.dataset.gate), viewGM)));
