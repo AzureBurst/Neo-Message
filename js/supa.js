@@ -25,7 +25,84 @@ if (SUPABASE_URL.startsWith('PASTE_')) {
   throw new Error('Neo Message: config.js has not been filled in yet.');
 }
 
-export const supa = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/* ------------------------------------------------------------------ */
+/*  "View as" — the GM looking at the site as a player sees it         */
+/*  (supabase/functions/view-as). A tab opened with #viewas=<token>    */
+/*  signs in as that player with its own session kept in this tab      */
+/*  only, so the GM stays signed in everywhere else. Every change is   */
+/*  blocked: nothing can be sent, saved, read-marked or cleared.       */
+/* ------------------------------------------------------------------ */
+
+const VIEW_KEY = 'neo.viewas';
+const PREVIEW = { message: 'Preview only, so nothing was changed.', code: 'preview' };
+const READ_RPCS = new Set(['directory', 'npc_inbox']);
+{
+  const m = location.hash.match(/viewas=([^&]+)(?:&u=([^&]*))?/);
+  if (m) {
+    try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ token: m[1], username: decodeURIComponent(m[2] || '') })); } catch {}
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+}
+/** { username } while this tab is a GM preview, otherwise null. */
+export const viewingAs = (() => { try { return JSON.parse(sessionStorage.getItem(VIEW_KEY)); } catch { return null; } })();
+
+const raw = viewingAs
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { storage: sessionStorage, storageKey: 'neo-viewas', detectSessionInUrl: false }
+    })
+  : createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* Something that can be chained and awaited like a query, and always
+   answers "preview only". */
+function blocked() {
+  const p = new Proxy(function () {}, {
+    get: (_, k) => k === 'then' ? (res) => res({ data: null, error: PREVIEW }) : () => p,
+    apply: () => p
+  });
+  return p;
+}
+function readOnly(client) {
+  const pass = (obj, k) => { const v = obj[k]; return typeof v === 'function' ? v.bind(obj) : v; };
+  const storage = {
+    from: (bucket) => new Proxy(client.storage.from(bucket), {
+      get: (b, k) => ['upload', 'update', 'remove', 'move', 'copy'].includes(k)
+        ? async () => ({ data: null, error: PREVIEW }) : pass(b, k)
+    })
+  };
+  return new Proxy(client, {
+    get(c, k) {
+      if (k === 'from') return (t) => new Proxy(c.from(t), {
+        get: (q, m) => ['insert', 'update', 'upsert', 'delete'].includes(m) ? () => blocked() : pass(q, m)
+      });
+      if (k === 'rpc') return (name, ...a) => READ_RPCS.has(name) ? c.rpc(name, ...a) : blocked();
+      if (k === 'storage') return storage;
+      if (k === 'functions') return { invoke: async () => ({ data: null, error: PREVIEW }) };
+      return pass(c, k);
+    }
+  });
+}
+
+export const supa = viewingAs ? readOnly(raw) : raw;
+
+/** Leaves a preview tab: forgets the player's session and goes back to the GM's. */
+export async function exitViewAs(goTo = 'admin.html') {
+  try { await raw.auth.signOut({ scope: 'local' }); } catch {}
+  try { sessionStorage.removeItem(VIEW_KEY); sessionStorage.removeItem('neo-viewas'); } catch {}
+  location.href = goTo;
+}
+
+function mountViewBar(username) {
+  if (document.querySelector('.viewas-bar')) return;
+  const bar = document.createElement('div');
+  bar.className = 'puppet-bar viewas-bar';
+  bar.innerHTML = `
+    <span class="puppet-dot"></span>
+    <span>Viewing as <strong>${esc(username)}</strong> · read-only</span>
+    <button class="puppet-back" type="button">Exit</button>`;
+  document.body.prepend(bar);
+  document.body.classList.add('puppeting');
+  bar.querySelector('.puppet-back').addEventListener('click', () => exitViewAs());
+}
 
 
 /* ------------------------------------------------------------------ */
@@ -50,6 +127,19 @@ function bounce(why) {
 }
 
 export async function requireProfile() {
+  if (viewingAs?.token) {
+    // First page of a preview tab: trade the one-time token for a session.
+    const { error } = await raw.auth.verifyOtp({ token_hash: viewingAs.token, type: 'magiclink' });
+    try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ username: viewingAs.username })); } catch {}
+    delete viewingAs.token;
+    if (error) {
+      try { sessionStorage.removeItem(VIEW_KEY); } catch {}
+      document.body.innerHTML = `<div class="notice notice-error" style="max-width:480px;margin:20vh auto">
+        That preview link has expired or was already used. Close this tab and press "View as" again.</div>`;
+      document.body.classList.remove('gated');
+      return null;
+    }
+  }
   const { data: { session } } = await supa.auth.getSession();
   if (!session) {
     bounce('You are not signed in. Taking you to the sign-in page…');
@@ -66,6 +156,7 @@ export async function requireProfile() {
   // Maintenance mode: shows the sign (and keeps watching) on every page.
   import('./maintenance.js').then(m => m.watchMaintenance(data))
     .catch(err => console.warn('[maintenance]', err));
+  if (viewingAs) { mountViewBar(viewingAs.username || data.username); return data; }
   // Signed in as an NPC? Show the "Back to me" bar on every page.
   try {
     if (localStorage.getItem('neo.npc.acting')) {
@@ -76,6 +167,7 @@ export async function requireProfile() {
 }
 
 export async function signOut() {
+  if (viewingAs) return exitViewAs();
   try { sessionStorage.removeItem('neo.deep'); } catch {}
   await supa.auth.signOut();
   location.replace('index.html');

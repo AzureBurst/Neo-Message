@@ -18,6 +18,7 @@ import {
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
 import { loadDirectory, loadCategoryList, sortPeople } from './directory.js';
+import { parseMeetings } from './flight-grades.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -46,8 +47,9 @@ let events = [];
 let whose = me.id;
 let people = [];          // [{ id, username, is_npc, category_id }]
 const nameOf = id => id === me.id ? 'You' : (people.find(p => p.id === id)?.username || 'Someone');
-const shown = () => !me.is_admin || whose === 'all' ? events
-  : events.filter(ev => ev.is_public || ev.owner_id === whose);
+let classes = [];         // the open calendar's Flight classes, as weekly entries
+const shown = () => (!me.is_admin || whose === 'all' ? events
+  : events.filter(ev => ev.is_public || ev.owner_id === whose)).concat(classes);
 
 /* ------------------------------------------------------------------ */
 /*  date helpers — all work in local date parts, no timezone drift     */
@@ -77,11 +79,74 @@ function prettyTime(t) {
   return `${h12}:${String(m).padStart(2, '0')} ${ap}`;
 }
 
-/* Does an event cover this day (inclusive of multi-day spans)? */
+/* Does an event cover this day (inclusive of multi-day spans and repeats)? */
 function covers(ev, dayStr) {
+  if (ev.repeat) return occursOn(ev, dayStr);
   const s = ev.start_date;
   const e = ev.end_date || ev.start_date;
   return dayStr >= s && dayStr <= e;
+}
+
+const utcDay = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+
+/* Repeats (sql/calendar-repeat.sql): every day / week / 2 weeks / month,
+   from the start date until repeat_until, minus any skipped days. */
+function occursOn(ev, d) {
+  if (d < ev.start_date || (ev.repeat_until && d > ev.repeat_until)) return false;
+  if ((ev.skip_dates || []).includes(d)) return false;
+  const day = parseYmd(d), start = parseYmd(ev.start_date);
+  if (ev.repeat === 'daily') return true;
+  if (ev.repeat === 'monthly') return day.getDate() === start.getDate();
+  const days = ev.repeat_days?.length ? ev.repeat_days : [start.getDay()];
+  if (!days.includes(day.getDay())) return false;
+  if (ev.repeat !== 'biweekly') return true;
+  // Count whole weeks between the two Sundays.
+  const weeks = Math.round(((utcDay(d) - day.getDay() * 864e5) - (utcDay(ev.start_date) - start.getDay() * 864e5)) / (7 * 864e5));
+  return weeks % 2 === 0;
+}
+
+const REPEAT_LABEL = { daily: 'Every day', weekly: 'Every week', biweekly: 'Every 2 weeks', monthly: 'Every month' };
+function repeatText(ev) {
+  if (!ev.repeat) return '';
+  let t = REPEAT_LABEL[ev.repeat] || 'Repeats';
+  if ((ev.repeat === 'weekly' || ev.repeat === 'biweekly') && ev.repeat_days?.length > 1)
+    t += ' on ' + [...ev.repeat_days].sort().map(i => DOW[i]).join(', ');
+  if (ev.repeat_until) t += ` until ${prettyDate(ev.repeat_until).replace(/^\w+, /, '')}`;
+  return t;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Flight classes: every course the person is enrolled in shows up    */
+/*  on its meeting days for the length of the active term.            */
+/* ------------------------------------------------------------------ */
+
+const classCache = new Map();
+async function classesFor(uid) {
+  if (!uid || uid === 'all') return [];
+  if (classCache.has(uid)) return classCache.get(uid);
+  let list = [];
+  try {
+    const [enr, term] = await Promise.all([
+      supa.from('flight_enrollments').select('course_id').eq('user_id', uid),
+      supa.from('ft_terms').select('start_date, weeks').eq('active', true).order('created_at', { ascending: false }).limit(1)
+    ]);
+    const t = term.data?.[0];
+    const ids = (enr.data || []).map(e => e.course_id);
+    if (!enr.error && ids.length && t?.start_date) {
+      const { data: crs } = await supa.from('flight_courses')
+        .select('id, code, title, schedule, room, professor_name, color').in('id', ids);
+      const s = parseYmd(t.start_date);
+      const until = ymd(new Date(s.getFullYear(), s.getMonth(), s.getDate() + (t.weeks || 16) * 7 - 1));
+      const hm = min => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+      list = (crs || []).flatMap(c => parseMeetings(c.schedule).map(m => ({
+        id: `class-${c.id}-${m.day}-${m.start}`, virtual: true, kind: 'class',
+        title: c.code, course: c, repeat: 'weekly', repeat_days: [m.day % 7],
+        start_date: t.start_date, repeat_until: until, start_time: hm(m.start), end_time: hm(m.end)
+      })));
+    }
+  } catch { list = []; }
+  classCache.set(uid, list);
+  return list;
 }
 
 /* ------------------------------------------------------------------ */
@@ -94,10 +159,14 @@ async function loadMonth() {
   const from = ymd(new Date(view.getFullYear(), view.getMonth() - 1, 1));
   const to   = ymd(new Date(view.getFullYear(), view.getMonth() + 2, 0));
 
-  const { data, error } = await supa.from('calendar_events')
+  const query = (withRepeats) => supa.from('calendar_events')
     .select('*')
-    .or(`and(start_date.lte.${to},start_date.gte.${from}),and(end_date.gte.${from},end_date.lte.${to})`)
+    .or(`and(start_date.lte.${to},start_date.gte.${from}),and(start_date.lte.${to},end_date.gte.${from})` +
+        (withRepeats ? `,and(repeat.not.is.null,start_date.lte.${to})` : ''))
     .order('start_time', { nullsFirst: true });
+  let { data, error } = await query(true);
+  // Before sql/calendar-repeat.sql is run there's no repeat column.
+  if (error && /repeat/i.test(error.message)) ({ data, error } = await query(false));
 
   if (error) { toast(error.message, 'error'); events = []; }
   else events = data || [];
@@ -124,8 +193,9 @@ function render() {
 
     const dstr = ymd(new Date(view.getFullYear(), view.getMonth(), dayNum));
     const dayEvents = shown().filter(ev => covers(ev, dstr));
-    const chips = dayEvents.slice(0, 3).map(ev => `
-      <span class="cal-chip ${ev.is_public ? 'gm' : ''} ${ev.assigned_by ? 'asg' : ''} ${ev.kind === 'reminder' ? 'rem' : ''}">
+    const chips = dayEvents.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')).slice(0, 3).map(ev => `
+      <span class="cal-chip ${ev.is_public ? 'gm' : ''} ${ev.assigned_by ? 'asg' : ''} ${ev.kind === 'reminder' ? 'rem' : ''} ${ev.virtual ? 'cls' : ''}"
+            ${ev.virtual ? `style="--cc:${esc(ev.course.color || '#2F6BFF')}"` : ''}>
         ${ev.kind === 'reminder' ? '🔔 ' : ''}${esc(ev.title)}
       </span>`).join('');
     const more = dayEvents.length > 3 ? `<span class="cal-more">+${dayEvents.length - 3}</span>` : '';
@@ -172,7 +242,20 @@ function renderDay() {
   });
 }
 
+function classRow(ev) {
+  const c = ev.course;
+  return `
+    <div class="cal-event cls" style="--cc:${esc(c.color || '#2F6BFF')}">
+      <div class="cal-event-main">
+        <div class="cal-event-title">${esc(c.code)} · ${esc(c.title)} <span class="cal-tag cal-tag-cls">Class</span></div>
+        <div class="cal-event-meta">${prettyTime(ev.start_time)} – ${prettyTime(ev.end_time)}${c.room ? ` · ${esc(c.room)}` : ''}${c.professor_name ? ` · ${esc(c.professor_name)}` : ''}</div>
+      </div>
+      <a class="icon-btn" href="flight.html?course=${esc(c.id)}" title="Open in Flight">↗</a>
+    </div>`;
+}
+
 function eventRow(ev) {
+  if (ev.virtual) return classRow(ev);
   const mine = ev.owner_id === me.id;
   const canEdit = me.is_admin || (mine && !ev.assigned_by);
   const owner = me.is_admin && !ev.is_public && !mine && (whose === 'all' || ev.owner_id !== whose)
@@ -192,7 +275,7 @@ function eventRow(ev) {
           ${owner}
         </div>
         <div class="cal-event-meta">
-          ${when}${span ? ` · ${prettyDate(ev.start_date)} → ${prettyDate(ev.end_date)}` : ''}
+          ${when}${span ? ` · ${prettyDate(ev.start_date)} → ${prettyDate(ev.end_date)}` : ''}${ev.repeat ? ` · <span class="cal-rep">↻ ${esc(repeatText(ev))}</span>` : ''}
         </div>
         ${ev.notes ? `<div class="cal-event-notes">${esc(ev.notes)}</div>` : ''}
       </div>
@@ -281,6 +364,21 @@ function openEditor(ev, defaultDay) {
       </div>
 
       <div class="field">
+        <label for="cRepeat">Repeats</label>
+        <select id="cRepeat">
+          <option value="">Doesn't repeat</option>
+          ${Object.entries(REPEAT_LABEL).map(([k, l]) => `<option value="${k}" ${e.repeat === k ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+      </div>
+      <div id="cRepWrap" ${e.repeat ? '' : 'hidden'}>
+        <div class="cal-dows" id="cDows" ${e.repeat === 'weekly' || e.repeat === 'biweekly' ? '' : 'hidden'}>
+          ${DOW.map((d, i) => `<button type="button" data-dow="${i}" class="${(e.repeat_days?.length ? e.repeat_days : [parseYmd(e.start_date).getDay()]).includes(i) ? 'on' : ''}">${d.slice(0, 2)}</button>`).join('')}
+        </div>
+        <div class="field"><label for="cUntil">Until <span class="muted">(leave empty to keep going)</span></label>
+          <input type="date" id="cUntil" class="mono" value="${esc(e.repeat_until || '')}"></div>
+      </div>
+
+      <div class="field">
         <label for="cNotes">Notes</label>
         <textarea id="cNotes" rows="2" maxlength="1000">${esc(e.notes || '')}</textarea>
       </div>
@@ -307,7 +405,8 @@ function openEditor(ev, defaultDay) {
 
       <div id="cMsg"></div>`,
     footer: `
-      ${editing ? '<button class="btn btn-danger" id="cDelete">Delete</button>' : ''}
+      ${editing ? `<button class="btn btn-danger" id="cDelete">${e.repeat ? 'Delete all' : 'Delete'}</button>` : ''}
+      ${editing && e.repeat && covers(e, selected) ? `<button class="btn btn-ghost" id="cSkip">Skip ${esc(prettyDate(selected).replace(/, \d+$/, ''))}</button>` : ''}
       <button class="btn btn-primary" id="cSave">${editing ? 'Save' : 'Add'}</button>`
   });
 
@@ -321,6 +420,26 @@ function openEditor(ev, defaultDay) {
     $('#cEndWrap', root).hidden = !e2.target.checked);
   $('#cTimed', root).addEventListener('change', e2 =>
     $('#cTimeWrap', root).hidden = !e2.target.checked);
+
+  // Repeats.
+  const syncRepeat = () => {
+    const r = $('#cRepeat', root).value;
+    $('#cRepWrap', root).hidden = !r;
+    $('#cDows', root).hidden = !(r === 'weekly' || r === 'biweekly');
+    // A repeating entry is one day long each time.
+    $('#cMulti', root).closest('.check').hidden = !!r;
+    if (r) { $('#cMulti', root).checked = false; $('#cEndWrap', root).hidden = true; }
+  };
+  $('#cRepeat', root).addEventListener('change', syncRepeat);
+  $$('#cDows [data-dow]', root).forEach(b => b.addEventListener('click', () => b.classList.toggle('on')));
+  syncRepeat();
+
+  $('#cSkip', root)?.addEventListener('click', async () => {
+    const { error } = await supa.from('calendar_events')
+      .update({ skip_dates: [...new Set([...(e.skip_dates || []), selected])] }).eq('id', e.id);
+    if (error) return msg(error.message);
+    close(); toast(`Skipped ${prettyDate(selected)}.`, 'ok'); await loadMonth();
+  });
 
   // GM: who it goes on.
   const picked = () => $$('#cPickList input:checked', root).map(i => i.value);
@@ -350,6 +469,11 @@ function openEditor(ev, defaultDay) {
     const timed   = $('#cTimed', root).checked;
     const end     = multiOn ? $('#cEnd', root).value || null : null;
     if (end && end < start) return msg('The end date is before the start date.');
+    const repeat = $('#cRepeat', root).value || null;
+    const until = repeat ? ($('#cUntil', root).value || null) : null;
+    if (until && until < start) return msg('"Until" is before the start date.');
+    const dows = $$('#cDows [data-dow].on', root).map(b => Number(b.dataset.dow));
+    if ((repeat === 'weekly' || repeat === 'biweekly') && !dows.length) return msg('Pick at least one day of the week.');
 
     const isPublic = me.is_admin ? $('#cPublic', root)?.checked || false : false;
     const targets = editing ? [e.owner_id]
@@ -367,6 +491,13 @@ function openEditor(ev, defaultDay) {
       end_time:   timed ? ($('#cEndT', root).value || null) : null,
       is_public: isPublic
     };
+    // Only send the repeat columns when they're used, so the calendar keeps
+    // working before sql/calendar-repeat.sql is run.
+    if (repeat || e.repeat) Object.assign(row, {
+      repeat, repeat_until: until,
+      repeat_days: repeat === 'weekly' || repeat === 'biweekly' ? dows : null,
+      end_date: null
+    });
     // Entries the GM puts on someone else's calendar are marked as from the GM.
     const rows = isPublic || editing ? [row]
       : targets.map(id => id === me.id ? row
@@ -379,7 +510,8 @@ function openEditor(ev, defaultDay) {
     const { error } = await q;
     if (error) {
       ev2.target.disabled = false;
-      return msg(/assigned_by/.test(error.message) ? 'Run sql/calendar-assign.sql in Supabase first.' : error.message);
+      return msg(/assigned_by/.test(error.message) ? 'Run sql/calendar-assign.sql in Supabase first.'
+        : /repeat/.test(error.message) ? 'Run sql/calendar-repeat.sql in Supabase first.' : error.message);
     }
 
     close();
@@ -426,9 +558,10 @@ async function mountWhose() {
   const sel = $('#calWhose');
   const want = new URLSearchParams(location.search).get('who');
   if (want && [...sel.options].some(o => o.value === want)) { sel.value = want; whose = want; }
-  sel.addEventListener('change', () => { whose = sel.value; render(); });
+  sel.addEventListener('change', async () => { whose = sel.value; classes = await classesFor(whose); render(); });
 }
 await mountWhose();
+classes = await classesFor(me.is_admin ? whose : me.id);
 
 $('#calPrev').addEventListener('click', () => { view = addMonths(view, -1); loadMonth(); });
 $('#calNext').addEventListener('click', () => { view = addMonths(view,  1); loadMonth(); });

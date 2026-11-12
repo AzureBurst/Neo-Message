@@ -37,6 +37,57 @@ mountCarrier($('#carrier'), { admin: true, label: 'NEO ADMIN' });
 
 $('#backApp').addEventListener('click', () => location.href = 'app.html');
 $('#refresh').addEventListener('click', () => loadAll());
+$('#backupBtn').addEventListener('click', (e) => downloadBackup(e.currentTarget));
+
+/* ------------------------------------------------------------------ */
+/*  Backup: every table, as one JSON file on your computer.            */
+/*  It's a safety copy of the game's data (messages, mail, sheets,      */
+/*  grades…). It doesn't hold passwords or uploaded images; those stay  */
+/*  in Supabase. The nightly backup (README → Backups) has everything. */
+/* ------------------------------------------------------------------ */
+
+const BACKUP_TABLES = [
+  'profiles', 'account_categories', 'account_tags', 'app_settings', 'contacts',
+  'conversations', 'conversation_members', 'messages', 'message_reactions',
+  'npcs', 'npc_reads', 'notifications',
+  'mail_threads', 'mail_messages', 'mail_state',
+  'calendar_events', 'journal_entries',
+  'ig_profiles', 'ig_posts', 'ig_comments', 'ig_likes', 'ig_follows', 'ig_post_tags',
+  'flight_students', 'flight_courses', 'flight_enrollments', 'flight_assignments',
+  'flight_grades', 'flight_progress', 'flight_announcements', 'flight_summaries',
+  'mt_profiles', 'mt_private', 'mt_comments',
+  'ft_terms', 'ft_weeks', 'ft_entries', 'ft_plans', 'ft_progress', 'ft_connections', 'ft_reputation',
+  'sw_sheets', 'sw_rolls', 'sw_requests',
+  'qr_searches', 'qr_results', 'qr_pages'
+];
+
+async function downloadBackup(btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  const out = { made_at: new Date().toISOString(), site: location.origin, tables: {} };
+  const skipped = [];
+  try {
+    for (const [i, t] of BACKUP_TABLES.entries()) {
+      btn.textContent = `Backing up… ${i + 1}/${BACKUP_TABLES.length}`;
+      const rows = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supa.from(t).select('*').range(from, from + 999);
+        if (error) { if (!rows.length) skipped.push(t); break; }
+        rows.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      if (!skipped.includes(t)) out.tables[t] = rows;
+    }
+    const n = Object.values(out.tables).reduce((a, r) => a + r.length, 0);
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadBlob(`neo-backup-${stamp}.json`, JSON.stringify(out, null, 1), 'application/json');
+    toast(`Backed up ${n.toLocaleString()} rows from ${Object.keys(out.tables).length} tables.`, 'ok');
+  } catch (err) {
+    toast(err.message || 'Backup failed.', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+  }
+}
 
 let log = [];      // every message, joined with names
 let people = [];   // every profile
@@ -382,6 +433,7 @@ function paintUsers() {
         ${!p.is_admin && 'number_only' in p ? `<label class="num-only" title="Players can only add them by typing their number; they never show up in searches">
           <input type="checkbox" data-numonly="${esc(p.id)}" ${p.number_only ? 'checked' : ''}> Number only</label>` : ''}</td>
       <td class="row-actions">
+        ${p.is_admin ? '' : `<button class="icon-btn" data-viewas="${esc(p.id)}" title="See the site as ${esc(p.username)} sees it (read-only)">👁</button>`}
         <button class="icon-btn" data-rename="${esc(p.id)}" title="Rename ${esc(p.username)}">✎</button>
         ${p.is_admin || p.id === me.id ? '' : `<button class="icon-btn danger-icon" data-delacct="${esc(p.id)}" title="Delete ${esc(p.username)}'s account">🗑</button>`}
       </td>
@@ -402,7 +454,25 @@ function paintUsers() {
     toast(`${p?.username || 'They'} ${cb.checked ? 'can now only be added by number.' : 'show up in searches again.'}`, 'ok');
   }));
   $$('[data-rename]').forEach(b => b.addEventListener('click', () => startRename(b.dataset.rename)));
+  $$('[data-viewas]').forEach(b => b.addEventListener('click', () => viewAs(b.dataset.viewas)));
   $$('[data-delacct]').forEach(b => b.addEventListener('click', () => deleteAccount(b.dataset.delacct)));
+}
+
+/* Opens a new tab showing the site as this player sees it, read-only
+   (supabase/functions/view-as). Your own session isn't touched. */
+export async function viewAs(id) {
+  const tab = window.open('about:blank', '_blank');   // open now, before the await, so it isn't blocked
+  const { data, error } = await supa.functions.invoke('view-as', { body: { target: id } });
+  if (error || !data?.token_hash) {
+    tab?.close();
+    const status = error?.context?.status;
+    let why = data?.error || '';
+    try { why = (await error?.context?.json())?.error || why; } catch {}
+    if (!why && (status === 404 || error?.name === 'FunctionsFetchError')) why = 'Deploy the view-as function in Supabase first (see the README).';
+    return toast(why || error?.message || 'Something went wrong.', 'error');
+  }
+  const url = `home.html#viewas=${encodeURIComponent(data.token_hash)}&u=${encodeURIComponent(data.username)}`;
+  if (tab) tab.location.href = url; else location.href = url;
 }
 
 /* Delete an account for good, after typing the name to confirm. */

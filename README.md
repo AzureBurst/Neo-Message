@@ -276,3 +276,74 @@ Run `sql/groups.sql` once (it replaces the older `group-admin.sql`).
 - **Deleting accounts** — NeoAdmin → Accounts → 🗑. Type the name to confirm.
   Their chat messages stay (as "Unknown"); everything else they owned goes.
   Admin accounts and your own can't be deleted.
+
+## View as a player
+
+See any page exactly as one player sees it — their contacts, mail,
+calendar, grades, what they can and can't find — without signing out.
+
+**One-time setup** (like the Discord function): in Supabase open
+**Edge Functions → Deploy a new function → Via editor**, name it
+`view-as`, paste in `supabase/functions/view-as/index.ts`, and deploy.
+It needs no secrets. Leave "Verify JWT" on.
+
+Then in **Admin → Accounts** press 👁 next to anyone. A new tab opens
+signed in as them, with a "Viewing as … · read-only" bar on every page.
+
+- It's a look only: nothing can be sent, saved, ticked, cleared or marked
+  read, and they don't show as online. Things you try show "Preview only".
+- Your own tabs stay signed in as you. **Exit** (or closing the tab) ends it.
+- Only the GM account can open a preview, and never of another GM account.
+  Their password and their own sign-ins aren't touched.
+
+## Calendar: repeats and classes
+
+Run `sql/calendar-repeat.sql`. Any entry can then repeat every day, every
+week (pick the weekdays, e.g. Mon/Wed/Fri), every 2 weeks or every month,
+until an optional end date. Opening one on a day gives **Skip** (just that
+day) and **Delete all**.
+
+Flight classes show up on each student's calendar by themselves: every
+course they're enrolled in, on the days and times in its **Schedule**
+field (e.g. `Mon/Wed 10:00–11:15`), from the active term's start date
+(MyTime → GM → term) for the term's number of weeks. Fix a course's
+schedule in Flight and every calendar follows. You see a player's classes
+when you open their calendar.
+
+## Backups
+
+**Quick copy, any time:** Admin → **Download backup** saves every table
+(messages, mail, sheets, grades, posts…) as one `.json` file on your
+computer. It doesn't include passwords or the uploaded images themselves.
+
+**Nightly full backup (recommended):** a GitHub Action copies the whole
+database every night, locks it with a password, and keeps each night's copy
+for 30 days. Set up once:
+
+1. In Supabase, press **Connect** (top of the dashboard) and copy the
+   **Session pooler** connection string. Put your database password in
+   place of `[YOUR-PASSWORD]`. (Forgot it? Project Settings → Database →
+   Reset database password. If the password has symbols like `@` `#` `/`,
+   reset it to letters and numbers only.)
+2. In GitHub: this repo → **Settings → Secrets and variables → Actions →
+   New repository secret**. Add two:
+   - `SUPABASE_DB_URL` — the connection string from step 1
+   - `BACKUP_PASSPHRASE` — a long password you make up. **Write it down
+     somewhere safe**; without it the backups can't be opened.
+3. Repo → **Actions → Nightly backup → Run workflow** to make the first
+   one now and check it goes green.
+
+To get one: Actions → Nightly backup → pick a night → download the file at
+the bottom. It's a `.7z`; open it with 7-Zip (Windows) or Keka / The
+Unarchiver (Mac) and type the passphrase. The repo is public, so the
+password is what keeps the copy private.
+
+**Restoring** (into the same project after a mistake, or a brand-new one):
+in the SQL Editor run the files from the backup in order —
+`1-accounts.sql`, `2-public.sql`, `3-account-hooks.sql`,
+`4-live-updates.sql`. A brand-new project takes them as they are. To
+restore over the same project, the existing tables have to be emptied
+first, so get help with that step rather than running the files over live
+data.
+`5-uploaded-files.txt` lists the uploaded files; the files themselves live
+in Supabase Storage and aren't part of the backup.

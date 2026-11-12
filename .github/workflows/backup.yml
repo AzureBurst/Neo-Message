@@ -1,0 +1,86 @@
+# =====================================================================
+#  Nightly backup of the Supabase database
+#
+#  Every night this copies the whole database (every table, plus the
+#  sign-in accounts) into a password-protected .7z file and keeps it on
+#  the run's page for 30 days. The repo is public, so the file is
+#  encrypted: without BACKUP_PASSPHRASE it's useless to anyone else.
+#
+#  Needs two repository secrets (Settings → Secrets and variables →
+#  Actions); see README → Backups:
+#    SUPABASE_DB_URL     the "Session pooler" connection string
+#    BACKUP_PASSPHRASE   a long password you keep somewhere safe
+#  Until both are set it does nothing.
+# =====================================================================
+name: Nightly backup
+
+on:
+  schedule:
+    - cron: '17 7 * * *'      # 2:17 AM Eastern (3:17 AM in summer)
+  workflow_dispatch:           # "Run workflow" button for a backup right now
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Check it's set up
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$PASS" ]; then
+            echo "::warning::Backups aren't set up yet. Add SUPABASE_DB_URL and BACKUP_PASSPHRASE (README → Backups)."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install pg_dump 17 and 7-Zip
+        if: env.SKIP != '1'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 p7zip-full
+
+      - name: Back up
+        if: env.SKIP != '1'
+        run: |
+          set -euo pipefail
+          PG=/usr/lib/postgresql/17/bin
+          NAME="neo-backup-$(date -u +%Y-%m-%d)"
+          mkdir -p "out/$NAME"
+          # Restore them in this order (README → Backups → Restoring).
+          # 1. The sign-in accounts (data only; Supabase makes those tables).
+          "$PG/pg_dump" "$DB_URL" --data-only --no-owner --no-privileges \
+            --table=auth.users --table=auth.identities -f "out/$NAME/1-accounts.sql"
+          # 2. Everything the site stores: tables, rules, functions, data.
+          "$PG/pg_dump" "$DB_URL" --schema=public --no-owner --no-privileges \
+            -f "out/$NAME/2-public.sql"
+          sed -i '/^CREATE SCHEMA public;$/d' "out/$NAME/2-public.sql"
+          # 3. The hook that makes a profile for each new account.
+          "$PG/psql" "$DB_URL" -qAt -c "set search_path = ''" -c "select format('drop trigger if exists %I on auth.users;', tgname) || chr(10) || pg_get_triggerdef(oid) || ';' from pg_trigger where tgrelid = 'auth.users'::regclass and not tgisinternal" \
+            > "out/$NAME/3-account-hooks.sql"
+          # 4. Which tables send live updates.
+          "$PG/psql" "$DB_URL" -qAt -c "select format('alter publication supabase_realtime add table %I.%I;', schemaname, tablename) from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' order by tablename" \
+            > "out/$NAME/4-live-updates.sql"
+          # 5. Which uploaded files exist (the files themselves stay in Storage).
+          "$PG/psql" "$DB_URL" -qAt -c "select bucket_id, name, created_at from storage.objects order by 1, 2" \
+            > "out/$NAME/5-uploaded-files.txt" || true
+          ls -la "out/$NAME"
+          ( cd out && 7z a -t7z -mhe=on -mx=9 "-p$PASS" "$NAME.7z" "$NAME" > /dev/null )
+          rm -rf "out/$NAME"
+          echo "NAME=$NAME" >> "$GITHUB_ENV"
+
+      - name: Keep it for 30 days
+        if: env.SKIP != '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: out/${{ env.NAME }}.7z
+          retention-days: 30
+          compression-level: 0
