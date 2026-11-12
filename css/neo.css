@@ -4291,3 +4291,8 @@ html.calm .sw-dice .sw-die.ace-ready { animation: none !important; }
   letter-spacing: .06em; text-transform: uppercase; background: rgba(200,255,61,.18); color: #c8ff3d; vertical-align: middle; }
 .ns-cast-head { flex-wrap: wrap; gap: 10px; }
 .ns-find { flex: 1; min-width: 160px; max-width: 320px; }
+.num-only { display: flex; align-items: center; gap: 6px; margin-top: 6px; font: 600 12px var(--font-ui); color: var(--muted); cursor: pointer; white-space: nowrap; }
+.num-only input { width: 15px; height: 15px; }
+label.num-only.field { font-size: 13.5px; color: inherit; white-space: normal; margin: 4px 0 12px; }
+.ns-numonly { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font: 700 10.5px var(--font-ui);
+  background: rgba(255,255,255,.08); color: #ffd27a; }

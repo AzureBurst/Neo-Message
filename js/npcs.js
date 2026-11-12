@@ -408,7 +408,7 @@ function viewCast() {
           ${avatar(n.id, 56, true)}
           <div class="ns-card-id">
             <strong>${esc(p.username)}</strong>
-            ${n.role ? `<span class="ns-role">${esc(n.role)}</span>` : ''}
+            ${n.role ? `<span class="ns-role">${esc(n.role)}</span>` : ''}${p.number_only ? '<span class="ns-numonly" title="Only addable by typing their number">📞 Number only</span>' : ''}
             <span class="mono">${esc(formatNumber(p.phone_number))}</span>
           </div>
           ${s.unread ? `<span class="ns-pill" title="Unread">${s.unread}</span>` : ''}
@@ -544,6 +544,8 @@ function openEditor(id = null) {
     </div>
     <div class="field"><label for="neRole">Role <span class="muted">(only you see this)</span></label>
       <input type="text" id="neRole" maxlength="60" value="${esc(n?.role || '')}" placeholder="e.g. Night dispatcher, Rival student, Informant"></div>
+    ${p && 'number_only' in p || !p ? `<label class="num-only field"><input type="checkbox" id="neNumOnly" ${p?.number_only ? 'checked' : ''}>
+      Number only <span class="muted">(players never find them in searches; they have to type the number)</span></label>` : ''}
     ${cats ? `<div class="field"><label for="neCat">Category <span class="muted">(decides who can find, add and email them)</span></label>
       ${categorySelect(cats.filter(c => c.key !== 'gm'), p?.category_id || cats.find(c => c.key === 'outsiders')?.id, 'id="neCat"')}</div>` : ''}
     <div class="field"><label>Colour <span class="muted">(how they show in your Studio)</span></label>
@@ -599,6 +601,7 @@ function openEditor(id = null) {
       }
       const prof = { avatar_url: avatarUrl || null, bio: bio || null };
       if ($('#neCat', root)) prof.category_id = $('#neCat', root).value;
+      if ($('#neNumOnly', root) && ($('#neNumOnly', root).checked || (p && 'number_only' in p))) prof.number_only = $('#neNumOnly', root).checked;
       if (!id || phone !== formatNumber(p.phone_number)) prof.phone_number = phone;
       const { error: pErr } = await supa.from('profiles').update(prof).eq('id', target);
       if (pErr) throw new Error(/phone_number/.test(pErr.message) ? 'That number is already taken.' : pErr.message);

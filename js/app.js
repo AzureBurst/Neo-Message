@@ -820,8 +820,12 @@ async function openContactsModal() {
   await cachePeople((rows ?? []).map(r => r.contact_id));
 
   // Categories + who's an NPC come from the directory (sql/categories.sql).
-  const [dir, cats] = await Promise.all([loadDirectory({ fresh: true }), loadCategoryList()]);
-  const dirOf = new Map(dir.map(d => [d.id, d]));
+  const [dirAll, cats] = await Promise.all([loadDirectory({ fresh: true }), loadCategoryList()]);
+  const dirOf = new Map(dirAll.map(d => [d.id, d]));
+  // Search only shows people you can add from the directory. Number-only
+  // characters (and e.g. faculty, for students) are added by typing a number.
+  const mine = new Set((rows ?? []).map(r => r.contact_id));
+  const dir = dirAll.filter(d => d.can_add || mine.has(d.id));
   const list = sortPeople((rows ?? []).map(r => {
     const p = state.people.get(r.contact_id);
     return { ...r, profile: p, label: r.nickname || p?.username || 'Unknown', d: dirOf.get(r.contact_id) };
@@ -837,7 +841,7 @@ async function openContactsModal() {
           <input id="addFind" placeholder="Name or phone number" maxlength="24" autocomplete="off">
           <button class="btn btn-sm" id="addGo" style="flex-shrink:0">Add</button>
         </div>
-        <div class="hint">Search the directory by name, or type a phone number. Some people can only be added by number.</div>
+        <div class="hint">Search the directory by name, or type a phone number.</div>
       </div>
       ${filterBar(allPeople, r => r.category_id, 'contacts', cats)}
       <div id="addResults" class="find-results"></div>
@@ -873,7 +877,7 @@ async function openContactsModal() {
       msgBox.innerHTML = `<div class="notice notice-${/duplicate|unique/i.test(error.message) ? 'info' : 'error'}">${
         /duplicate|unique/i.test(error.message)
           ? esc(name) + ' is already in your contacts.'
-          : /row-level security/i.test(error.message) ? esc(name) + ' can only be added by phone number.'
+          : /row-level security/i.test(error.message) ? 'Nobody by that name in your directory. Try their number.'
           : esc(error.message)}</div>`;
       return;
     }
@@ -890,7 +894,7 @@ async function openContactsModal() {
         <strong>${esc(p.username)}${p.is_npc ? '' : '<span class="player-tag">Player</span>'}</strong>
         <span>${categoryChip(p)}${p.about ? ` <small class="muted">${esc(p.about)}</small>` : ''}</span>
       </span>
-      <span class="find-add">${already.has(p.id) ? 'In contacts' : p.can_add ? 'Add' : 'By number only'}</span>
+      <span class="find-add">${already.has(p.id) ? 'In contacts' : 'Add'}</span>
     </${p.can_add && !already.has(p.id) ? 'button' : 'div'}>`;
   let applyFilter = () => {};
   const paintFind = (rows) => {
@@ -941,10 +945,6 @@ async function openContactsModal() {
     const hit = dir.find(p => p.username.toLowerCase() === q.toLowerCase());
     if (!hit) {
       msgBox.innerHTML = '<div class="notice notice-error">Nobody by that name in your directory. Try their number.</div>';
-      return;
-    }
-    if (!hit.can_add) {
-      msgBox.innerHTML = `<div class="notice notice-info">${esc(hit.username)} can only be added by phone number.</div>`;
       return;
     }
     await addById(hit.id, hit.username);

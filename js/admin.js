@@ -378,7 +378,9 @@ function paintUsers() {
       <td>${p.is_admin
         ? '<span class="pill admin">GM</span>'
         : cats ? categorySelect(cats.filter(c => c.key !== 'gm'), p.category_id, `class="cat-select" data-cat-for="${esc(p.id)}"`)
-        : '<span class="pill">player</span>'}</td>
+        : '<span class="pill">player</span>'}
+        ${!p.is_admin && 'number_only' in p ? `<label class="num-only" title="Players can only add them by typing their number; they never show up in searches">
+          <input type="checkbox" data-numonly="${esc(p.id)}" ${p.number_only ? 'checked' : ''}> Number only</label>` : ''}</td>
       <td class="row-actions">
         <button class="icon-btn" data-rename="${esc(p.id)}" title="Rename ${esc(p.username)}">✎</button>
         ${p.is_admin || p.id === me.id ? '' : `<button class="icon-btn danger-icon" data-delacct="${esc(p.id)}" title="Delete ${esc(p.username)}'s account">🗑</button>`}
@@ -391,6 +393,13 @@ function paintUsers() {
       if (p) p.category_id = sel.value;
       toast(`${p?.username || 'Account'} is now in ${cats.find(c => c.id === sel.value)?.name}.`, 'ok');
     }
+  }));
+  $$('[data-numonly]').forEach(cb => cb.addEventListener('change', async () => {
+    const { error } = await supa.from('profiles').update({ number_only: cb.checked }).eq('id', cb.dataset.numonly);
+    if (error) { cb.checked = !cb.checked; return toast(/number_only/.test(error.message) ? 'Run sql/number-only.sql in Supabase first.' : error.message, 'error'); }
+    const p = people.find(x => x.id === cb.dataset.numonly);
+    if (p) p.number_only = cb.checked;
+    toast(`${p?.username || 'They'} ${cb.checked ? 'can now only be added by number.' : 'show up in searches again.'}`, 'ok');
   }));
   $$('[data-rename]').forEach(b => b.addEventListener('click', () => startRename(b.dataset.rename)));
   $$('[data-delacct]').forEach(b => b.addEventListener('click', () => deleteAccount(b.dataset.delacct)));
