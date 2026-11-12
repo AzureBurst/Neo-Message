@@ -17,6 +17,7 @@ import {
 } from './supa.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
+import { loadDirectory, loadCategoryList, sortPeople } from './directory.js';
 
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
@@ -39,6 +40,14 @@ const main = $('#calMain');
 let view = startOfMonth(storyNow());
 let selected = ymd(storyNow());
 let events = [];
+
+/* GM only: whose calendar is open. me.id = the GM's own, 'all' = every
+   calendar at once, or a player's / NPC's id (sql/calendar-assign.sql). */
+let whose = me.id;
+let people = [];          // [{ id, username, is_npc, category_id }]
+const nameOf = id => id === me.id ? 'You' : (people.find(p => p.id === id)?.username || 'Someone');
+const shown = () => !me.is_admin || whose === 'all' ? events
+  : events.filter(ev => ev.is_public || ev.owner_id === whose);
 
 /* ------------------------------------------------------------------ */
 /*  date helpers — all work in local date parts, no timezone drift     */
@@ -114,9 +123,9 @@ function render() {
     if (dayNum < 1 || dayNum > daysInMonth) { cells.push('<div class="cal-cell empty"></div>'); continue; }
 
     const dstr = ymd(new Date(view.getFullYear(), view.getMonth(), dayNum));
-    const dayEvents = events.filter(ev => covers(ev, dstr));
+    const dayEvents = shown().filter(ev => covers(ev, dstr));
     const chips = dayEvents.slice(0, 3).map(ev => `
-      <span class="cal-chip ${ev.is_public ? 'gm' : ''} ${ev.kind === 'reminder' ? 'rem' : ''}">
+      <span class="cal-chip ${ev.is_public ? 'gm' : ''} ${ev.assigned_by ? 'asg' : ''} ${ev.kind === 'reminder' ? 'rem' : ''}">
         ${ev.kind === 'reminder' ? '🔔 ' : ''}${esc(ev.title)}
       </span>`).join('');
     const more = dayEvents.length > 3 ? `<span class="cal-more">+${dayEvents.length - 3}</span>` : '';
@@ -142,14 +151,15 @@ function render() {
 
 function renderDay() {
   const box = $('#calDay');
-  const dayEvents = events
+  const dayEvents = shown()
     .filter(ev => covers(ev, selected))
     .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
 
   box.innerHTML = `
     <div class="cal-day-head">
       <h3>${prettyDate(selected)}</h3>
-      <button class="btn btn-sm btn-primary" id="calDayAdd">Add</button>
+      <button class="btn btn-sm btn-primary" id="calDayAdd">${me.is_admin && whose !== me.id && whose !== 'all'
+        ? `Add to ${esc(nameOf(whose))}` : 'Add'}</button>
     </div>
     ${dayEvents.length ? dayEvents.map(eventRow).join('')
       : '<div class="ig-empty muted">Nothing on this day.</div>'}`;
@@ -164,18 +174,22 @@ function renderDay() {
 
 function eventRow(ev) {
   const mine = ev.owner_id === me.id;
-  const canEdit = mine || me.is_admin;
+  const canEdit = me.is_admin || (mine && !ev.assigned_by);
+  const owner = me.is_admin && !ev.is_public && !mine && (whose === 'all' || ev.owner_id !== whose)
+    ? `<span class="cal-tag cal-tag-who">${esc(nameOf(ev.owner_id))}</span>` : '';
   const span = ev.end_date && ev.end_date !== ev.start_date;
   const when = ev.start_time
     ? prettyTime(ev.start_time) + (ev.end_time ? ` – ${prettyTime(ev.end_time)}` : '')
     : 'All day';
 
   return `
-    <div class="cal-event ${ev.is_public ? 'gm' : ''}" data-ev="${esc(ev.id)}">
+    <div class="cal-event ${ev.is_public ? 'gm' : ''} ${ev.assigned_by ? 'asg' : ''}" data-ev="${esc(ev.id)}">
       <div class="cal-event-main">
         <div class="cal-event-title">
           ${ev.kind === 'reminder' ? '🔔 ' : ''}${esc(ev.title)}
           ${ev.is_public ? '<span class="cal-tag">GM</span>' : ''}
+          ${ev.assigned_by && !ev.is_public ? `<span class="cal-tag cal-tag-asg">${me.is_admin ? 'Assigned' : 'From GM'}</span>` : ''}
+          ${owner}
         </div>
         <div class="cal-event-meta">
           ${when}${span ? ` · ${prettyDate(ev.start_date)} → ${prettyDate(ev.end_date)}` : ''}
@@ -209,8 +223,18 @@ function sheet({ title, body, footer }) {
   return { root, close };
 }
 
+function pickGroup(label, rows, preset) {
+  if (!rows.length) return '';
+  return `<div class="cal-pick-head">${label}</div>` + rows.map(p => `
+    <label class="cal-pick-row" data-name="${esc(p.username.toLowerCase())}" ${p.is_npc ? '' : 'data-player'}>
+      <input type="checkbox" value="${esc(p.id)}" ${preset.has(p.id) ? 'checked' : ''}><span>${esc(p.username)}</span>
+    </label>`).join('');
+}
+
 function openEditor(ev, defaultDay) {
   const editing = !!ev;
+  // The GM adding while a player's calendar is open: it goes on theirs.
+  const preset = new Set([whose === 'all' ? me.id : whose]);
   const e = ev || {
     kind: 'event', title: '', notes: '',
     start_date: defaultDay || selected, end_date: '',
@@ -265,7 +289,21 @@ function openEditor(ev, defaultDay) {
       <label class="check">
         <input type="checkbox" id="cPublic" ${e.is_public ? 'checked' : ''}>
         <span>GM event — everyone can see this</span>
-      </label>` : ''}
+      </label>
+      ${editing ? (e.is_public ? '' : `<div class="muted small cal-on">On ${esc(nameOf(e.owner_id))}'s calendar</div>`) : `
+      <div class="field cal-pick" id="cPickWrap" ${e.is_public ? 'hidden' : ''}>
+        <label>Put it on <span class="muted" id="cPickCount"></span></label>
+        <div class="cal-pick-tools">
+          <input type="search" id="cPickFind" placeholder="Find someone…">
+          <button type="button" class="btn btn-ghost btn-sm" data-pick="players">All players</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-pick="none">Clear</button>
+        </div>
+        <div class="cal-pick-list" id="cPickList">
+          <label class="cal-pick-row"><input type="checkbox" value="${esc(me.id)}" ${preset.has(me.id) ? 'checked' : ''}><span>My own calendar</span></label>
+          ${pickGroup('Players', people.filter(p => !p.is_npc), preset)}
+          ${pickGroup('NPCs', people.filter(p => p.is_npc), preset)}
+        </div>
+      </div>`}` : ''}
 
       <div id="cMsg"></div>`,
     footer: `
@@ -284,6 +322,24 @@ function openEditor(ev, defaultDay) {
   $('#cTimed', root).addEventListener('change', e2 =>
     $('#cTimeWrap', root).hidden = !e2.target.checked);
 
+  // GM: who it goes on.
+  const picked = () => $$('#cPickList input:checked', root).map(i => i.value);
+  const count = () => { const n = picked().length; if ($('#cPickCount', root)) $('#cPickCount', root).textContent = n > 1 ? `(${n} calendars)` : ''; };
+  $('#cPublic', root)?.addEventListener('change', e2 => { if ($('#cPickWrap', root)) $('#cPickWrap', root).hidden = e2.target.checked; });
+  $('#cPickList', root)?.addEventListener('change', count);
+  $('#cPickFind', root)?.addEventListener('input', e2 => {
+    const q = e2.target.value.trim().toLowerCase();
+    $$('#cPickList [data-name]', root).forEach(r => r.hidden = !!q && !r.dataset.name.includes(q));
+  });
+  $$('[data-pick]', root).forEach(b => b.addEventListener('click', () => {
+    $$('#cPickList input', root).forEach(i => {
+      const row = i.closest('.cal-pick-row');
+      i.checked = b.dataset.pick === 'players' ? row.hasAttribute('data-player') : false;
+    });
+    count();
+  }));
+  count();
+
   $('#cSave', root).addEventListener('click', async (ev2) => {
     const title = $('#cTitle', root).value.trim();
     const start = $('#cStart', root).value;
@@ -295,8 +351,13 @@ function openEditor(ev, defaultDay) {
     const end     = multiOn ? $('#cEnd', root).value || null : null;
     if (end && end < start) return msg('The end date is before the start date.');
 
+    const isPublic = me.is_admin ? $('#cPublic', root)?.checked || false : false;
+    const targets = editing ? [e.owner_id]
+      : (me.is_admin && !isPublic ? picked() : [me.id]);
+    if (!targets.length) return msg('Pick whose calendar it goes on.');
+
     const row = {
-      owner_id: me.id,
+      owner_id: editing ? e.owner_id : me.id,
       kind,
       title,
       notes: $('#cNotes', root).value.trim() || null,
@@ -304,18 +365,27 @@ function openEditor(ev, defaultDay) {
       end_date: end,
       start_time: timed ? ($('#cStartT', root).value || null) : null,
       end_time:   timed ? ($('#cEndT', root).value || null) : null,
-      is_public: me.is_admin ? $('#cPublic', root)?.checked || false : false
+      is_public: isPublic
     };
+    // Entries the GM puts on someone else's calendar are marked as from the GM.
+    const rows = isPublic || editing ? [row]
+      : targets.map(id => id === me.id ? row
+        : { ...row, owner_id: id, assigned_by: me.id });
 
     ev2.target.disabled = true;
     const q = editing
       ? supa.from('calendar_events').update(row).eq('id', e.id)
-      : supa.from('calendar_events').insert(row);
+      : supa.from('calendar_events').insert(rows);
     const { error } = await q;
-    if (error) { msg(error.message); ev2.target.disabled = false; return; }
+    if (error) {
+      ev2.target.disabled = false;
+      return msg(/assigned_by/.test(error.message) ? 'Run sql/calendar-assign.sql in Supabase first.' : error.message);
+    }
 
     close();
-    toast(editing ? 'Entry saved.' : 'Entry added.', 'ok');
+    toast(editing ? 'Entry saved.'
+      : rows.length > 1 ? `Added to ${rows.length} calendars.`
+      : rows[0].owner_id !== me.id ? `Added to ${nameOf(rows[0].owner_id)}'s calendar.` : 'Entry added.', 'ok');
     selected = start;
     await loadMonth();
   });
@@ -335,6 +405,30 @@ function openEditor(ev, defaultDay) {
 /* ------------------------------------------------------------------ */
 /*  wiring                                                            */
 /* ------------------------------------------------------------------ */
+
+/* GM: pick whose calendar to look at. */
+async function mountWhose() {
+  if (!me.is_admin) return;
+  const [dir] = await Promise.all([loadDirectory(), loadCategoryList()]);
+  people = sortPeople(dir,
+    { catOf: p => p.category_id, isNpc: p => !!p.is_npc, nameOf: p => p.username });
+  const bar = document.createElement('div');
+  bar.className = 'cal-whose';
+  bar.innerHTML = `
+    <label for="calWhose">Calendar</label>
+    <select id="calWhose">
+      <option value="${esc(me.id)}">Mine</option>
+      <option value="all">Everyone's</option>
+      ${people.some(p => !p.is_npc) ? `<optgroup label="Players">${people.filter(p => !p.is_npc).map(p => `<option value="${esc(p.id)}">${esc(p.username)}</option>`).join('')}</optgroup>` : ''}
+      ${people.some(p => p.is_npc) ? `<optgroup label="NPCs">${people.filter(p => p.is_npc).map(p => `<option value="${esc(p.id)}">${esc(p.username)}</option>`).join('')}</optgroup>` : ''}
+    </select>`;
+  main.before(bar);
+  const sel = $('#calWhose');
+  const want = new URLSearchParams(location.search).get('who');
+  if (want && [...sel.options].some(o => o.value === want)) { sel.value = want; whose = want; }
+  sel.addEventListener('change', () => { whose = sel.value; render(); });
+}
+await mountWhose();
 
 $('#calPrev').addEventListener('click', () => { view = addMonths(view, -1); loadMonth(); });
 $('#calNext').addEventListener('click', () => { view = addMonths(view,  1); loadMonth(); });

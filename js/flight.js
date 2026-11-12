@@ -65,13 +65,15 @@ async function loadStudent() {
     ? 'The portal is not set up yet — run sql/flight.sql in Supabase.' : enr.error.message);
 
   const ids = (enr.data || []).map(e => e.course_id);
-  const [crs, asg, ann] = await Promise.all([
+  const [crs, asg, ann, sum] = await Promise.all([
     ids.length ? supa.from('flight_courses').select('*').in('id', ids).order('code')
                : Promise.resolve({ data: [] }),
     ids.length ? supa.from('flight_assignments').select('*').in('course_id', ids).order('due_at')
                : Promise.resolve({ data: [] }),
     supa.from('flight_announcements').select('*')
-      .order('created_at', { ascending: false }).limit(40)
+      .order('created_at', { ascending: false }).limit(40),
+    ids.length ? supa.from('flight_summaries').select('*').in('course_id', ids).order('class_date', { ascending: false }).order('created_at', { ascending: false })
+               : Promise.resolve({ data: [] })
   ]);
 
   const grades = new Map((grd.data || []).map(g => [g.assignment_id, g]));
@@ -92,6 +94,7 @@ async function loadStudent() {
   D = {
     record, courses, assignments, grades, done, enrollments,
     announcements: ann.data || [],
+    summaries: sum.error ? [] : (sum.data || []),     // sql/flight-summaries.sql
     gpa: record.gpa_override != null ? Number(record.gpa_override) : computedGpa,
     courseById: new Map(courses.map(c => [c.id, c]))
   };
@@ -122,6 +125,7 @@ async function go(name, arg = null) {
       else if (name === 'schedule') viewSchedule();
       else if (name === 'course') viewCourse(arg);
       else if (name === 'tasks') viewTasks(arg || 'upcoming');
+      else if (name === 'summaries') viewSummaries(arg);
       else if (name === 'account') viewAccount();
       else if (name === 'handbook') viewHandbook(arg);
     }
@@ -348,15 +352,140 @@ function viewCourse(id) {
       </section>
 
       <section class="fl-section">
+        <div class="fl-section-head"><h3>Class summaries</h3>
+          ${D.summaries.some(x => x.course_id === id) ? '<button class="btn btn-ghost btn-sm" data-allsum>See all</button>' : ''}</div>
+        ${D.summaries.filter(x => x.course_id === id).map(x => summaryRow(x, { showCourse: false })).join('')
+          || '<div class="fl-empty">No class summaries yet.</div>'}
+      </section>
+
+      <section class="fl-section">
         <div class="fl-section-head"><h3>Announcements</h3></div>
         ${anns.map(announcementHtml).join('') || '<div class="fl-empty">No announcements for this course.</div>'}
       </section>
     </div>`;
+  wireSummaries(main);
+  $('[data-allsum]', main)?.addEventListener('click', () => go('summaries', id));
 
   wireTasks(main);
   $('[data-back]', main).addEventListener('click', () => go('courses'));
   $('[data-email]', main).addEventListener('click', () => openEmailProfessor(c));
   $('[data-calall]', main)?.addEventListener('click', () => addToCalendar(list.filter(a => a.due_at)));
+}
+
+/* ------------------------------------------------------------------ */
+/*  class summaries (sql/flight-summaries.sql)                         */
+/* ------------------------------------------------------------------ */
+
+const classDay = (d, long = false) => new Date(d + 'T12:00:00').toLocaleDateString([],
+  long ? { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' } : { weekday: 'short', month: 'short', day: 'numeric' });
+const summaryTitle = s => s.title?.trim() || `Class on ${classDay(s.class_date)}`;
+const fileIcon = s => !s.file_url ? '' : /^image\//.test(s.file_type || '') ? '🖼' : /pdf/.test(s.file_type || s.file_name || '') ? '📄' : '📎';
+
+/** Light formatting: **bold**, *italic*, "- " bullets, "# " headings, blank-line paragraphs. */
+function notesHtml(text) {
+  const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*(?!\s)(.+?)\*(?!\*)/g, '$1<em>$2</em>');
+  return String(text || '').split(/\n{2,}/).map(block => {
+    const lines = block.split('\n');
+    if (lines.every(l => /^\s*[-•]\s+/.test(l))) return `<ul>${lines.map(l => `<li>${inline(l.replace(/^\s*[-•]\s+/, ''))}</li>`).join('')}</ul>`;
+    return lines.map(l => /^#{1,3}\s+/.test(l) ? `<h4>${inline(l.replace(/^#{1,3}\s+/, ''))}</h4>`
+      : /^\s*[-•]\s+/.test(l) ? `<ul><li>${inline(l.replace(/^\s*[-•]\s+/, ''))}</li></ul>` : `<p>${inline(l)}</p>`).join('');
+  }).join('');
+}
+
+function summaryRow(s, { showCourse = true } = {}) {
+  const c = D.courseById.get(s.course_id);
+  const snip = String(s.body || '').replace(/[*#•]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140);
+  return `
+    <button class="fl-sum-row" data-sum="${esc(s.id)}" style="--c:${colorOf(c?.color)}">
+      <span class="fl-sum-date"><b>${esc(new Date(s.class_date + 'T12:00:00').toLocaleDateString([], { day: 'numeric' }))}</b>
+        <small>${esc(new Date(s.class_date + 'T12:00:00').toLocaleDateString([], { month: 'short' }))}</small></span>
+      <span class="fl-sum-main">
+        <span class="fl-sum-top">${showCourse && c ? `<span class="fl-chip" style="--c:${colorOf(c.color)}">${esc(c.code)}</span>` : ''}
+          <strong>${esc(summaryTitle(s))}</strong>${s.file_url ? `<span class="fl-sum-file" title="${esc(s.file_name || 'Attached file')}">${fileIcon(s)}</span>` : ''}</span>
+        ${snip ? `<small>${esc(snip)}${(s.body || '').length > 140 ? '…' : ''}</small>` : `<small>${esc(s.file_name || 'Attached file')}</small>`}
+      </span>
+      <span class="fl-sum-go">›</span>
+    </button>`;
+}
+
+function wireSummaries(scope) {
+  $$('[data-sum]', scope).forEach(b => b.addEventListener('click', () => openSummary(D.summaries.find(x => x.id === b.dataset.sum))));
+}
+
+function fileBlock(s) {
+  if (!s.file_url) return '';
+  const name = esc(s.file_name || 'Attached file');
+  if (/^image\//.test(s.file_type || '')) return `<a class="fl-sum-img" href="${esc(s.file_url)}" target="_blank" rel="noopener"><img src="${esc(s.file_url)}" alt="${name}"></a>`;
+  const pdf = /pdf/i.test(s.file_type || s.file_name || '');
+  return `
+    <div class="fl-sum-attach">
+      <span>${fileIcon(s)} ${name}</span>
+      <a class="btn btn-ghost btn-sm" href="${esc(s.file_url)}" target="_blank" rel="noopener">Open</a>
+    </div>
+    ${pdf ? `<iframe class="fl-sum-pdf" src="${esc(s.file_url)}#view=FitH" title="${name}"></iframe>` : ''}`;
+}
+
+/** The reader: the whole summary, any time. */
+function openSummary(s) {
+  if (!s) return toast('That summary isn\'t available.', 'error');
+  const c = D.courseById.get(s.course_id);
+  const list = D.summaries.filter(x => x.course_id === s.course_id);
+  const i = list.indexOf(s);
+  const { root, close } = sheet({
+    title: summaryTitle(s), wide: true,
+    body: `
+      <div class="fl-sum-head" style="--c:${colorOf(c?.color)}">
+        ${c ? `<span class="fl-chip" style="--c:${colorOf(c.color)}">${esc(c.code)}</span><span>${esc(c.title)}</span>` : ''}
+        <span class="fl-sum-when">${esc(classDay(s.class_date, true))}</span>
+      </div>
+      ${s.body ? `<div class="fl-sum-body">${notesHtml(s.body)}</div>` : ''}
+      ${fileBlock(s)}`,
+    footer: `
+      <button class="btn btn-ghost btn-sm" data-older ${i < list.length - 1 ? '' : 'disabled'}>‹ Earlier class</button>
+      <span class="grow"></span>
+      <button class="btn btn-ghost btn-sm" data-newer ${i > 0 ? '' : 'disabled'}>Next class ›</button>`
+  });
+  clearNotificationsFor(s.id);
+  $('[data-older]', root).addEventListener('click', () => { close(); openSummary(list[i + 1]); });
+  $('[data-newer]', root).addEventListener('click', () => { close(); openSummary(list[i - 1]); });
+}
+
+/** Every class summary from every course, newest class first. */
+function viewSummaries(courseId = null) {
+  const courses = D.courses.filter(c => D.summaries.some(s => s.course_id === c.id));
+  let pick = courseId && D.courseById.has(courseId) ? courseId : 'all';
+  main.innerHTML = `
+    <div class="fl-section fl-sum-page">
+      <div class="fl-section-head"><h3>Class summaries</h3></div>
+      <p class="muted small">What was covered in each class, posted after it meets.</p>
+      ${D.summaries.length ? `
+        <input type="search" id="sumFind" class="fl-sum-find" placeholder="Search summaries…">
+        ${courses.length > 1 ? `<div class="cat-filter fl-sum-filter">
+          <button type="button" data-sc="all" class="${pick === 'all' ? 'on' : ''}">All <i>${D.summaries.length}</i></button>
+          ${courses.map(c => `<button type="button" data-sc="${esc(c.id)}" class="${pick === c.id ? 'on' : ''}" style="--cc:${colorOf(c.color)}">${esc(c.code)} <i>${D.summaries.filter(s => s.course_id === c.id).length}</i></button>`).join('')}
+        </div>` : ''}
+        <div id="sumList"></div>` : '<div class="fl-empty">No class summaries yet. They show up here after each class.</div>'}
+    </div>`;
+  const paint = () => {
+    const q = ($('#sumFind')?.value || '').trim().toLowerCase();
+    const rows = D.summaries.filter(s => (pick === 'all' || s.course_id === pick) &&
+      (!q || `${summaryTitle(s)} ${s.body || ''} ${s.file_name || ''} ${D.courseById.get(s.course_id)?.code || ''}`.toLowerCase().includes(q)));
+    // Group by month of the class.
+    let last = '', html = '';
+    for (const s of rows) {
+      const m = new Date(s.class_date + 'T12:00:00').toLocaleDateString([], { month: 'long', year: 'numeric' });
+      if (m !== last) { html += `<h4 class="fl-sum-month">${esc(m)}</h4>`; last = m; }
+      html += summaryRow(s);
+    }
+    $('#sumList').innerHTML = html || '<div class="fl-empty">Nothing matches.</div>';
+    wireSummaries($('#sumList'));
+  };
+  if (!D.summaries.length) return;
+  paint();
+  $('#sumFind').addEventListener('input', paint);
+  $$('[data-sc]', main).forEach(b => b.addEventListener('click', () => {
+    pick = b.dataset.sc; $$('[data-sc]', main).forEach(x => x.classList.toggle('on', x === b)); paint();
+  }));
 }
 
 function viewTasks(filter) {
@@ -830,7 +959,7 @@ async function viewAdminCourse(id, tab = 'roster') {
       </div>
       <div class="seg fl-seg">
         ${[['roster', `Roster · ${enrolled.size}`], ['assignments', `Assignments · ${assignments.length}`],
-           ['gradebook', 'Gradebook'], ['announcements', 'Announcements']]
+           ['gradebook', 'Gradebook'], ['summaries', 'Class summaries'], ['announcements', 'Announcements']]
           .map(([k, label]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${label}</button>`).join('')}
       </div>
       <div id="acBody"></div>
@@ -958,6 +1087,31 @@ async function viewAdminCourse(id, tab = 'roster') {
     }));
   }
 
+  /* ---- class summaries ---- */
+  if (tab === 'summaries') {
+    const { data: sums, error: sErr } = await supa.from('flight_summaries').select('*').eq('course_id', id).order('class_date', { ascending: false }).order('created_at', { ascending: false });
+    body.innerHTML = sErr ? `<div class="fl-empty">Run sql/flight-summaries.sql in Supabase first.</div>` : `
+      <div class="fl-actions"><button class="btn btn-primary btn-sm" id="sumNew">＋ Add class summary</button>
+        <span class="muted small">Everyone enrolled is notified and can read it any time.</span></div>
+      ${(sums || []).map(s => `
+        <div class="fl-ann fl-sum-admin">
+          <div class="fl-ann-head"><strong>${esc(summaryTitle(s))}</strong>
+            <span class="fl-ann-time mono">${esc(classDay(s.class_date, true))}</span>
+            ${s.file_url ? `<a href="${esc(s.file_url)}" target="_blank" rel="noopener" class="fl-sum-file">${fileIcon(s)} ${esc(s.file_name || 'file')}</a>` : ''}
+            <button class="icon-btn" data-sedit="${esc(s.id)}" title="Edit">✎</button>
+            <button class="icon-btn" data-sdel="${esc(s.id)}" title="Delete">🗑</button></div>
+          ${s.body ? `<div class="fl-ann-body fl-sum-body">${notesHtml(s.body)}</div>` : ''}
+        </div>`).join('') || '<div class="fl-empty">No summaries yet.</div>'}`;
+    $('#sumNew')?.addEventListener('click', () => openSummaryEditor(c));
+    $$('[data-sedit]', body).forEach(b => b.addEventListener('click', () => openSummaryEditor(c, sums.find(s => s.id === b.dataset.sedit))));
+    $$('[data-sdel]', body).forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Delete this class summary? Students won\'t be able to read it any more.')) return;
+      const { error } = await supa.from('flight_summaries').delete().eq('id', b.dataset.sdel);
+      if (error) return toast(error.message, 'error');
+      go('adminCourse', { id, tab: 'summaries' });
+    }));
+  }
+
   /* ---- announcements ---- */
   if (tab === 'announcements') {
     body.innerHTML = `
@@ -1021,6 +1175,64 @@ function openAssignmentEditor(courseId, a) {
     const { error } = await supa.from('flight_assignments').delete().eq('id', a.id);
     if (error) return toast(error.message, 'error');
     close(); go('adminCourse', { id: courseId, tab: 'assignments' });
+  });
+}
+
+/* GM: write or upload a class summary. */
+const SUMMARY_MAX_MB = 20;
+function openSummaryEditor(c, s = null) {
+  const now = storyNow();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  let file = null, removeFile = false;
+  const { root, close } = sheet({
+    title: `${s ? 'Edit' : 'New'} class summary · ${c.code}`, wide: true,
+    body: `
+      <div class="fl-row2">
+        <div class="field"><label for="smDate">Class date</label><input type="date" id="smDate" value="${esc(s?.class_date || today)}"></div>
+        <div class="field"><label for="smTitle">Title <span class="muted">(optional)</span></label>
+          <input type="text" id="smTitle" maxlength="140" value="${esc(s?.title || '')}" placeholder="e.g. Rescue triage basics"></div>
+      </div>
+      <div class="field"><label for="smBody">What was covered</label>
+        <textarea id="smBody" rows="10" placeholder="Write the summary here. **bold**, *italic*, - bullet points, # headings.">${esc(s?.body || '')}</textarea></div>
+      <div class="field"><label>File <span class="muted">(optional · PDF, image, Word or text, up to ${SUMMARY_MAX_MB} MB)</span></label>
+        <div class="fl-sum-up">
+          <span id="smFileName">${s?.file_url ? `${fileIcon(s)} ${esc(s.file_name || 'Attached file')}` : 'No file'}</span>
+          <label class="btn btn-ghost btn-sm">Choose file<input type="file" id="smFile" hidden
+            accept=".pdf,.doc,.docx,.txt,.md,.rtf,.odt,image/*,application/pdf"></label>
+          ${s?.file_url ? '<button type="button" class="btn btn-ghost btn-sm" id="smNoFile">Remove</button>' : ''}
+        </div></div>
+      <div id="smMsg"></div>`,
+    footer: `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="smSave">${s ? 'Save' : 'Post summary'}</button>`
+  });
+  $('#smFile', root).addEventListener('change', (e) => {
+    file = e.target.files[0] || null; removeFile = false;
+    $('#smFileName', root).textContent = file ? `📎 ${file.name}` : 'No file';
+  });
+  $('#smNoFile', root)?.addEventListener('click', () => { file = null; removeFile = true; $('#smFileName', root).textContent = 'No file'; });
+  $('#smSave', root).addEventListener('click', async (e) => {
+    const msg = t => { $('#smMsg', root).innerHTML = `<div class="notice notice-error">${esc(t)}</div>`; };
+    const date = $('#smDate', root).value, body = $('#smBody', root).value.trim();
+    if (!date || +date.slice(0, 4) < 1000) return msg('Pick the class date.');
+    if (!body && !file && !(s?.file_url && !removeFile)) return msg('Write a summary or attach a file.');
+    if (file && file.size > SUMMARY_MAX_MB * 1024 * 1024) return msg(`That file is over ${SUMMARY_MAX_MB} MB.`);
+    e.target.disabled = true; e.target.textContent = file ? 'Uploading…' : 'Saving…';
+    const row = { course_id: c.id, class_date: date, title: $('#smTitle', root).value.trim() || null, body: body || null, updated_at: new Date().toISOString() };
+    if (removeFile) Object.assign(row, { file_url: null, file_name: null, file_type: null });
+    if (file) {
+      const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5);
+      const path = `${me.id}/summaries/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supa.storage.from('attachments').upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+      if (upErr) { e.target.disabled = false; e.target.textContent = s ? 'Save' : 'Post summary'; return msg(upErr.message); }
+      Object.assign(row, { file_url: supa.storage.from('attachments').getPublicUrl(path).data.publicUrl, file_name: file.name, file_type: file.type || null });
+    }
+    const { error } = s ? await supa.from('flight_summaries').update(row).eq('id', s.id)
+                        : await supa.from('flight_summaries').insert(row);
+    if (error) {
+      e.target.disabled = false; e.target.textContent = s ? 'Save' : 'Post summary';
+      return msg(/flight_summaries/.test(error.message) && /exist/.test(error.message) ? 'Run sql/flight-summaries.sql in Supabase first.' : error.message);
+    }
+    close(); playSound('sent'); toast(s ? 'Saved.' : 'Posted. Everyone in the class has been notified.', 'ok');
+    go('adminCourse', { id: c.id, tab: 'summaries' });
   });
 }
 
@@ -1140,6 +1352,7 @@ supa.channel('flight-live')
   .on('postgres_changes', { event: '*', schema: 'public', table: 'flight_assignments' }, () => liveRefresh())
   .on('postgres_changes', { event: '*', schema: 'public', table: 'flight_grades' }, () => liveRefresh())
   .on('postgres_changes', { event: '*', schema: 'public', table: 'flight_announcements' }, () => liveRefresh())
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'flight_summaries' }, () => liveRefresh())
   .on('postgres_changes', { event: '*', schema: 'public', table: 'flight_enrollments' }, () => liveRefresh())
   .subscribe();
 
@@ -1156,5 +1369,7 @@ onClockChange(() => liveRefresh());
 const startParams = new URLSearchParams(location.search);
 const wantCourse = startParams.get('course');
 // flight.html?handbook  or  ?handbook=honor  opens the handbook (at a chapter)
+const wantSummary = startParams.get('summary');
 if (startParams.has('handbook')) go('handbook', startParams.get('handbook') || null);
+else if (wantSummary) go('summaries').then(() => openSummary(D?.summaries?.find(s => s.id === wantSummary)));
 else go(wantCourse ? 'course' : 'dash', wantCourse);
