@@ -86,7 +86,7 @@ if (me.is_admin) {
 
 $('#signOutBtn').addEventListener('click', signOut);
 $('#meBtn').addEventListener('click', openProfileModal);
-$('#contactsBtn').addEventListener('click', openContactsModal);
+$('#contactsBtn').addEventListener('click', () => openContactsModal());
 
 const muteBtn = $('#muteBtn');
 const paintMute = () => {
@@ -811,7 +811,9 @@ function modal({ title, body, footer }) {
 
 /* ---------- contacts ---------- */
 
-async function openContactsModal() {
+let contactsTab = null;   // remembers the last tab while the page is open
+
+async function openContactsModal(tab = contactsTab) {
   const { data: rows } = await supa
     .from('contacts')
     .select('id, nickname, contact_id')
@@ -822,51 +824,89 @@ async function openContactsModal() {
   // Categories + who's an NPC come from the directory (sql/categories.sql).
   const [dirAll, cats] = await Promise.all([loadDirectory({ fresh: true }), loadCategoryList()]);
   const dirOf = new Map(dirAll.map(d => [d.id, d]));
-  // Search only shows people you can add from the directory. Number-only
-  // characters (and e.g. faculty, for students) are added by typing a number.
   const mine = new Set((rows ?? []).map(r => r.contact_id));
-  const dir = dirAll.filter(d => d.can_add || mine.has(d.id));
+  // "Find people" only shows people you can add and don't have yet.
+  // Number-only characters (and e.g. faculty, for students) are added by number.
+  const dir = dirAll.filter(d => d.can_add && !mine.has(d.id));
   const list = sortPeople((rows ?? []).map(r => {
     const p = state.people.get(r.contact_id);
     return { ...r, profile: p, label: r.nickname || p?.username || 'Unknown', d: dirOf.get(r.contact_id) };
   }), { catOf: c => c.d?.category_id, isNpc: c => (c.d ? c.d.is_npc : true), nameOf: c => c.label }, cats);
-  const allPeople = [...list.map(c => ({ category_id: c.d?.category_id })), ...dir.filter(d => !list.some(c => c.contact_id === d.id))];
+  const cur = tab || (list.length ? 'mine' : 'find');
 
   const { root, close } = modal({
     title: 'Contacts',
     body: `
-      <div class="field">
-        <label for="addFind">Add someone</label>
-        <div class="inline-row">
-          <input id="addFind" placeholder="Name or phone number" maxlength="24" autocomplete="off">
-          <button class="btn btn-sm" id="addGo" style="flex-shrink:0">Add</button>
-        </div>
-        <div class="hint">Search the directory by name, or type a phone number.</div>
+      <div class="ct-tabs" role="tablist">
+        <button type="button" data-ctab="mine" class="${cur === 'mine' ? 'on' : ''}">My contacts <i>${list.length}</i></button>
+        <button type="button" data-ctab="find" class="${cur === 'find' ? 'on' : ''}">Find people</button>
       </div>
-      ${filterBar(allPeople, r => r.category_id, 'contacts', cats)}
-      <div id="addResults" class="find-results"></div>
-      <div id="addMsg"></div>
-      <div style="margin-top:16px" id="contactList">
-        ${list.length ? list.map(c => `
-          <div class="contact-row" data-pid="${c.contact_id}" data-cat="${esc(c.d?.category_id || 'none')}">
-            <span class="avatar avatar-sm">${
-              c.profile?.avatar_url
-                ? `<img src="${esc(c.profile.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover">`
-                : esc(c.label.slice(0, 2).toUpperCase())
-            }</span>
-            <div class="info">
-              <div class="nm">${esc(c.label)}${c.d && !c.d.is_npc ? '<span class="player-tag">Player</span>' : ''}</div>
-              <div class="nu">${esc(formatNumber(c.profile?.phone_number))}</div>
-            </div>
-            <span class="pill">Message</span>
-          </div>`).join('')
-        : '<div class="empty-state">No contacts yet. Add one with a number above.</div>'}
-      </div>`
+
+      <section class="ct-pane" data-pane="mine" ${cur === 'mine' ? '' : 'hidden'}>
+        ${list.length > 6 ? `<input id="ctFilter" class="ct-filter" type="search" placeholder="Search your contacts" autocomplete="off">` : ''}
+        ${filterBar(list.map(c => ({ category_id: c.d?.category_id })), r => r.category_id, 'contacts', cats)}
+        <div id="contactList">
+          ${list.length ? list.map(c => `
+            <div class="contact-row" data-pid="${c.contact_id}" data-cat="${esc(c.d?.category_id || 'none')}"
+                 data-q="${esc((c.label + ' ' + (c.profile?.username || '') + ' ' + (c.profile?.phone_number || '').replace(/\D/g, '')).toLowerCase())}">
+              <span class="avatar avatar-sm">${
+                c.profile?.avatar_url
+                  ? `<img src="${esc(c.profile.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover">`
+                  : esc(c.label.slice(0, 2).toUpperCase())
+              }</span>
+              <div class="info">
+                <div class="nm">${esc(c.label)}${c.d && !c.d.is_npc ? '<span class="player-tag">Player</span>' : ''}</div>
+                <div class="nu">${esc(formatNumber(c.profile?.phone_number))}</div>
+              </div>
+              <span class="pill">Message</span>
+            </div>`).join('')
+          : '<div class="empty-state">No contacts yet. Use <b>Find people</b> to add someone.</div>'}
+          <div class="find-none" id="ctNone" hidden>No contacts match.</div>
+        </div>
+      </section>
+
+      <section class="ct-pane" data-pane="find" ${cur === 'find' ? '' : 'hidden'}>
+        <div class="field">
+          <label for="addFind">Add someone</label>
+          <div class="inline-row">
+            <input id="addFind" placeholder="Name or phone number" maxlength="24" autocomplete="off">
+            <button class="btn btn-sm" id="addGo" style="flex-shrink:0">Add</button>
+          </div>
+          <div class="hint">Search the directory by name, or type a phone number.</div>
+        </div>
+        <div id="addMsg"></div>
+        ${filterBar(dir, r => r.category_id, 'contacts-find', cats)}
+        <div id="addResults" class="find-results"></div>
+      </section>`
   });
+
+  // Tabs.
+  $$('[data-ctab]', root).forEach(b => b.addEventListener('click', () => {
+    contactsTab = b.dataset.ctab;
+    $$('[data-ctab]', root).forEach(x => x.classList.toggle('on', x === b));
+    $$('.ct-pane', root).forEach(p => { p.hidden = p.dataset.pane !== contactsTab; });
+    if (contactsTab === 'find') $('#addFind', root).focus();
+  }));
+
+  // My contacts: search + chips.
+  const ctFilter = $('#ctFilter', root);
+  const paintMine = () => {
+    const q = (ctFilter?.value || '').trim().toLowerCase().replace(/[()\-\s.+]/g, '');
+    let shown = 0;
+    $$('#contactList .contact-row', root).forEach(r => {
+      const hide = !!q && !r.dataset.q.replace(/[()\-\s.+]/g, '').includes(q);
+      r.classList.toggle('q-out', hide);
+      if (!hide && !r.classList.contains('cat-out')) shown++;
+    });
+    const none = $('#ctNone', root); if (none) none.hidden = !list.length || shown > 0;
+  };
+  ctFilter?.addEventListener('input', paintMine);
+  wireFilter(root, 'contacts', { items: '#contactList [data-cat]', onChange: paintMine });
 
   const findBox = $('#addFind', root);
   const results = $('#addResults', root);
   const msgBox  = $('#addMsg', root);
+  const reopen = () => { contactsTab = 'mine'; close(); openContactsModal('mine'); };
 
   /** Adds someone we already have the id for. */
   async function addById(id, name) {
@@ -882,20 +922,19 @@ async function openContactsModal() {
       return;
     }
     msgBox.innerHTML = `<div class="notice notice-ok">${esc(name)} added.</div>`;
-    setTimeout(() => { close(); openContactsModal(); }, 700);
+    setTimeout(reopen, 700);
   }
 
   /* Directory search: only people you're allowed to see (sql/categories.sql). */
-  const already = new Set(list.map(c => c.contact_id));
   const findRow = (p) => `
-    <${p.can_add && !already.has(p.id) ? 'button type="button"' : 'div'} class="find-row ${p.can_add ? '' : 'no-add'}" data-id="${esc(p.id)}" data-name="${esc(p.username)}" data-cat="${esc(p.category_id || 'none')}">
+    <button type="button" class="find-row" data-id="${esc(p.id)}" data-name="${esc(p.username)}" data-cat="${esc(p.category_id || 'none')}">
       <span class="avatar avatar-sm" data-find-avatar="${esc(p.id)}"></span>
       <span class="find-id">
         <strong>${esc(p.username)}${p.is_npc ? '' : '<span class="player-tag">Player</span>'}</strong>
         <span>${categoryChip(p)}${p.about ? ` <small class="muted">${esc(p.about)}</small>` : ''}</span>
       </span>
-      <span class="find-add">${already.has(p.id) ? 'In contacts' : 'Add'}</span>
-    </${p.can_add && !already.has(p.id) ? 'button' : 'div'}>`;
+      <span class="find-add">Add</span>
+    </button>`;
   let applyFilter = () => {};
   const paintFind = (rows) => {
     rows = sortPeople(rows, { catOf: p => p.category_id, isNpc: p => p.is_npc, nameOf: p => p.username }, cats);
@@ -903,25 +942,25 @@ async function openContactsModal() {
     results.innerHTML = rows.length
       ? (players.length ? `<div class="find-group">Players</div>${players.map(findRow).join('')}` : '') +
         byCategory(npcs).map(g => `<div class="find-group" data-group-of="${esc(g.rows[0].category_id || 'none')}">${esc(g.name)}</div>${g.rows.map(findRow).join('')}`).join('')
-      : '<div class="find-none">Nobody by that name.</div>';
+      : `<div class="find-none">${dir.length ? 'Nobody by that name.' : 'Everyone you can find is already in your contacts. Others can be added by their number.'}</div>`;
     applyFilter();
     rows.forEach(p => paintAvatar(results.querySelector(`[data-find-avatar="${p.id}"]`), p.avatar_url, p.username));
     $$('button.find-row', results).forEach(r => r.addEventListener('click', () => addById(r.dataset.id, r.dataset.name)));
   };
   findBox.addEventListener('input', () => {
     const q = findBox.value.trim().toLowerCase();
-    if (/^[\d ()\-+.]+$/.test(q)) { results.innerHTML = ''; return; }
+    if (/^[\d ()\-+.]+$/.test(q)) { results.innerHTML = '<div class="find-none">Press Add to look up this number.</div>'; return; }
     paintFind(q ? dir.filter(p => p.username.toLowerCase().includes(q) || (p.about || '').toLowerCase().includes(q)) : dir);
   });
-  // Chips filter both lists; a group heading hides with its people.
-  applyFilter = wireFilter(root, 'contacts', { items: '#contactList [data-cat], #addResults [data-cat]', onChange: () => {
+  // Chips; a group heading hides with its people.
+  applyFilter = wireFilter(root, 'contacts-find', { items: '#addResults [data-cat]', onChange: () => {
     $$('#addResults .find-group', root).forEach(h => {
       let n = h.nextElementSibling, any = false;
       while (n && !n.classList.contains('find-group')) { if (!n.classList.contains('cat-out')) any = true; n = n.nextElementSibling; }
       h.classList.toggle('cat-out', !any);
     });
   } });
-  if (dir.length) paintFind(dir);
+  paintFind(dir);
 
   $('#addGo', root).addEventListener('click', async () => {
     const q = findBox.value.trim();
@@ -938,10 +977,14 @@ async function openContactsModal() {
       }
       msgBox.innerHTML = `<div class="notice notice-ok">${esc(data.username)} added.</div>`;
       findBox.value = '';
-      setTimeout(() => { close(); openContactsModal(); }, 700);
+      setTimeout(reopen, 700);
       return;
     }
 
+    if (dirAll.some(p => mine.has(p.id) && p.username.toLowerCase() === q.toLowerCase())) {
+      msgBox.innerHTML = `<div class="notice notice-info">${esc(q)} is already in your contacts.</div>`;
+      return;
+    }
     const hit = dir.find(p => p.username.toLowerCase() === q.toLowerCase());
     if (!hit) {
       msgBox.innerHTML = '<div class="notice notice-error">Nobody by that name in your directory. Try their number.</div>';

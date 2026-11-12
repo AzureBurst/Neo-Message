@@ -4367,3 +4367,14 @@ label.num-only.field { font-size: 13.5px; color: inherit; white-space: normal; m
 .cal-tag-cls { background: var(--cc, #2F6BFF); color: #fff; }
 .cal-event.cls a.icon-btn { text-decoration: none; display: grid; place-items: center; }
 .modal [hidden] { display: none !important; }
+
+/* ---------- Messages: contacts split into "My contacts" / "Find people" ---------- */
+.ct-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 14px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid var(--edge); }
+.ct-tabs button { flex: 1; padding: 8px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--muted);
+  font: 600 13px var(--font-ui); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.ct-tabs button i { font-style: normal; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,.08); }
+.ct-tabs button.on { background: var(--sent); color: #fff; }
+.ct-tabs button.on i { background: rgba(0,0,0,.2); }
+.ct-pane[hidden] { display: none !important; }
+.ct-filter { width: 100%; margin-bottom: 10px; }
+.contact-row.q-out { display: none !important; }
