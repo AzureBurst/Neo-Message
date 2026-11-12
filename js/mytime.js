@@ -421,8 +421,9 @@ function derivedOf(s) {
     armor,
     pace: d.pace ?? 6,
     dash: d.dash ?? 'd6',
-    encumbrance: d.encumbrance ?? str * 5,
-    carry: d.carry ?? str * 20
+    // Savage Worlds load limit: d4 20, d6 40, d8 60, d10 80, d12 100. Max carry is 4× that.
+    encumbrance: d.encumbrance ?? (str / 2 - 1) * 20,
+    carry: d.carry ?? (d.encumbrance ?? (str / 2 - 1) * 20) * 4
   };
 }
 
