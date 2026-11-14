@@ -22,6 +22,10 @@ import {
 } from './dice.js';
 import { loadDirectory, loadCategoryList, sortPeople, filterBar, wireFilter } from './directory.js';
 
+// The 1 / 2 / 3 point explanation cards on Free Time. Hidden for now;
+// set to true to bring them back.
+const SHOW_POINT_RULES = false;
+
 const me = await requireProfile();
 if (!me) throw new Error('redirecting');
 
@@ -1290,11 +1294,11 @@ async function viewFreeTime(uid) {
           <span><small>Week</small><b>${term ? `${term.current_week} / ${term.weeks}` : '—'}</b>${term?.start_date ? `<small class="ft-began">from ${weekStart(term, term.current_week)}</small>` : ''}</span></div>
       </header>
 
-      <div class="ft-rules">
+      ${SHOW_POINT_RULES ? `<div class="ft-rules">
         <div><b>1 point</b><span>Roll the track's trait with the stage penalty, then the GM looks at your roll and decides. An excellent roll fills 2 boxes and a success fills 1. A critical failure (a 1 on both dice) fills nothing and gives you a complication.</span></div>
         <div><b>2 points</b><span>No roll, fill 1 box. Only at −0 or −1.</span></div>
         <div><b>3 points</b><span>No roll, fill 1 box. For −2 and −3.</span></div>
-      </div>
+      </div>` : ''}
 
       ${weekCard}
 
