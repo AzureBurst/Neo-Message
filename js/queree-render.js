@@ -12,37 +12,81 @@ export function escHtml(s) {
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-/* Inline marks for wiki text: **bold**, *italic*, [[Link]] or
-   [[Link|label]]. Links carry data-q so tapping one searches for it. */
+/* Inline marks for wiki text:
+     **bold**  *italic*  [[Link]] or [[Link|label]] (blue; tapping searches)
+     {{blue|text}} (blue, not a link)  [^1] or [^citation needed] (a
+     superscript reference like Wikipedia's [1]).
+   Links carry data-q so tapping one searches for it. */
 export function inline(text) {
   return escHtml(text)
+    .replace(/\[\^([^\]]+?)\]/g, (_, n) => /^\d+$/.test(n.trim())
+      ? `<sup class="qr-ref">[${n.trim()}]</sup>`
+      : `<sup class="qr-ref qr-cn">[<i>${n.trim()}</i>]</sup>`)
+    .replace(/\{\{blue\|(.+?)\}\}/g, '<span class="qr-blue">$1</span>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, '$1<em>$2</em>')
     .replace(/\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g,
       (_, target, label) => `<a class="qr-wikilink" data-q="${target.trim()}">${(label || target).trim()}</a>`);
 }
 
-/* Wiki body: "## Heading" starts a section, blank lines split
-   paragraphs, lines starting "- " become bullet lists. */
+/* Wiki body:
+     "## Heading" starts a section, "### Sub-heading" a sub-section
+     blank lines split paragraphs
+     "- " bullet lists, "1. " numbered lists
+     ": text" an italic note line, like Wikipedia's "For other uses, see…"
+     "{{notice|text}}" a boxed notice, like "This article needs more citations" */
 export function parseWiki(text) {
-  const sections = [{ heading: null, blocks: [] }];
-  let para = [], list = [];
+  const sections = [{ heading: null, level: 0, blocks: [] }];
+  let para = [], list = [], ol = [];
+  const cur = () => sections[sections.length - 1];
   const flush = () => {
-    const cur = sections[sections.length - 1];
-    if (para.length) { cur.blocks.push({ type: 'p', text: para.join(' ') }); para = []; }
-    if (list.length) { cur.blocks.push({ type: 'ul', items: list }); list = []; }
+    if (para.length) { cur().blocks.push({ type: 'p', text: para.join(' ') }); para = []; }
+    if (list.length) { cur().blocks.push({ type: 'ul', items: list }); list = []; }
+    if (ol.length) { cur().blocks.push({ type: 'ol', items: ol }); ol = []; }
   };
   for (const raw of String(text || '').split('\n')) {
     const line = raw.trim();
-    const h = line.match(/^#{2,3}\s+(.+)/);
-    if (h) { flush(); sections.push({ heading: h[1].trim(), blocks: [] }); continue; }
+    const h = line.match(/^(#{2,3})\s+(.+)/);
+    if (h) { flush(); sections.push({ heading: h[2].trim(), level: h[1].length, blocks: [] }); continue; }
     if (!line) { flush(); continue; }
-    if (/^[-*]\s+/.test(line)) { if (para.length) { const p = para; para = []; sections[sections.length - 1].blocks.push({ type: 'p', text: p.join(' ') }); } list.push(line.replace(/^[-*]\s+/, '')); continue; }
-    if (list.length) flush();
+    const notice = line.match(/^\{\{notice\|(.+)\}\}$/i);
+    if (notice) { flush(); cur().blocks.push({ type: 'box', text: notice[1].trim() }); continue; }
+    if (/^:\s*/.test(line)) { flush(); cur().blocks.push({ type: 'hat', text: line.replace(/^:\s*/, '') }); continue; }
+    if (/^[-*]\s+/.test(line)) { if (para.length || ol.length) flush(); list.push(line.replace(/^[-*]\s+/, '')); continue; }
+    if (/^\d+[.)]\s+/.test(line)) { if (para.length || list.length) flush(); ol.push(line.replace(/^\d+[.)]\s+/, '')); continue; }
+    if (list.length || ol.length) flush();
     para.push(line);
   }
   flush();
   return sections.filter((s, i) => i === 0 ? s.blocks.length : true);
+}
+
+/* One section's blocks as HTML. */
+export function wikiBlocks(sec) {
+  return sec.blocks.map(x =>
+      x.type === 'ul'  ? `<ul>${x.items.map(i => `<li>${inline(i)}</li>`).join('')}</ul>`
+    : x.type === 'ol'  ? `<ol>${x.items.map(i => `<li>${inline(i)}</li>`).join('')}</ol>`
+    : x.type === 'hat' ? `<div class="qr-hatnote">${inline(x.text)}</div>`
+    : x.type === 'box' ? `<div class="qr-notice"><span class="qr-notice-icon" aria-hidden="true">📖</span><div>${inline(x.text)}</div></div>`
+    : `<p>${inline(x.text)}</p>`).join('');
+}
+
+/* Infobox rows: "Label: Value", "## Header" for a centered header row,
+   and a line without a label continues the row above on a new line. */
+export function parseInfoboxRows(text) {
+  const rows = [];
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const h = line.match(/^(?:#{1,3}\s+(.+)|==\s*(.+?)\s*==)$/);
+    if (h) { rows.push({ type: 'head', text: (h[1] || h[2]).trim() }); continue; }
+    const m = line.match(/^([^:]+?)\s*:\s*(.+)$/);
+    if (m && !/^\[\[|^\{\{|^https?$/i.test(m[1])) { rows.push({ type: 'row', label: m[1], values: [m[2]] }); continue; }
+    const last = rows[rows.length - 1];
+    if (last?.type === 'row') last.values.push(line);
+    else rows.push({ type: 'row', label: '', values: [line] });
+  }
+  return rows;
 }
 
 /* Infobox: one "Label: Value" per line. */
@@ -131,7 +175,8 @@ export function snippet(result, n = 180) {
     : result.kind === 'forum' ? (parseForum(b.posts)[0]?.lines.join(' ') || '')
     : result.kind === 'image' ? (b.caption || '')
     : b.text;
-  const t = String(raw || '').replace(/^#+\s+/gm, '').replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, a, l) => l || a)
+  const t = String(raw || '').replace(/^\{\{notice\|.*\}\}$/gim, '').replace(/^:\s*.*$/gm, '')
+    .replace(/\[\^[^\]]+\]/g, '').replace(/\{\{blue\|(.+?)\}\}/g, '$1').replace(/^#+\s+/gm, '').replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, a, l) => l || a)
     .replace(/\*\*?/g, '').replace(/\s+/g, ' ').trim();
   return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
 }

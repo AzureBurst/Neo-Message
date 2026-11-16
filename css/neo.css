@@ -3151,19 +3151,42 @@ body.qr-page { --qr-blue:#4285F4; --qr-red:#EA4335; --qr-yel:#FBBC05; --qr-grn:#
   font: 12px var(--font-ui); color: #54595D;
 }
 .qr-wiki-brand { font: 700 18px Georgia, serif; color: #202122; letter-spacing: .02em; font-variant: small-caps; }
-.qr-doc-wiki h1 { font: 400 30px/1.25 Georgia, "Times New Roman", serif; margin: 0 0 4px; padding-bottom: 4px; border-bottom: 1px solid #A2A9B1; }
-.qr-doc-wiki h2 { font: 400 22px/1.3 Georgia, serif; margin: 22px 0 8px; padding-bottom: 3px; border-bottom: 1px solid #A2A9B1; }
-.qr-doc-wiki p { margin: 0 0 12px; font-family: var(--font-body); font-size: 15px; }
-.qr-doc-wiki ul { margin: 0 0 12px 22px; padding: 0; font-family: var(--font-body); }
+.qr-doc-wiki h1 { font: 400 29px/1.25 "Linux Libertine", Georgia, "Times New Roman", serif; margin: 0; padding: 0; border: 0; color: #202122; }
+.qr-wiki-titlebar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 4px; }
+.qr-langs { font: 700 13.5px Arial, sans-serif; color: #3366CC; white-space: nowrap; padding-bottom: 4px; }
+.qr-wiki-tabs { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid #A2A9B1; margin-bottom: 6px;
+  font: 13.5px Arial, sans-serif; }
+.qr-wiki-tabs span { display: flex; gap: 14px; }
+.qr-wiki-tabs b, .qr-wiki-tabs a { padding: 6px 0 5px; color: #3366CC; font-weight: 400; cursor: default; }
+.qr-wiki-tabs b { color: #202122; border-bottom: 2px solid #202122; margin-bottom: -1px; }
+.qr-doc-wiki h2 { font: 400 22px/1.3 "Linux Libertine", Georgia, serif; margin: 22px 0 8px; padding-bottom: 3px; border-bottom: 1px solid #A2A9B1; scroll-margin-top: 12px; }
+.qr-doc-wiki h3 { font: 700 16.5px/1.4 Arial, sans-serif; margin: 16px 0 6px; color: #202122; scroll-margin-top: 12px; }
+.qr-editlinks { font: 13px Arial, sans-serif; color: #54595D; margin-left: 10px; white-space: nowrap; vertical-align: middle; }
+.qr-editlinks a { color: #3366CC; cursor: default; }
+.qr-doc-wiki p { margin: 0 0 12px; font: 15px/1.65 Arial, "Helvetica Neue", sans-serif; color: #202122; }
+.qr-doc-wiki ul, .qr-doc-wiki ol { margin: 0 0 12px 24px; padding: 0; font: 15px/1.6 Arial, "Helvetica Neue", sans-serif; }
+.qr-doc-wiki li { margin: 2px 0; }
+.qr-doc-wiki strong { color: #202122; font-weight: 700; }
+.qr-blue { color: #3366CC; }
+.qr-ref { font-size: 75%; line-height: 1; color: #3366CC; vertical-align: super; }
+.qr-ref.qr-cn i { font-style: italic; }
+.qr-hatnote { font: italic 14.5px/1.6 Arial, sans-serif; color: #202122; padding-left: 1.6em; margin: 0 0 6px; }
+.qr-notice { display: flex; align-items: center; gap: 12px; margin: 10px auto 14px; max-width: 760px;
+  background: #F8F9FA; border: 1px solid #A2A9B1; border-left: 10px solid #F28500; padding: 8px 12px;
+  font: 14px/1.55 Arial, sans-serif; color: #202122; clear: none; }
+.qr-notice-icon { font-size: 30px; flex: none; }
 .qr-wiki-from { color: #54595D; font: 12.5px var(--font-ui) !important; margin-bottom: 16px !important; }
 .qr-wikilink { color: #3366CC; cursor: pointer; }
 .qr-wikilink:hover { text-decoration: underline; }
 .qr-infobox {
-  float: right; width: 260px; margin: 0 0 14px 20px;
-  background: #F8F9FA; border: 1px solid #A2A9B1; padding: 6px;
-  font: 13px/1.4 var(--font-body);
+  float: right; clear: right; width: 280px; margin: 0 0 14px 20px;
+  background: #F8F9FA; border: 1px solid #A2A9B1; padding: 4px;
+  font: 13px/1.45 Arial, sans-serif; color: #202122;
 }
-.qr-infobox-title { text-align: center; font: 700 16px Georgia, serif; padding: 6px; background: #E8DEF8; margin-bottom: 6px; }
+.qr-infobox-title { text-align: center; font: 700 16.5px/1.3 Arial, sans-serif; padding: 4px 6px 6px; }
+.qr-infobox .qr-ib-head th { text-align: center; width: auto; padding: 6px; font-size: 13.5px; background: #EAECF0; }
+.qr-infobox .qr-ib-full { text-align: center; }
+.qr-infobox tbody tr:hover { background: transparent; }
 .qr-infobox img { width: 100%; display: block; cursor: zoom-in; }
 .qr-infobox-cap { text-align: center; font-size: 12px; color: #54595D; padding: 4px 2px 6px; }
 .qr-infobox table { width: 100%; border-collapse: collapse; }
@@ -3176,7 +3199,11 @@ body.qr-page { --qr-blue:#4285F4; --qr-red:#EA4335; --qr-yel:#FBBC05; --qr-grn:#
   font: 13.5px var(--font-body);
 }
 .qr-toc b { display: block; text-align: center; margin-bottom: 4px; }
-.qr-toc ol { margin: 0; padding-left: 20px; color: #3366CC; }
+.qr-toc ol { margin: 0; padding-left: 4px; list-style: none; font-family: Arial, sans-serif; }
+.qr-toc li.sub { padding-left: 18px; }
+.qr-toc a { color: #3366CC; cursor: pointer; }
+.qr-toc a:hover { text-decoration: underline; }
+.qr-toc a span { color: #202122; margin-right: 4px; }
 .qr-wiki-foot { clear: both; margin-top: 26px; padding-top: 10px; border-top: 1px solid #A2A9B1; font: 12px var(--font-ui); color: #54595D; }
 
 /* imageboard */
@@ -4378,3 +4405,14 @@ label.num-only.field { font-size: 13.5px; color: inherit; white-space: normal; m
 .ct-pane[hidden] { display: none !important; }
 .ct-filter { width: 100%; margin-bottom: 10px; }
 .contact-row.q-out { display: none !important; }
+
+/* Queree wiki editor: formatting buttons */
+.qr-fmt { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.qr-fmt button {
+  min-width: 32px; height: 28px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--edge);
+  background: rgba(255,255,255,.06); color: #ECECEC; font: 600 12.5px var(--font-ui); cursor: pointer;
+}
+.qr-fmt button:hover { border-color: var(--sent); }
+.qr-fmt button sup { font-size: 10px; }
+.qr-fmt-blue { color: #6EA0FF; }
+.qr-fmt-help { margin-top: 4px; }

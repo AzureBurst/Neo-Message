@@ -16,7 +16,7 @@ import { mountShade, clearNotificationsFor } from './shade.js';
 import { playSound } from './sfx.js';
 import { openRoller, openRequest, rollCard, requestCard, loadRequests, requestResultsHtml, wireRequestButtons } from './dice.js';
 import {
-  inline, parseWiki, parseInfobox, parseForum, forumLine, postNumber,
+  inline, parseWiki, wikiBlocks, parseInfoboxRows, parseInfobox, parseForum, forumLine, postNumber,
   matchPages, snippet
 } from './queree-render.js';
 
@@ -72,8 +72,7 @@ const aiSeen = new Set();            // types out once per visit, then sits stil
 function aiHtml(r) {
   const b = r.body || {};
   const sections = parseWiki(b.text);
-  const blocks = sec => sec.blocks.map(x => x.type === 'ul'
-    ? `<ul>${x.items.map(i => `<li>${inline(i)}</li>`).join('')}</ul>` : `<p>${inline(x.text)}</p>`).join('');
+  const blocks = wikiBlocks;
   const lines = t => String(t || '').split('\n').map(l => l.trim()).filter(Boolean);
   const sources = lines(b.sources).map(l => { const [name, site] = l.split('|').map(x => x.trim()); return { name, site: site || '' }; });
   const follow = lines(b.followups);
@@ -436,6 +435,7 @@ async function viewResult({ source, id, searchId }) {
 
   $('#qrBack').addEventListener('click', () => searchId ? go('search', { searchId }) : go('home'));
   $$('.qr-wikilink', main).forEach(a => a.addEventListener('click', () => runSearch(a.dataset.q)));
+  wireToc(main);
   $$('.qr-doc img[data-zoom]', main).forEach(im => im.addEventListener('click', () => lightbox(im.src)));
   wireAi(main, { onSearch: runSearch });
 }
@@ -444,24 +444,37 @@ function renderBody(r) {
   const b = r.body || {};
   if (r.kind === 'ai') return aiHtml(r);
   if (r.kind === 'wiki') {
-    const info = parseInfobox(b.infobox);
+    const rows = parseInfoboxRows(b.infobox);
     const sections = parseWiki(b.text);
-    const toc = sections.filter(s => s.heading);
-    const blocks = s => s.blocks.map(x => x.type === 'ul'
-      ? `<ul>${x.items.map(i => `<li>${inline(i)}</li>`).join('')}</ul>` : `<p>${inline(x.text)}</p>`).join('');
+    const lead = sections.filter(x => !x.heading);
+    const body = sections.filter(x => x.heading);
+    // Numbered like Wikipedia: 1, 1.1, 1.2, 2 …
+    let n2 = 0, n3 = 0;
+    body.forEach(x => { if (x.level === 3 && n2) x.num = `${n2}.${++n3}`; else { x.num = `${++n2}`; n3 = 0; } });
+    // A stable "N languages" from the title, so it never changes between visits.
+    const langs = 2 + (postNumber(r.title || 'x', 0) % 61);
+    const edit = '<span class="qr-editlinks">[ <a>edit</a> | <a>edit source</a> ]</span>';
     return `
       <div class="qr-wiki-head"><span class="qr-wiki-brand">Heropedia</span><span>The Free Hero Encyclopedia</span></div>
-      <h1>${esc(r.title || 'Untitled')}</h1>
+      <div class="qr-wiki-titlebar"><h1>${esc(r.title || 'Untitled')}</h1><span class="qr-langs">文A ${langs} languages</span></div>
+      <div class="qr-wiki-tabs" aria-hidden="true">
+        <span><b>Article</b><a>Talk</a></span>
+        <span><b>Read</b><a>Edit</a><a>View history</a></span>
+      </div>
       <p class="qr-wiki-from">From Heropedia, the free hero encyclopedia</p>
-      ${(info.length || b.image_url) ? `<aside class="qr-infobox">
+      ${(rows.length || b.image_url) ? `<aside class="qr-infobox">
         <div class="qr-infobox-title">${esc(r.title || '')}</div>
         ${b.image_url ? `<img src="${esc(b.image_url)}" alt="" data-zoom>` : ''}
-        ${b.image_caption ? `<div class="qr-infobox-cap">${esc(b.image_caption)}</div>` : ''}
-        ${info.length ? `<table>${info.map(([l, v]) => `<tr><th>${esc(l)}</th><td>${inline(v)}</td></tr>`).join('')}</table>` : ''}
+        ${b.image_caption ? `<div class="qr-infobox-cap">${inline(b.image_caption)}</div>` : ''}
+        ${rows.length ? `<table>${rows.map(x => x.type === 'head'
+          ? `<tr class="qr-ib-head"><th colspan="2">${inline(x.text)}</th></tr>`
+          : x.label ? `<tr><th>${inline(x.label)}</th><td>${x.values.map(inline).join('<br>')}</td></tr>`
+          : `<tr><td colspan="2" class="qr-ib-full">${x.values.map(inline).join('<br>')}</td></tr>`).join('')}</table>` : ''}
       </aside>` : ''}
-      ${sections.filter(s => !s.heading).map(blocks).join('')}
-      ${toc.length > 1 ? `<nav class="qr-toc"><b>Contents</b><ol>${toc.map(s => `<li>${esc(s.heading)}</li>`).join('')}</ol></nav>` : ''}
-      ${sections.filter(s => s.heading).map(s => `<h2>${esc(s.heading)}</h2>${blocks(s)}`).join('')}
+      ${lead.map(wikiBlocks).join('')}
+      ${body.length > 1 ? `<nav class="qr-toc"><b>Contents</b><ol>${body.map((x, i) =>
+        `<li class="${x.level === 3 ? 'sub' : ''}"><a data-toc="${i}"><span>${x.num}</span> ${esc(x.heading)}</a></li>`).join('')}</ol></nav>` : ''}
+      ${body.map((x, i) => `<h${x.level === 3 ? 3 : 2} data-sec="${i}">${esc(x.heading)} ${x.level === 3 ? '' : edit}</h${x.level === 3 ? 3 : 2}>${wikiBlocks(x)}`).join('')}
       <div class="qr-wiki-foot">This page was last edited on ${esc(storyNow().toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }))}.</div>`;
   }
 
@@ -817,6 +830,91 @@ function openDeadEnd({ searchId, query, existing = null }) {
 /*  the composer — one form for every kind of result                  */
 /* ------------------------------------------------------------------ */
 
+/* Contents links jump to their heading. */
+function wireToc(scope) {
+  $$('[data-toc]', scope).forEach(a => a.addEventListener('click', () =>
+    $(`[data-sec="${a.dataset.toc}"]`, scope)?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Formatting buttons for the wiki editor. They write the same plain  */
+/*  marks you could type by hand, around whatever is selected.         */
+/* ------------------------------------------------------------------ */
+
+const FMT = {
+  bold:   { label: '<b>B</b>', title: 'Bold (Ctrl+B)', wrap: ['**', '**', 'bold text'] },
+  italic: { label: '<i>I</i>', title: 'Italic (Ctrl+I)', wrap: ['*', '*', 'italic text'] },
+  link:   { label: '<span class="qr-fmt-blue">Link</span>', title: 'Blue link: tapping it searches for that page (Ctrl+K)', wrap: ['[[', ']]', 'Page name'] },
+  blue:   { label: '<span class="qr-fmt-blue">Blue</span>', title: 'Blue text that is not a link', wrap: ['{{blue|', '}}', 'blue text'] },
+  ref:    { label: '<sup>[1]</sup>', title: 'Reference number, like [1]' },
+  cn:     { label: '<sup>[?]</sup>', title: '[citation needed]', insert: '[^citation needed]' },
+  h2:     { label: 'Heading', title: 'Section heading', line: '## ' },
+  h3:     { label: 'Sub', title: 'Sub-section heading', line: '### ' },
+  ul:     { label: '• List', title: 'Bullet list', line: '- ' },
+  ol:     { label: '1. List', title: 'Numbered list', line: n => `${n + 1}. ` },
+  hat:    { label: '<i>Note</i>', title: 'Italic note line at the top, like "For other uses, see …"', line: ': ' },
+  notice: { label: '▣ Box', title: 'Notice box, like "This article needs more citations"',
+            block: '{{notice|This article **needs more citations**. Please help [[improve this article]] by adding citations to reliable sources.}}' },
+  ibhead: { label: 'Header row', title: 'A centered header row in the infobox', line: '## ' }
+};
+
+function fmtBar(target, keys) {
+  return `<div class="qr-fmt" data-fmt-for="${target}">${keys.map(k =>
+    `<button type="button" data-fmt="${k}" title="${esc(FMT[k].title)}">${FMT[k].label}</button>`).join('')}</div>`;
+}
+
+function applyFmt(el, key) {
+  const f = FMT[key];
+  const v = el.value, a = el.selectionStart ?? v.length, z = el.selectionEnd ?? v.length;
+  const sel = v.slice(a, z);
+  el.focus();
+  if (f.wrap) {
+    const [L, R, ph] = f.wrap;
+    // Already wrapped? Unwrap.
+    if (sel && v.slice(a - L.length, a) === L && v.slice(z, z + R.length) === R) {
+      el.setRangeText(sel, a - L.length, z + R.length, 'select');
+    } else {
+      const t = sel || ph;
+      el.setRangeText(L + t + R, a, z, 'end');
+      el.setSelectionRange(a + L.length, a + L.length + t.length);
+    }
+  } else if (key === 'ref') {
+    const n = Math.max(0, ...[...v.matchAll(/\[\^(\d+)\]/g)].map(m => +m[1])) + 1;
+    el.setRangeText(`[^${n}]`, z, z, 'end');
+  } else if (f.insert) {
+    el.setRangeText(f.insert, z, z, 'end');
+  } else if (f.block) {
+    const before = a && v[a - 1] !== '\n' ? '\n' : '';
+    el.setRangeText(`${before}${f.block}\n`, a, z, 'end');
+  } else if (f.line) {
+    if (el.tagName !== 'TEXTAREA') return;
+    const ls = v.lastIndexOf('\n', a - 1) + 1;
+    const le = v.indexOf('\n', z); const end = le < 0 ? v.length : le;
+    const strip = l => l.replace(/^(#{1,3}\s+|[-*]\s+|\d+[.)]\s+|:\s*)/, '');
+    const lines = v.slice(ls, end).split('\n');
+    const pre = i => typeof f.line === 'function' ? f.line(i) : f.line;
+    const same = lines.every((l, i) => l.startsWith(pre(i)));
+    const out = lines.map((l, i) => same ? strip(l) : pre(i) + strip(l)).join('\n');
+    el.setRangeText(out, ls, end, 'end');
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function wireFmt(root) {
+  $$('.qr-fmt', root).forEach(bar => {
+    const el = $('#' + bar.dataset.fmtFor, root);
+    if (!el) return;
+    // Keep the selection when a button is pressed.
+    bar.addEventListener('mousedown', e => { if (e.target.closest('[data-fmt]')) e.preventDefault(); });
+    $$('[data-fmt]', bar).forEach(b => b.addEventListener('click', () => applyFmt(el, b.dataset.fmt)));
+    el.addEventListener('keydown', e => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const key = { b: 'bold', i: 'italic', k: 'link' }[e.key.toLowerCase()];
+      if (key) { e.preventDefault(); applyFmt(el, key); }
+    });
+  });
+}
+
 function openComposer({ kind, target, searchId = null, existing = null, query = '' }) {
   const k = KINDS[kind];
   const e = existing || {};
@@ -830,11 +928,13 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
   const kindFields = {
     wiki: `
       ${imageField('Infobox image (optional)')}
-      ${field('cCap', 'Image caption (optional)', `<input type="text" id="cCap" value="${esc(b.image_caption || '')}">`)}
+      ${field('cCap', 'Image caption (optional)', `${fmtBar('cCap', ['bold', 'italic', 'link', 'blue'])}<input type="text" id="cCap" value="${esc(b.image_caption || '')}">`)}
       ${field('cInfo', 'Infobox — one "Label: Value" per line (optional)',
-        `<textarea id="cInfo" rows="4" placeholder="Born: 2131&#10;Alias: The Phoenix&#10;Affiliation: [[Justice University]]">${esc(b.infobox || '')}</textarea>`)}
+        `${fmtBar('cInfo', ['bold', 'italic', 'link', 'blue', 'ref', 'ibhead'])}<textarea id="cInfo" rows="5" placeholder="Born: 2131&#10;Alias: The Phoenix&#10;## Affiliations&#10;Team: [[Justice University]]&#10;[[The Phoenix Squad]]">${esc(b.infobox || '')}</textarea>
+        <p class="muted small qr-fmt-help">A line with no label adds a second line to the row above. <b>Header row</b> makes a centered heading like "Occupation".</p>`)}
       ${field('cText', 'Article',
-        `<textarea id="cText" rows="12" placeholder="Opening paragraph…&#10;&#10;## Early life&#10;Text with **bold**, *italic* and [[Links]] that search when tapped.&#10;- bullet points start with a dash">${esc(b.text || '')}</textarea>`)}`,
+        `${fmtBar('cText', ['bold', 'italic', 'link', 'blue', 'ref', 'cn', 'h2', 'h3', 'ul', 'ol', 'hat', 'notice'])}<textarea id="cText" rows="14" placeholder=": For other uses, see [[The Phoenix (disambiguation)]].&#10;&#10;**The Phoenix** (born 2131) is a [[hero]] known for…[^1]&#10;&#10;## Early life&#10;Text with **bold**, *italic*, [[Links]] and {{blue|blue text}}.&#10;- bullet points start with a dash">${esc(b.text || '')}</textarea>
+        <p class="muted small qr-fmt-help">Select words, then press a button. <span class="qr-fmt-blue">Link</span> is blue and searches that page when tapped; <span class="qr-fmt-blue">Blue</span> is only blue. Ctrl+B / Ctrl+I / Ctrl+K work too.</p>`)}`,
     forum: `
       ${field('cBoard', 'Board', `<input type="text" id="cBoard" value="${esc(b.board || '/x/ - Paranormal')}">`)}
       ${imageField('Image on the first post (optional)')}
@@ -899,6 +999,8 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
     btn.disabled = false; btn.textContent = 'Upload';
   });
 
+  wireFmt(root);
+
   // What the form currently holds, shaped like a stored row.
   const collect = () => {
     const v = id => $(id, root)?.value.trim() || '';
@@ -918,6 +1020,7 @@ function openComposer({ kind, target, searchId = null, existing = null, query = 
     const r = collect();
     $('#cLive', root).innerHTML = previewInner(r, r.source || k.source(r.title || query || 'Page'));
     $$('#cLive a.qr-wikilink, #cLive .qr-result', root).forEach(a => a.addEventListener('click', (ev) => ev.preventDefault()));
+    wireToc($('#cLive', root));
     wireAi($('#cLive', root), { animate: false });
   };
   root.addEventListener('input', () => { clearTimeout(liveT); liveT = setTimeout(paintLive, 150); });
