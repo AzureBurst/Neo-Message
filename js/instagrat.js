@@ -840,7 +840,8 @@ function openManage(card, postId) {
   const adminBits = me.is_admin ? `
     <button class="menu-item" data-do="likes">Set fake likes
       <span class="muted">(currently +${pad})</span></button>
-    <button class="menu-item" data-do="ghost">Add a comment as someone…</button>` : '';
+    <button class="menu-item" data-do="ghost">Add a comment as someone…</button>
+    <button class="menu-item" data-do="time">Change date &amp; time</button>` : '';
 
   const { root, close } = sheet({
     title: 'Manage post',
@@ -892,6 +893,57 @@ function openManage(card, postId) {
   $('[data-do="ghost"]', root)?.addEventListener('click', () => {
     close();
     sheetGhostComment(card, postId);
+  });
+
+  $('[data-do="time"]', root)?.addEventListener('click', () => {
+    close();
+    sheetPostTime(card, postId);
+  });
+}
+
+/* GM: change the in-story date and time shown on a post
+   (sql/instagrat-post-time.sql). */
+async function sheetPostTime(card, postId) {
+  const { data: post } = await supa.from('ig_posts').select('id, story_at, created_at').eq('id', postId).maybeSingle();
+  const cur = new Date(post?.story_at || post?.created_at || storyNow());
+  const pad = n => String(n).padStart(2, '0');
+  const toInput = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const { root, close } = sheet({
+    title: 'Post date & time',
+    body: `
+      <p class="muted small">The in-story time shown on this post.</p>
+      <div class="field">
+        <label for="ptAt">Date and time</label>
+        <input type="datetime-local" id="ptAt" class="mono" value="${toInput(cur)}">
+      </div>
+      <div class="ig-pt-quick">
+        <button type="button" class="btn btn-ghost btn-sm" data-pt="now">Story clock now</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-pt="-1h">−1 hour</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-pt="-1d">−1 day</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-pt="-7d">−1 week</button>
+      </div>`,
+    footer: `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="ptSave">Save</button>`
+  });
+  const input = $('#ptAt', root);
+  $$('[data-pt]', root).forEach(b => b.addEventListener('click', () => {
+    const base = b.dataset.pt === 'now' ? storyNow() : new Date(input.value || cur);
+    const ms = { now: 0, '-1h': -36e5, '-1d': -864e5, '-7d': -7 * 864e5 }[b.dataset.pt];
+    input.value = toInput(new Date(base.getTime() + ms));
+  }));
+  $('#ptSave', root).addEventListener('click', async (e) => {
+    const d = new Date(input.value);
+    if (!input.value || isNaN(d) || d.getFullYear() < 1000) return toast('Pick a full date and time.', 'error');
+    e.currentTarget.disabled = true;
+    const { error } = await supa.rpc('ig_set_post_time', { p_post: postId, p_at: d.toISOString() });
+    if (error) {
+      e.currentTarget.disabled = false;
+      return toast(/ig_set_post_time/.test(error.message) ? 'Run sql/instagrat-post-time.sql in Supabase first.' : error.message, 'error');
+    }
+    // Redraw the date on this card in place.
+    const stamp = icStamp({ story_at: d.toISOString(), created_at: d.toISOString() }, { fmt: 'date' });
+    card.querySelectorAll('.ig-postdate, .knot-card-date').forEach(el => { el.innerHTML = stamp; });
+    close();
+    toast('Post time changed.', 'ok');
   });
 }
 

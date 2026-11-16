@@ -4416,3 +4416,6 @@ label.num-only.field { font-size: 13.5px; color: inherit; white-space: normal; m
 .qr-fmt button sup { font-size: 10px; }
 .qr-fmt-blue { color: #6EA0FF; }
 .qr-fmt-help { margin-top: 4px; }
+
+/* Instagrat: GM post time */
+.ig-pt-quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: -4px; }
