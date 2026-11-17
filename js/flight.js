@@ -15,6 +15,7 @@ import {
   supa, requireProfile, ungate, mountCarrier, setClockSource,
   startPresence, esc, toast, fullStamp, $, $$, icStamp, icAt
 } from './supa.js';
+import { openSetTime } from './settime.js';
 import { loadClock, storyNow, onClockChange } from './clock.js';
 import { openRoller, openRequest, requestCard, loadRequests, requestResultsHtml, wireRequestButtons } from './dice.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
@@ -1120,10 +1121,16 @@ async function viewAdminCourse(id, tab = 'roster') {
         <div class="fl-ann">
           <div class="fl-ann-head"><strong>${esc(n.title)}</strong>
             <span class="fl-ann-time mono">${icStamp(n, { fmt: 'full' })}</span>
+            <button class="icon-btn" data-atime="${esc(n.id)}" title="Change date &amp; time">🕓</button>
             <button class="icon-btn" data-adel="${esc(n.id)}" title="Delete">🗑</button></div>
           ${n.body ? `<div class="fl-ann-body">${esc(n.body)}</div>` : ''}
         </div>`).join('') || '<div class="fl-empty">Nothing posted yet.</div>'}`;
     $('#anNew').addEventListener('click', () => openAnnouncementEditor(id));
+    $$('[data-atime]', body).forEach(b => b.addEventListener('click', () => {
+      const n = (ann || []).find(x => x.id === b.dataset.atime);
+      openSetTime({ kind: 'announcement', id: n.id, current: n.story_at || n.created_at, title: 'Announcement time',
+        onDone: () => go('adminCourse', { id, tab: 'announcements' }) });
+    }));
     $$('[data-adel]', body).forEach(b => b.addEventListener('click', async () => {
       if (!confirm('Delete this announcement?')) return;
       const { error } = await supa.from('flight_announcements').delete().eq('id', b.dataset.adel);

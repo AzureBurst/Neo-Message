@@ -4419,3 +4419,40 @@ label.num-only.field { font-size: 13.5px; color: inherit; white-space: normal; m
 
 /* Instagrat: GM post time */
 .ig-pt-quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: -4px; }
+
+/* ---------- GM Desk ---------- */
+.desk-wrap { max-width: 1200px; }
+.desk-sub { margin: -4px 0 16px; }
+.desk-h2 { margin: 36px 0 6px; font-size: 18px; }
+.desk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.desk-card { position: relative; background: var(--panel, #12161f); border: 1px solid var(--edge); border-radius: 14px; padding: 14px 14px 40px; }
+.desk-card.has { border-color: color-mix(in srgb, var(--sent) 55%, var(--edge)); }
+.desk-card.off { opacity: .55; }
+.desk-card header { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.desk-card h3 { font: 700 14.5px var(--font-ui); margin: 0; flex: 1; }
+.desk-ic { font-size: 18px; }
+.desk-n { min-width: 28px; text-align: center; font: 800 14px var(--font-ui); padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.07); }
+.desk-card.has .desk-n { background: var(--sent); color: #0B0E14; }
+.desk-card ul { list-style: none; margin: 0; padding: 0; }
+.desk-card li a { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline; padding: 6px 4px; border-radius: 8px; color: inherit; text-decoration: none; font-size: 13px; }
+.desk-card li a:hover { background: rgba(255,255,255,.05); }
+.desk-card li span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desk-card li time { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.desk-more { display: block; font-size: 12px; color: var(--muted); padding: 4px; }
+.desk-open { position: absolute; right: 14px; bottom: 12px; font: 600 12.5px var(--font-ui); color: var(--sent); text-decoration: none; }
+.setup-sum { font: 700 14px var(--font-ui); margin: 6px 0 14px; }
+.setup-sum.ok { color: #4ADE80; } .setup-sum.bad { color: #F59E0B; }
+#setup { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; align-items: start; }
+#setup > .setup-sum, #setup > .notice { grid-column: 1 / -1; }
+.setup-group { background: var(--panel, #12161f); border: 1px solid var(--edge); border-radius: 14px; padding: 12px 14px; }
+.setup-group h3 { margin: 0 0 6px; font: 700 12px var(--font-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.setup-row { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; padding: 4px 0; font-size: 13px; }
+.setup-row code { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.setup-row.ok .setup-mark { color: #4ADE80; }
+.setup-row.bad .setup-mark { color: #F87171; font-weight: 800; }
+.setup-row.bad code { color: #FBBF24; }
+
+/* "Change date & time" dialog */
+.settime-root .scrim { position: fixed; inset: 0; z-index: 400; }
+.settime-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+.mail-time-btn { width: 26px; height: 26px; font-size: 13px; }

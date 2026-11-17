@@ -14,6 +14,7 @@ import {
   supa, requireProfile, ungate, mountCarrier, setClockSource,
   startPresence, paintAvatar, esc, toast, fullStamp, shortTime, $, $$, icStamp, icAt
 } from './supa.js';
+import { openSetTime } from './settime.js';
 
 // Everyone's address is name@juniversity.edu (sql/mail-domain.sql moves
 // the old @neo.mail / @neo.com ones over). Set here, not in config.js.
@@ -180,6 +181,10 @@ async function openThread(id) {
     </div>`;
 
   $('#mailBack').addEventListener('click', loadBox);
+  $$('[data-mtime]', main).forEach(b => b.addEventListener('click', () => {
+    const m = (msgs || []).find(x => x.id === b.dataset.mtime);
+    openSetTime({ kind: 'mail', id: m.id, current: m.story_at || m.created_at, title: 'Email time', onDone: () => openThread(id) });
+  }));
 
   $('#mailArchive').addEventListener('click', async () => {
     await supa.from('mail_state').upsert(
@@ -212,6 +217,7 @@ function messageHtml(m) {
         <strong>${esc(m.from_name)}</strong>
         <span class="mail-addr mono">${esc(addr)}</span>
         <span class="mail-msg-time mono">${icStamp(m, { fmt: 'full' })}</span>
+        ${me.is_admin ? `<button class="icon-btn mail-time-btn" data-mtime="${esc(m.id)}" title="Change date &amp; time">🕓</button>` : ''}
       </div>
       <div class="mail-msg-body">${esc(m.body)}</div>
     </div>`;

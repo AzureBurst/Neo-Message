@@ -1,10 +1,12 @@
 // =====================================================================
 //  notify-discord — Supabase Edge Function
 //
-//  Fired by a database webhook whenever a row is inserted into
-//  public.messages. It works out who should hear about the message,
-//  looks up their Discord IDs, and sends each of them a DM through the
-//  Discord bot.
+//  Fired by database webhooks:
+//   * public.messages (insert): DMs everyone else in the chat.
+//   * public.notifications (insert + update): DMs the person the
+//     notification is for, so emails, judged rolls, shop answers, class
+//     summaries, calendar events and the rest reach Discord too. Chat
+//     notifications are skipped there (the messages webhook covers them).
 //
 //  It deliberately does NOT send the message text. Players get a nudge
 //  ("you have a new message from X"), not the contents — the contents
@@ -33,6 +35,11 @@ Deno.serve(async (req) => {
 
   let body: any;
   try { body = await req.json(); } catch { return new Response("bad json", { status: 400 }); }
+
+  // A notification row? Handle it separately.
+  if (body.table === "notifications" || (body.record?.user_id && body.record?.app)) {
+    return await notifyFromNotification(body);
+  }
 
   // A Supabase webhook sends { type, table, record, ... }. Accept either
   // that or a bare message row.
@@ -118,3 +125,73 @@ Deno.serve(async (req) => {
 
   return new Response("ok", { status: 200 });
 });
+
+// ---------------------------------------------------------------------
+//  Notifications → Discord (sql/gm-tools.sql makes the throttle table)
+// ---------------------------------------------------------------------
+
+// Chat is handled by the messages webhook; likes would be noise.
+const SKIP_APPS  = new Set(["messages"]);
+const SKIP_KINDS = new Set(["ig_like"]);
+const ICON: Record<string, string> = {
+  mail: "✉️", mytime: "🎲", flight: "🎓", calendar: "📅", instagrat: "📸",
+  journal: "📓", queree: "🔎", npc: "🎭",
+};
+
+async function notifyFromNotification(body: any): Promise<Response> {
+  const n = body.record ?? body;
+  const old = body.old_record;
+  if (!n?.user_id || SKIP_APPS.has(n.app) || SKIP_KINDS.has(n.kind)) return new Response("ignored", { status: 200 });
+  // Updates happen when an unread notification collects another one
+  // ("3 new emails"); only those count, not marking it read.
+  if (body.type === "UPDATE") {
+    const more = (n.count ?? 1) > (old?.count ?? 1);
+    const freshAgain = old?.read_at && !n.read_at;
+    if (!more && !freshAgain) return new Response("ignored", { status: 200 });
+  }
+  if (n.read_at) return new Response("already read", { status: 200 });
+
+  const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const token = Deno.env.get("DISCORD_BOT_TOKEN");
+  if (!token) return new Response("no bot token", { status: 500 });
+  const appUrl = (Deno.env.get("NEO_APP_URL") ?? "").replace(/\/$/, "");
+
+  const { data: who } = await supa.from("profiles").select("id, discord_id, last_seen").eq("id", n.user_id).single();
+  if (!who?.discord_id) return new Response("not linked", { status: 200 });
+  const now = Date.now();
+  if (who.last_seen && now - new Date(who.last_seen).getTime() < ACTIVE_MS) return new Response("active", { status: 200 });
+
+  // One DM per thing per two minutes.
+  const key = `${n.app}:${n.ref_id ?? n.kind}`;
+  const { data: last } = await supa.from("discord_notif_throttle").select("last_notified")
+    .eq("user_id", who.id).eq("ref", key).maybeSingle();
+  if (last && now - new Date(last.last_notified).getTime() < THROTTLE_MS) return new Response("throttled", { status: 200 });
+
+  // A nudge, not the contents: who/what, and the subject at most.
+  const icon = ICON[n.app] ?? "🔔";
+  let line: string;
+  if (n.kind === "mail_new" || n.kind === "mail_reply") {
+    line = `${icon} New email from **${n.title ?? "someone"}** in Neomail.`;
+  } else {
+    line = `${icon} **${n.title ?? "Neo Message"}**${n.body ? ` · ${String(n.body).slice(0, 120)}` : ""}`;
+  }
+  if ((n.count ?? 1) > 1) line += ` (${n.count})`;
+  if (appUrl) line += `\n${n.link ? `${appUrl}/${String(n.link).replace(/^\//, "")}` : appUrl}`;
+
+  try {
+    const dmRes = await fetch(`${DISCORD_API}/users/@me/channels`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient_id: who.discord_id }),
+    });
+    const dm = await dmRes.json();
+    if (!dm?.id) return new Response("cannot dm", { status: 200 });
+    await fetch(`${DISCORD_API}/channels/${dm.id}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content: line }),
+    });
+    await supa.from("discord_notif_throttle").upsert({ user_id: who.id, ref: key, last_notified: new Date().toISOString() });
+  } catch (_e) { /* best effort */ }
+  return new Response("ok", { status: 200 });
+}

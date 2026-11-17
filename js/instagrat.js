@@ -194,7 +194,7 @@ async function viewFeed() {
   const { data: posts } = await supa
     .from('ig_posts').select('*')
     .eq('status', 'approved')
-    .order('created_at', { ascending: false })
+    .order('story_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })
     .limit(60);
 
   if (!posts?.length) {
@@ -312,7 +312,7 @@ async function viewProfile(id) {
   // "private and I am not in".
   const { data: posts } = await supa.from('ig_posts').select('*')
     .eq('author_id', id).eq('status', 'approved')
-    .order('created_at', { ascending: false });
+    .order('story_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
 
   const locked = p.is_private && !mine && rel !== 'following' && !me.is_admin;
 
@@ -1452,6 +1452,8 @@ const igParams = new URLSearchParams(location.search);
 if (ig && igParams.get('post')) {
   show('post', igParams.get('post'));
   clearNotificationsFor(igParams.get('post'));
+} else if (igParams.get('view') === 'review' && me.is_admin) {
+  show('review');
 } else if (ig && igParams.get('user')) {
   show('profile', igParams.get('user'));
   clearNotificationsFor(igParams.get('user'));

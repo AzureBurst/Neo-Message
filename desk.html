@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neo Message — GM Desk</title>
+<meta name="theme-color" content="#0B0E14">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/neo.css">
+<link rel="stylesheet" href="css/edge.css">
+<script src="js/theme-boot.js"></script>
+</head>
+<body class="gated">
+  <div id="gateNote" class="gate-note">
+    <span>Checking your session…</span>
+    <a href="index.html" class="gate-escape">Go to sign in</a>
+  </div>
+
+<div id="carrier"></div>
+
+<main class="admin-wrap desk-wrap">
+  <div class="admin-head">
+    <h1>GM<span>Desk</span></h1>
+    <span class="grow"></span>
+    <button class="btn btn-ghost btn-sm" id="backApp">Back to messages</button>
+    <button class="btn btn-ghost btn-sm" id="toAdmin">Admin</button>
+    <button class="btn btn-ghost btn-sm" id="refresh">Refresh</button>
+  </div>
+
+  <p class="muted small desk-sub" id="deskSummary">Checking what's waiting…</p>
+  <div class="desk-grid" id="desk"></div>
+
+  <h2 class="desk-h2">Setup check</h2>
+  <p class="muted small desk-sub">Each feature tested against your database. Anything marked ✗ needs that SQL file run in the Supabase SQL Editor (top to bottom is a safe order).</p>
+  <div id="setup"></div>
+</main>
+
+<div id="modalRoot"></div>
+<script type="module" src="js/desk.js"></script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import {
   formatNumber, shortTime, dayLabel, isJumboEmoji, esc, toast,
   lightbox, uploadFile, shrinkImage, $, $$, icStamp, icAt
 } from './supa.js';
+import { openSetTime } from './settime.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow, onClockChange, openClockModal } from './clock.js';
 import { openRoller, openRequest, rollCard, requestCard } from './dice.js';
@@ -75,6 +76,7 @@ function addGmButton(id, glyph, label, onClick) {
 }
 
 if (me.is_admin) {
+  addGmButton('deskBtn', '☑', 'GM Desk: what\'s waiting on you', () => location.href = 'desk.html');
   addGmButton('adminBtn', '◉', 'Admin console', () => location.href = 'admin.html');
   addGmButton('clockBtn', '◔', 'Story clock',   () => openClockModal(modal));
   addGmButton('maintBtn', '🚧', 'Maintenance mode',
@@ -426,6 +428,7 @@ function renderStream({ keepScroll = false } = {}) {
           <button type="button" data-act="reply" title="Reply">↩</button>
           <button type="button" data-act="react" title="React">☺</button>
           <button type="button" data-act="pin" title="${t?.pinned_message_id === m.id ? 'Unpin' : 'Pin'}">📌</button>
+          ${me.is_admin ? '<button type="button" data-act="time" title="Change date &amp; time">🕓</button>' : ''}
         </div>
       </div>`;
 
@@ -467,6 +470,10 @@ streamEl.addEventListener('click', async (e) => {
   if (!m) return;
   if (act.dataset.act === 'reply') { setReply(m); input.focus(); }
   if (act.dataset.act === 'react') openReactPicker(act, id);
+  if (act.dataset.act === 'time') openSetTime({
+    kind: 'message', id, current: m.story_at || m.created_at, title: 'Message time',
+    onDone: (iso) => { m.story_at = iso; renderStream({ keepScroll: true }); }
+  });
   if (act.dataset.act === 'pin') {
     const t = state.threads.find(x => x.id === state.openId);
     const { error } = await supa.rpc('group_pin', { conv: state.openId, msg: t?.pinned_message_id === id ? null : id });

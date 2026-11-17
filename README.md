@@ -363,3 +363,52 @@ Run `sql/mytime-judge-shop.sql`.
   optional cost. Players pick one (saying which trait, if it's an increase);
   you're notified, update their sheet with ✎ Edit sheet, then press ✓ Done
   (or Decline), and they're told.
+
+## GM Desk
+
+Run `sql/gm-tools.sql`. The ☑ button in Messages (or **GM Desk** on the
+Admin page) opens `desk.html`:
+
+- **Waiting on you:** free time weeks to review, free time rolls to judge,
+  requested rolls to call, shop picks, emails waiting for a reply, unread
+  NPC chats, Instagrat posts to approve and Queree searches to answer, each
+  with a count, the newest few, and a link straight there. It refreshes by
+  itself every minute.
+- **Setup check:** every feature, tested against your database, with the
+  SQL file to run next to anything marked ✗. Data-only files
+  (`npc-roster.sql`, `transcripts-import.sql`, `instagrat-redate-existing.sql`)
+  aren't listed. Run them only when you mean to.
+
+## Changing the time on something already sent
+
+Also from `sql/gm-tools.sql`. As the GM:
+
+- **Chat:** hover (or press and hold) a message → 🕓.
+- **Neomail:** open the email → 🕓 next to its time. Between two players
+  both copies move.
+- **Flight:** Admin → course → Announcements → 🕓.
+- **Instagrat:** a post's ⋯ → Change date & time (`sql/instagrat-post-time.sql`).
+  The feed and profiles are ordered by these dates, so a backdated post
+  drops into place.
+
+## Discord: emails and other events
+
+Text messages already DM players on Discord. To also DM them for emails,
+judged rolls, shop answers, class summaries, calendar events, grades and
+so on:
+
+1. Run `sql/gm-tools.sql` (it adds a small table the function uses).
+2. Supabase → **Edge Functions → notify-discord → Code**: replace it with
+   `supabase/functions/notify-discord/index.ts` from this repo and
+   **Deploy**. (Text messages keep working exactly as before.)
+3. Supabase → **Database → Webhooks → Create a new hook**:
+   - Name: `discord-notifications`
+   - Table: `notifications`, events: **Insert** and **Update**
+   - Type: **Supabase Edge Functions**, function: `notify-discord`, POST
+   - HTTP header: `x-neo-secret` = the same `NEO_WEBHOOK_SECRET` your
+     messages webhook uses.
+
+The DM is a nudge with a link, never the email's text. Someone already on
+the site isn't DMed, and the same thing won't DM more than once every two
+minutes. Likes and chat notifications are skipped (chat has its own hook).
+The GM Desk setup check shows ✓ once the webhook is in place.
