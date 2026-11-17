@@ -470,3 +470,11 @@ Run `sql/open-email.sql`. Then tick **Students can email** next to anyone
 find them in the Neomail directory and the To field and email them,
 without their number and without them being a contact. It doesn't let
 students add them in Messages. Untick it to close it again.
+
+## NPC mailboxes
+
+Run `sql/npc-mailbox.sql`. Sign in as an NPC (NPC Studio → Sign in as)
+and open Neomail: their inbox and Sent show every email they're on,
+whether you picked them in From or typed their name, and the emails
+sent to them. Replies go out as them, under the same name and address.
+Your own GM Neomail still shows all of it as before.

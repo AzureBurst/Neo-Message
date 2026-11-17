@@ -197,6 +197,7 @@ const SETUP = [
     ['Email notifications', 'mail-notify.sql', [TR('trg_notif_mail'), SRC('notif_on_mail', 'peer_thread')]],
     ['@juniversity.edu addresses', 'mail-domain.sql', [SRC('mail_addr', 'juniversity.edu')]],
     ['Group email, Cc/Bcc, attachments, Sent & Bin', 'mail-v2.sql', [F('mail_send2'), C('mail_messages.attachments')]],
+    ['NPC mailboxes (sign in as an NPC)', 'npc-mailbox.sql', [F('mail_reply_npc'), POL('mail_thread_npc_read')]],
   ]],
   ['Flight', [
     ['Flight portal', 'flight.sql', [T('flight_courses'), T('flight_enrollments')]],

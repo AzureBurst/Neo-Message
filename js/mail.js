@@ -40,6 +40,10 @@ try { sessionStorage.setItem('neo.deep', '1'); sessionStorage.setItem('neo.lastA
 if (me.is_admin) $$('.mail-admin-tab').forEach(el => el.hidden = false);
 
 const main = $('#mailMain');
+
+// Signed in as an NPC? Then the mail you handle for them is their mailbox
+// (sql/npc-mailbox.sql).
+const asNpc = !me.is_admin && (await supa.rpc('is_gm_character', { uid: me.id })).data === true;
 let box = 'inbox';
 let query = '';
 
@@ -62,7 +66,7 @@ async function stateFor(threadIds) {
 }
 
 /* Is this my copy (I'm its reader) or an old thread I own as the GM? */
-const isMine = t => t.recipient_id === me.id;
+const isMine = t => t.recipient_id === me.id || (asNpc && !!t.conv_id);
 const received = t => isMine(t) ? (t.i_received ?? true) : (t.i_sent ?? t.last_from_recipient);
 const sentByMe = t => isMine(t) ? (t.i_sent ?? false) : true;
 
@@ -70,7 +74,10 @@ async function loadBox() {
   main.innerHTML = '<div class="ig-loading">Loading…</div>';
   if (box === 'directory') return renderDirectory();
 
-  const mine = supa.from('mail_threads').select('*').eq('recipient_id', me.id).order('last_at', { ascending: false });
+  // An NPC sees every thread they're on (the database decides which).
+  const mine = asNpc
+    ? supa.from('mail_threads').select('*').order('last_at', { ascending: false })
+    : supa.from('mail_threads').select('*').eq('recipient_id', me.id).order('last_at', { ascending: false });
   // The GM also owns the old one-to-one threads they sent as NPCs.
   const owned = me.is_admin
     ? supa.from('mail_threads').select('*').eq('owner_admin_id', me.id).neq('recipient_id', me.id).order('last_at', { ascending: false })
@@ -307,14 +314,17 @@ async function openThread(id) {
     if (replyAtt.some(a => a.uploading)) return toast('Wait for the attachments to finish uploading.', 'info');
     e.currentTarget.disabled = true;
     const files = replyAtt.map(({ url, name, type, size }) => ({ url, name, type, size }));
-    const { error } = v2
+    const { error } = asNpc && t.recipient_id !== me.id
+      ? await supa.rpc('mail_reply_npc', { p_thread: id, p_body: body, p_attachments: files, p_all: replyAll })
+      : v2
       ? await supa.rpc('mail_reply2', { p_thread: id, p_body: body, p_attachments: files, p_as: $('#mailReplyAs')?.value || null, p_all: replyAll })
       : files.length
         ? await supa.rpc('mail_reply_att', { p_thread: id, p_body: body, p_attachments: files })
         : await supa.rpc('mail_reply', { p_thread: id, p_body: body });
     if (error) {
       e.currentTarget.disabled = false;
-      return toast(/mail_reply_att|mail_reply2/.test(error.message) ? 'Run sql/mail-v2.sql in Supabase first.' : error.message, 'error');
+      return toast(/mail_reply_npc/.test(error.message) ? 'Run sql/npc-mailbox.sql in Supabase first.'
+        : /mail_reply_att|mail_reply2/.test(error.message) ? 'Run sql/mail-v2.sql in Supabase first.' : error.message, 'error');
     }
     playSound('sent');
     openThread(id);
