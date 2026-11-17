@@ -38,7 +38,7 @@ begin
         -- A Supabase database webhook is a trigger that calls http_request.
         when 'webhook'  then exists (select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
                                       where t.tgrelid = to_regclass('public.' || n) and not t.tgisinternal
-                                        and p.proname = 'http_request')
+                                        and (p.proname = 'http_request' or p.proname ilike 'notify_discord%'))
         when 'category' then to_regclass('public.account_categories') is not null
                              and exists (select 1 from public.account_categories where key = n)
         else false end;
