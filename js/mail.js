@@ -43,7 +43,11 @@ const main = $('#mailMain');
 
 // Signed in as an NPC? Then the mail you handle for them is their mailbox
 // (sql/npc-mailbox.sql).
-const asNpc = !me.is_admin && (await supa.rpc('is_gm_character', { uid: me.id })).data === true;
+let asNpc = false;
+if (!me.is_admin) {
+  try { asNpc = !!localStorage.getItem('neo.npc.acting'); } catch {}
+  if (!asNpc) asNpc = (await supa.rpc('is_gm_character', { uid: me.id })).data === true;
+}
 let box = 'inbox';
 let query = '';
 

@@ -5,8 +5,8 @@
 --  the same mail as their own inbox and Sent, and replies go out as
 --  them. Your GM Neomail keeps showing everything as before.
 --  An NPC counts as "on" an email when you wrote it as them (picked
---  from the NPC list or typed their name in From), or it was sent to
---  them. Players can't see any of this.
+--  from the NPC list or typed their name in From, in old or new mail),
+--  or it was sent to them. Players can't see any of this.
 --  Run after mail-v2.sql. Safe to run more than once.
 -- =====================================================================
 
@@ -21,8 +21,12 @@ language sql stable security definer set search_path = public as $$
        uid = any(t.npc_ids)
     or (t.conv_id is not null and t.gm_name is not null
         and public.name_key(t.gm_name) = (select public.name_key(username) from public.profiles where id = uid))
-    or (t.conv_id is null and t.target_id = uid
-        and exists (select 1 from public.profiles where id = t.owner_admin_id and is_admin)));
+    -- Older one-to-one emails you sent or got as them (by account, or by
+    -- the name you typed as the sender).
+    or (t.conv_id is null
+        and exists (select 1 from public.profiles where id = t.owner_admin_id and is_admin)
+        and (t.target_id = uid
+             or public.name_key(t.sender_name) = (select public.name_key(username) from public.profiles where id = uid))));
 $$;
 
 create or replace function public.mail_npc_can_read(p_thread uuid) returns boolean
@@ -54,7 +58,8 @@ begin
   if th.conv_id is null then
     -- An old one-to-one thread: write on the NPC's side of it.
     insert into public.mail_messages (thread_id, from_recipient, from_name, from_addr, body, attachments, author_id)
-    values (th.id, false, nm, public.mail_addr(nm, 'juniversity.edu'), nullif(p_body, ''), att, auth.uid());
+    values (th.id, false, coalesce(th.sender_name, nm), coalesce(th.sender_addr, public.mail_addr(nm, 'juniversity.edu')),
+            nullif(p_body, ''), att, auth.uid());
     update public.mail_threads set last_at = now(), last_snippet = left(coalesce(p_body, '📎 Attachment'), 140),
            last_from_recipient = false where id = th.id;
     return;
