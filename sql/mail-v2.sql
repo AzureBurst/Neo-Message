@@ -1,8 +1,8 @@
 -- =====================================================================
 --  Neomail v2
 --   * One email to several people: To, Cc and Bcc, picked one by one or
---     a whole group at once. Everyone on it sees the replies (Bcc
---     people get the email but not the replies, unless they reply).
+--     a whole group at once. Replying, you choose: just the sender (the
+--     default) or everyone. Bcc people never get anyone else's replies.
 --   * Attachments (images, PDFs, documents) on any email.
 --   * A Sent box for everyone, a Trash box, and "delete forever".
 --   * The GM writes as themself, as any NPC, or as any name and address.
@@ -175,14 +175,18 @@ $$;
 grant execute on function public.mail_send2(uuid[], uuid[], uuid[], text, text, jsonb, uuid, text, text) to authenticated;
 
 -- ---------------------------------------------------------------------
---  Reply (to everyone on the email)
+--  Reply
+--  Everyone chooses: "Reply" (the default) goes only to whoever wrote
+--  the latest email you got; "Reply all" goes to everyone on it.
 -- ---------------------------------------------------------------------
+drop function if exists public.mail_reply2(uuid, text, jsonb, uuid);
 create or replace function public.mail_reply2(p_thread uuid, p_body text,
-  p_attachments jsonb default '[]'::jsonb, p_as uuid default null)
+  p_attachments jsonb default '[]'::jsonb, p_as uuid default null, p_all boolean default false)
 returns void language plpgsql security definer set search_path = public as $$
 declare
-  me uuid := auth.uid(); th public.mail_threads; c public.mail_threads;
+  me uuid := auth.uid(); gm uuid := public.mail_gm_id(); th public.mail_threads; c public.mail_threads;
   a_name text; a_addr text; att jsonb := public.mail_clean_attachments(p_attachments);
+  may_all boolean; to_all boolean; last_author uuid; target uuid;
 begin
   select * into th from public.mail_threads where id = p_thread;
   if th.id is null then raise exception 'That email is gone.'; end if;
@@ -204,17 +208,36 @@ begin
     a_addr := public.mail_addr(a_name, 'juniversity.edu');
   end if;
 
-  -- A Bcc reader who replies is out in the open now.
-  if th.is_bcc then update public.mail_threads set is_bcc = false where id = th.id; end if;
+  may_all := true;   -- anyone may choose Reply all
+  -- Whose copy "Reply" goes to: the author of the latest email I got.
+  select author_id into last_author from public.mail_messages
+   where thread_id = th.id and not from_recipient order by created_at desc limit 1;
+  if last_author is not null then
+    select id into target from public.mail_threads
+     where conv_id = th.conv_id and id <> th.id
+       and recipient_id = case when exists (select 1 from public.profiles where id = last_author and is_admin)
+                               then gm else last_author end
+     limit 1;
+  end if;
+  -- Nobody else has written yet (my own email): reply goes to everyone it went to.
+  to_all := (p_all and may_all) or (target is null and may_all);
+  if not to_all and target is null then
+    -- Fall back to the GM's copy (an NPC's mass email).
+    select id into target from public.mail_threads where conv_id = th.conv_id and recipient_id = gm and id <> th.id limit 1;
+    if target is null then raise exception 'There''s nobody to reply to.'; end if;
+  end if;
 
-  for c in select * from public.mail_threads where conv_id = th.conv_id and (not is_bcc or id = th.id) loop
+  if th.is_bcc and to_all then update public.mail_threads set is_bcc = false where id = th.id; end if;
+
+  for c in select * from public.mail_threads
+            where conv_id = th.conv_id
+              and (id = th.id or (to_all and not is_bcc) or (not to_all and id = target)) loop
     insert into public.mail_messages (thread_id, from_recipient, from_name, from_addr, body, attachments, author_id)
     values (c.id, c.id = th.id, a_name, a_addr, nullif(p_body, ''), att, me);
     update public.mail_threads
        set last_at = now(), last_snippet = left(coalesce(p_body, '📎 Attachment'), 140),
            last_from_recipient = (c.id = th.id)
      where id = c.id;
-    -- A new reply brings the conversation back to the others' inboxes.
     if c.id <> th.id then
       update public.mail_state set archived = false, deleted = false
        where thread_id = c.id and user_id = c.recipient_id and not purged;
@@ -222,7 +245,7 @@ begin
   end loop;
 end;
 $$;
-grant execute on function public.mail_reply2(uuid, text, jsonb, uuid) to authenticated;
+grant execute on function public.mail_reply2(uuid, text, jsonb, uuid, boolean) to authenticated;
 
 -- Old-style threads: replies can carry attachments too.
 create or replace function public.mail_reply_att(p_thread uuid, p_body text, p_attachments jsonb)

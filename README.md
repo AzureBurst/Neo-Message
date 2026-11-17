@@ -458,3 +458,7 @@ Then:
   Story time on the GM Desk.
 - **Announcements:** title, message, optional picture and link, from the
   GM Desk.
+
+**Replying:** ↩ Reply goes only to whoever sent you the latest email;
+↩↩ Reply all goes to everyone on it. You can switch between the two
+above the reply box before sending.

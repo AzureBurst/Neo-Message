@@ -197,6 +197,13 @@ async function openThread(id) {
       ${t.is_bcc ? '<span class="muted">You were Bcc’d. Replying lets everyone see you’re on it.</span>' : ''}
     </div>` : '';
 
+  // Reply goes to the sender by default; Reply all is a choice.
+  const groupMail = v2 && people.length > 1;
+  const lastIn = [...(msgs || [])].reverse().find(m => m.from_recipient !== isMine(t) ? true : false);
+  const senderName = lastIn?.from_name || t.sender_name;
+  let replyAll = false;
+  const everyone = new Set([...people.map(nameOnly).filter(n => n !== me.username), senderName]).size;
+
   // The GM replies as whoever they wrote as, or any NPC on the email.
   const asChoices = me.is_admin && v2 && isMine(t)
     ? [{ id: '', name: t.gm_name || me.username }, ...(t.npc_ids || []).map(id => ({ id, name: dirName(id) }))]
@@ -224,10 +231,16 @@ async function openThread(id) {
       <div class="mail-msgs">${(msgs || []).map(m => messageHtml(m, t)).join('')}</div>
       ${s.deleted ? '' : `
       <div class="mail-actions-row" id="mailActRow">
-        <button class="btn btn-ghost" id="mailReplyBtn">↩ Reply${v2 && people.length > 1 ? ' all' : ''}</button>
+        <button class="btn btn-ghost" id="mailReplyBtn">↩ Reply</button>
+        ${groupMail ? '<button class="btn btn-ghost" id="mailReplyAllBtn">↩↩ Reply all</button>' : ''}
         <button class="btn btn-ghost" id="mailFwdBtn">↪ Forward</button>
       </div>
       <div class="mail-reply" id="mailReplyBox" hidden>
+        ${groupMail ? `<div class="mail-reply-to" role="radiogroup" aria-label="Reply to">
+          <span>To</span>
+          <button type="button" data-rto="sender" class="on">${esc(senderName)}</button>
+          <button type="button" data-rto="all">Everyone on this email (${everyone})</button>
+        </div>` : ''}
         ${asChoices.length > 1 ? `<label class="mail-reply-as">Reply as
           <select id="mailReplyAs">${asChoices.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label>` : ''}
         <div class="rt-wrap" hidden>${toolbarHtml()}</div>
@@ -267,9 +280,17 @@ async function openThread(id) {
   if (s.deleted) return;
   $('#mailFwdBtn').addEventListener('click', () => forward(t, (msgs || [])[msgs.length - 1]));
   const replyBox = $('#mailReplyBox');
-  $('#mailReplyBtn').addEventListener('click', () => {
-    replyBox.hidden = false; $('#mailActRow').hidden = true; $('#mailReplyBody').focus();
-  });
+  const setTo = (all) => {
+    replyAll = all;
+    $$('[data-rto]', replyBox).forEach(b => b.classList.toggle('on', (b.dataset.rto === 'all') === all));
+    $('#mailReplyBody').placeholder = all ? 'Reply to everyone on this email…' : `Reply to ${senderName}…`;
+  };
+  $$('[data-rto]', replyBox).forEach(b => b.addEventListener('click', () => setTo(b.dataset.rto === 'all')));
+  const openReply = (all) => {
+    replyBox.hidden = false; $('#mailActRow').hidden = true; setTo(all); $('#mailReplyBody').focus();
+  };
+  $('#mailReplyBtn').addEventListener('click', () => openReply(false));
+  $('#mailReplyAllBtn')?.addEventListener('click', () => openReply(true));
   $('#mailReplyCancel').addEventListener('click', () => {
     if ($('#mailReplyBody').value.trim() && !confirm('Discard this reply?')) return;
     $('#mailReplyBody').value = ''; replyAtt.length = 0; paintAtt($('#mailReplyAtt'), replyAtt);
@@ -287,7 +308,7 @@ async function openThread(id) {
     e.currentTarget.disabled = true;
     const files = replyAtt.map(({ url, name, type, size }) => ({ url, name, type, size }));
     const { error } = v2
-      ? await supa.rpc('mail_reply2', { p_thread: id, p_body: body, p_attachments: files, p_as: $('#mailReplyAs')?.value || null })
+      ? await supa.rpc('mail_reply2', { p_thread: id, p_body: body, p_attachments: files, p_as: $('#mailReplyAs')?.value || null, p_all: replyAll })
       : files.length
         ? await supa.rpc('mail_reply_att', { p_thread: id, p_body: body, p_attachments: files })
         : await supa.rpc('mail_reply', { p_thread: id, p_body: body });
