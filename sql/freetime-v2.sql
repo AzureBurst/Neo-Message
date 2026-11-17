@@ -4,8 +4,9 @@
 --   * Terms have a start date. The current term is set to week 8,
 --     starting August 21st.
 --   * The GM can set a player's points for the current week.
---  Run after mytime.sql. Safe to run more than once — but note it sets
---  the current term back to week 8 each time it runs.
+--  Run after mytime.sql. Safe to run more than once: the week-8 /
+--  August 21st start is only set if the term has no start date yet, so
+--  it never undoes a week or date you've set since.
 -- =====================================================================
 
 -- Reputation: any text, blank to start.
@@ -16,7 +17,7 @@ update public.ft_reputation set level = ''
 
 -- Term start date.
 alter table public.ft_terms add column if not exists start_date date;
-update public.ft_terms set current_week = 8, start_date = date '2026-08-21' where active;
+update public.ft_terms set current_week = 8, start_date = date '2026-08-21' where active and start_date is null;
 
 -- GM: set (or create) a player's entries for the current week.
 -- p_entries: [{track | connection_id, points (0 removes it), note}]
