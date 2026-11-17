@@ -24,12 +24,13 @@
     <nav class="mail-tabs" id="mailTabs">
       <button class="mail-tab is-on" data-box="inbox">Inbox</button>
       <button class="mail-tab" data-box="starred">Starred</button>
+      <button class="mail-tab" data-box="sent">Sent</button>
       <button class="mail-tab" data-box="archived">Archive</button>
-      <button class="mail-tab mail-admin-tab" data-box="sent" hidden>Sent</button>
+      <button class="mail-tab" data-box="trash">Bin</button>
       <button class="mail-tab" data-box="directory">Directory</button>
     </nav>
-    <button class="ig-post-btn" id="mailWrite" title="New email" hidden>✎</button>
-    <button class="ig-post-btn mail-admin-tab" id="mailCompose" title="Compose" hidden>✎</button>
+    <input type="search" id="mailSearch" class="mail-search" placeholder="Search mail" autocomplete="off">
+    <button class="mail-compose-btn" id="mailCompose" title="New email">✎ <span>Compose</span></button>
     <button class="icon-btn mail-admin-tab" id="mailTags" title="Account tags" hidden>#</button>
   </header>
 

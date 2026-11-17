@@ -20,6 +20,16 @@ begin
   select * into th from public.mail_threads where id = new.thread_id;
   if th.id is null then return new; end if;
 
+  -- Group email (sql/mail-v2.sql): whoever's copy gets an email someone
+  -- else wrote is told.
+  if (to_jsonb(th)->>'conv_id') is not null then
+    if new.from_recipient then return new; end if;
+    select avatar_url into av from public.profiles where id = (to_jsonb(new)->>'author_id')::uuid;
+    perform public.push_notification(th.recipient_id, 'mail', 'mail_new',
+      new.from_name, th.subject, 'mail.html?t=' || th.id, th.id, av);
+    return new;
+  end if;
+
   if new.from_recipient then
     -- Written by the thread's player. Between two players the other one
     -- is told through their own copy (below), so skip it here.

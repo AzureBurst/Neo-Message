@@ -86,11 +86,18 @@ const QUEUES = [
   {
     key: 'npcmail', icon: '✉️', title: 'Emails waiting for a reply', href: 'mail.html', file: 'mail.sql',
     async load() {
-      const { data, error } = await supa.from('mail_threads')
-        .select('id, recipient_id, subject, sender_name, last_at, last_from_recipient, owner_admin_id')
-        .eq('owner_admin_id', me.id).eq('last_from_recipient', true).order('last_at');
-      if (error) return { missing: true };
-      return { items: data.map(t => ({ text: `${who(t.recipient_id)} → ${t.sender_name}`, sub: t.subject, at: t.last_at, href: `mail.html?t=${t.id}` })) };
+      // Old one-to-one threads you own, and your own copies of newer
+      // conversations where someone else wrote last.
+      const [old, mine] = await Promise.all([
+        supa.from('mail_threads').select('id, recipient_id, subject, sender_name, last_at, conv_id')
+          .eq('owner_admin_id', me.id).eq('last_from_recipient', true).order('last_at'),
+        supa.from('mail_threads').select('id, subject, last_from_name, last_at, conv_id')
+          .eq('recipient_id', me.id).eq('last_from_recipient', false).not('conv_id', 'is', null).order('last_at')
+      ]);
+      if (old.error) return { missing: true };
+      const a = (old.data || []).filter(t => !t.conv_id).map(t => ({ text: `${who(t.recipient_id)} → ${t.sender_name}`, sub: t.subject, at: t.last_at, href: `mail.html?t=${t.id}` }));
+      const b = (mine.error ? [] : mine.data || []).map(t => ({ text: t.last_from_name || 'Someone', sub: t.subject, at: t.last_at, href: `mail.html?t=${t.id}` }));
+      return { items: [...a, ...b].sort((x, y) => new Date(x.at) - new Date(y.at)) };
     }
   },
   {
@@ -188,6 +195,7 @@ const SETUP = [
     ['Player-to-player email', 'categories.sql', [C('mail_threads.peer_thread'), F('mail_compose')]],
     ['Email notifications', 'mail-notify.sql', [TR('trg_notif_mail'), SRC('notif_on_mail', 'peer_thread')]],
     ['@juniversity.edu addresses', 'mail-domain.sql', [SRC('mail_addr', 'juniversity.edu')]],
+    ['Group email, Cc/Bcc, attachments, Sent & Bin', 'mail-v2.sql', [F('mail_send2'), C('mail_messages.attachments')]],
   ]],
   ['Flight', [
     ['Flight portal', 'flight.sql', [T('flight_courses'), T('flight_enrollments')]],

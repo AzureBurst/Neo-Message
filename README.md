@@ -412,3 +412,25 @@ The DM is a nudge with a link, never the email's text. Someone already on
 the site isn't DMed, and the same thing won't DM more than once every two
 minutes. Likes and chat notifications are skipped (chat has its own hook).
 The GM Desk setup check shows ✓ once the webhook is in place.
+
+## Neomail v2
+
+Run `sql/mail-v2.sql`. Then:
+
+- **Compose** (everyone) opens a mail-app style window: To, plus Cc and
+  Bcc, with names that turn into chips as you pick them. Type a group
+  (*Group H Students*, *Faculty*… or, for the GM, *All players* and
+  `#tags`) to add everyone in it at once. Players can only add people
+  they're allowed to email.
+- **The GM's From line**: yourself, any NPC, or any name and address
+  (e.g. *JU Registrar <registrar@juniversity.edu>*). Replies to an NPC
+  land in your inbox; reply as any NPC on the email.
+- **Replies go to everyone on the email.** Bcc people get the email but
+  not the replies, unless they reply themselves.
+- **Aa** shows formatting: bold, italic, strikethrough, blue, links,
+  lists and quotes. **📎 / 🖼** attach files and photos (up to 8, 15 MB each).
+- **Forward** (↪ on any email, or the button under it) brings the
+  original and its attachments along.
+- **Sent**, **Archive** (📥 moves it back to the Inbox), **Bin** (Restore
+  or Delete forever), **✉ Mark as unread**, and **Search mail** (subjects,
+  people and what's written inside).
