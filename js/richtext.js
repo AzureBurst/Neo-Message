@@ -12,10 +12,11 @@ function inline(t) {
   return esc(t)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
-    .replace(/\{\{blue\|(.+?)\}\}/g, '<span class="rt-blue">$1</span>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/~~(.+?)~~/g, '<s>$1</s>')
-    .replace(/(^|[^*])\*(?!\s)(.+?)\*(?!\*)/g, '$1<em>$2</em>');
+    // Marks may run over several lines (e.g. a whole signature in *…*).
+    .replace(/\{\{blue\|([\s\S]+?)\}\}/g, '<span class="rt-blue">$1</span>')
+    .replace(/\*\*(?!\s)([\s\S]+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~([\s\S]+?)~~/g, '<s>$1</s>')
+    .replace(/(^|[^*])\*(?![\s*])([\s\S]+?)\*(?!\*)/g, '$1<em>$2</em>');
 }
 
 /** Marked-up text → safe HTML. */
@@ -39,8 +40,11 @@ export function renderRich(text) {
       while (i < lines.length && /^>\s?/.test(lines[i])) q.push(lines[i++].replace(/^>\s?/, ''));
       html += `<blockquote>${renderRich(q.join('\n'))}</blockquote>`; continue;
     }
-    html += l.trim() ? `<div>${inline(l)}</div>` : '<div><br></div>';
-    i++;
+    if (!l.trim()) { html += '<div><br></div>'; i++; continue; }
+    // A run of ordinary lines is one block, so marks can span the lines.
+    const run = [];
+    while (i < lines.length && lines[i].trim() && !/^\s*([-*•]\s+|\d+[.)]\s+)|^>\s?/.test(lines[i])) run.push(lines[i++]);
+    html += `<div>${inline(run.join('\n')).replace(/\n/g, '<br>')}</div>`;
   }
   return html;
 }
@@ -49,7 +53,7 @@ export function renderRich(text) {
 export function plainText(text) {
   return String(text ?? '')
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1').replace(/\{\{blue\|(.+?)\}\}/g, '$1')
-    .replace(/\*\*(.+?)\*\*/g, '$1').replace(/~~(.+?)~~/g, '$1').replace(/\*(.+?)\*/g, '$1')
+    .replace(/\*\*([\s\S]+?)\*\*/g, '$1').replace(/~~([\s\S]+?)~~/g, '$1').replace(/\*(?![\s*])([\s\S]+?)\*/g, '$1')
     .replace(/^\s*([-*•]|\d+[.)]|>)\s?/gm, '');
 }
 
