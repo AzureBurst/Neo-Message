@@ -17,6 +17,7 @@ import {
   paintAvatar, uploadFile, shrinkImage, lightbox, esc, toast, startPresence,
   shortTime, fullStamp, $, $$, icStamp, icAt
 } from './supa.js';
+import { postToDiscord, whenLabel, siteLink } from './discord-post.js';
 import { mountShade, clearNotificationsFor } from './shade.js';
 import { loadClock, storyNow } from './clock.js';
 import { attachEmoji } from './emoji.js';
@@ -841,7 +842,8 @@ function openManage(card, postId) {
     <button class="menu-item" data-do="likes">Set fake likes
       <span class="muted">(currently +${pad})</span></button>
     <button class="menu-item" data-do="ghost">Add a comment as someone…</button>
-    <button class="menu-item" data-do="time">Change date &amp; time</button>` : '';
+    <button class="menu-item" data-do="time">Change date &amp; time</button>
+    <button class="menu-item" data-do="discord">📣 Post to Discord</button>` : '';
 
   const { root, close } = sheet({
     title: 'Manage post',
@@ -899,6 +901,35 @@ function openManage(card, postId) {
     close();
     sheetPostTime(card, postId);
   });
+
+  $('[data-do="discord"]', root)?.addEventListener('click', () => {
+    close();
+    sheetDiscord(postId);
+  });
+}
+
+/* GM: share a post in the game's Discord channel: its picture, caption,
+   who posted it, its in-story date and time, and a link back to it. */
+async function sheetDiscord(postId) {
+  const { data: post } = await supa.from('ig_posts').select('id, image_url, caption, story_at, created_at').eq('id', postId).maybeSingle();
+  if (!post) return toast('That post is gone.', 'error');
+  const when = whenLabel(post.story_at || post.created_at);
+  const { root, close } = sheet({
+    title: 'Post to Discord',
+    body: `
+      <div class="ig-dc-preview">
+        ${post.image_url ? `<img src="${esc(post.image_url)}" alt="">` : ''}
+        <div><small>📅 ${esc(when)}</small><p>${esc(post.caption || '')}</p></div>
+      </div>
+      <div class="field"><label for="dcNote">Add a message <span class="muted">(optional)</span></label>
+        <textarea id="dcNote" rows="2" maxlength="1800" placeholder="e.g. Heads up, this is going viral on campus…"></textarea></div>`,
+    footer: `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="dcGo">Post</button>`
+  });
+  $('#dcGo', root).addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
+    const ok = await postToDiscord({ kind: 'ig_post', post_id: postId, when, link: siteLink(`instagrat.html?post=${postId}`), note: $('#dcNote', root).value });
+    if (ok) close(); else e.currentTarget.disabled = false;
+  });
 }
 
 /* GM: change the in-story date and time shown on a post
@@ -921,7 +952,8 @@ async function sheetPostTime(card, postId) {
         <button type="button" class="btn btn-ghost btn-sm" data-pt="-1h">−1 hour</button>
         <button type="button" class="btn btn-ghost btn-sm" data-pt="-1d">−1 day</button>
         <button type="button" class="btn btn-ghost btn-sm" data-pt="-7d">−1 week</button>
-      </div>`,
+      </div>
+      <label class="check"><input type="checkbox" id="ptDiscord"> <span>Also post it to Discord with the new time</span></label>`,
     footer: `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="ptSave">Save</button>`
   });
   const input = $('#ptAt', root);
@@ -942,8 +974,10 @@ async function sheetPostTime(card, postId) {
     // Redraw the date on this card in place.
     const stamp = icStamp({ story_at: d.toISOString(), created_at: d.toISOString() }, { fmt: 'date' });
     card.querySelectorAll('.ig-postdate, .knot-card-date').forEach(el => { el.innerHTML = stamp; });
+    const toDiscord = $('#ptDiscord', root).checked;
     close();
     toast('Post time changed.', 'ok');
+    if (toDiscord) postToDiscord({ kind: 'ig_post', post_id: postId, when: whenLabel(d), link: siteLink(`instagrat.html?post=${postId}`) });
   });
 }
 

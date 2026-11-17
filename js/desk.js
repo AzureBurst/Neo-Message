@@ -5,7 +5,7 @@
 // =====================================================================
 
 import {
-  supa, setClockSource, requireProfile, ungate, mountCarrier, esc, $, $$
+  supa, setClockSource, requireProfile, ungate, mountCarrier, esc, toast, $, $$
 } from './supa.js';
 import { loadClock, storyNow } from './clock.js';
 
@@ -231,6 +231,7 @@ const SETUP = [
     ['Discord IDs', 'discord.sql', [C('profiles.discord_id')]],
     ['DMs for chat messages', 'webhook on messages', [HOOK('messages')]],
     ['DMs for emails & other events', 'webhook on notifications', [HOOK('notifications'), T('discord_notif_throttle')]],
+    ['Channel for your updates', 'GM Desk → Discord channel', [{ t: 'setting', n: 'discord_channel' }]],
   ]],
 ];
 
@@ -258,8 +259,65 @@ async function paintSetup() {
     ? `${missing} feature${missing === 1 ? '' : 's'} need setting up.` : 'Everything is set up.'}</p>`);
 }
 
+/* ------------------------------------------------------------------ */
+/*  Discord channel (supabase/functions/discord-post)                  */
+/* ------------------------------------------------------------------ */
+
+async function paintDiscord() {
+  const box = $('#discord');
+  const { data } = await supa.from('app_settings').select('value').eq('key', 'discord_channel').maybeSingle();
+  const id = data?.value?.id || '';
+  box.innerHTML = `
+    <section class="desk-card dc-card">
+      <header><span class="desk-ic">#</span><h3>Channel</h3></header>
+      <div class="dc-row">
+        <input id="dcChannel" class="mono" inputmode="numeric" placeholder="Channel ID, e.g. 1234567890123456789" value="${esc(id)}">
+        <button class="btn btn-sm btn-primary" id="dcSave">Save</button>
+        <button class="btn btn-sm btn-ghost" id="dcTest" ${id ? '' : 'disabled'}>Send a test</button>
+      </div>
+      <p class="muted small">In Discord: Settings → Advanced → Developer Mode on, then right-click the channel → Copy Channel ID.</p>
+    </section>
+    <section class="desk-card dc-card">
+      <header><span class="desk-ic">🕓</span><h3>Story time</h3></header>
+      <p class="small">Now: <b id="dcNow"></b></p>
+      <div class="dc-row"><input id="dcClockNote" maxlength="300" placeholder="Optional note, e.g. Later that night…">
+        <button class="btn btn-sm btn-primary" id="dcClock" ${id ? '' : 'disabled'}>Post</button></div>
+    </section>
+    <section class="desk-card dc-card dc-wide">
+      <header><span class="desk-ic">📣</span><h3>Announcement</h3></header>
+      <input id="dcTitle" maxlength="256" placeholder="Title">
+      <textarea id="dcText" rows="3" maxlength="1800" placeholder="Message"></textarea>
+      <div class="dc-row">
+        <input id="dcImage" placeholder="Picture link (https://…, optional)">
+        <input id="dcLink" placeholder="Link (https://…, optional)">
+      </div>
+      <div class="dc-row"><span class="grow"></span><button class="btn btn-sm btn-primary" id="dcAnnounce" ${id ? '' : 'disabled'}>Post announcement</button></div>
+    </section>`;
+  const { postToDiscord, whenLabel } = await import('./discord-post.js');
+  $('#dcNow').textContent = whenLabel(storyNow());
+  $('#dcSave').addEventListener('click', async () => {
+    const v = $('#dcChannel').value.trim();
+    if (v && !/^\d{15,22}$/.test(v)) return toast('That doesn’t look like a channel ID (it’s a long number).', 'error');
+    const { error } = await supa.from('app_settings').upsert({ key: 'discord_channel', value: { id: v }, updated_at: new Date().toISOString() });
+    if (error) return toast(error.message, 'error');
+    toast(v ? 'Channel saved.' : 'Channel cleared.', 'ok'); paintDiscord();
+  });
+  const run = (btn, payload, after) => $(btn).addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
+    const ok = await postToDiscord(payload());
+    e.currentTarget.disabled = false;
+    if (ok) after?.();
+  });
+  run('#dcTest', () => ({ kind: 'test' }));
+  run('#dcClock', () => ({ kind: 'clock', when: whenLabel(storyNow()), note: $('#dcClockNote').value }), () => { $('#dcClockNote').value = ''; });
+  run('#dcAnnounce', () => ({ kind: 'announce', title: $('#dcTitle').value, note: $('#dcText').value,
+    image: $('#dcImage').value.trim(), link: $('#dcLink').value.trim() }),
+    () => ['#dcTitle', '#dcText', '#dcImage', '#dcLink'].forEach(s => { $(s).value = ''; }));
+}
+
 await loadNames();
 paintDesk();
+paintDiscord();
 paintSetup();
 // Keep it fresh while it's open.
 setInterval(paintDesk, 60_000);

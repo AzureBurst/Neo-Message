@@ -100,11 +100,19 @@ export function openClockModal(modal) {
 
       <p class="muted small">
         Unticked, the app follows real time and the field above is ignored.
-      </p>`,
+      </p>
+
+      <label class="check">
+        <input type="checkbox" id="clockDiscord">
+        <span>Announce the new time on Discord</span>
+      </label>
+      <input type="text" id="clockNote" maxlength="300" placeholder="Optional note, e.g. One week later…" hidden>`,
     footer: `
       <button class="btn btn-ghost" id="clockNow">Use right now</button>
       <button class="btn btn-primary" id="clockSave">Apply</button>`
   });
+
+  $('#clockDiscord', root).addEventListener('change', (e) => { $('#clockNote', root).hidden = !e.target.checked; });
 
   $('#clockNow', root).addEventListener('click', () => {
     $('#clockAt', root).value = toLocalInput(new Date());
@@ -135,6 +143,10 @@ export function openClockModal(modal) {
     announce();
     toast(frozen ? `Clock pinned to ${storyDate()}, ${storyTime()}.`
                  : 'Clock following real time again.', 'ok');
+    if ($('#clockDiscord', root).checked) {
+      const { postToDiscord, whenLabel } = await import('./discord-post.js');
+      postToDiscord({ kind: 'clock', when: whenLabel(storyNow()), note: $('#clockNote', root).value });
+    }
     close();
   });
 

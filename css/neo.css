@@ -4579,3 +4579,24 @@ label.num-only.field { font-size: 13.5px; color: inherit; white-space: normal; m
 .mc-win select option, .mc-win select optgroup { background: var(--panel); color: var(--text); }
 .mc-text { padding: 12px 0 !important; }
 .mc-custom input + input { border-left: 1px solid var(--edge) !important; padding-left: 10px !important; }
+
+/* GM Desk: Discord channel */
+.desk-discord { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.dc-card { padding-bottom: 14px; display: flex; flex-direction: column; gap: 8px; }
+.dc-card.dc-wide { grid-column: span 2; }
+@media (max-width: 700px) { .dc-card.dc-wide { grid-column: auto; } }
+.dc-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.dc-row input { flex: 1 1 160px; min-width: 0; }
+.dc-card > input, .dc-card > textarea { width: 100%; }
+
+/* Instagrat: Discord preview */
+.ig-dc-preview { display: flex; gap: 12px; padding: 10px; border-radius: 10px; background: var(--panel-2); border-left: 4px solid #E1306C; margin-bottom: 12px; }
+.ig-dc-preview img { width: 90px; height: 90px; object-fit: cover; border-radius: 6px; flex: none; }
+.ig-dc-preview p { margin: 4px 0 0; font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.ig-dc-preview small { color: var(--muted); }
+.dc-card input, .dc-card textarea {
+  background: var(--ink, #0B0E14); color: var(--text); border: 1px solid var(--edge); border-radius: 10px;
+  padding: 9px 12px; font: 14px var(--font-ui); outline: none;
+}
+.dc-card input:focus, .dc-card textarea:focus { border-color: var(--sent); }
+.dc-card textarea { resize: vertical; }

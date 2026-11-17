@@ -434,3 +434,27 @@ Run `sql/mail-v2.sql`. Then:
 - **Sent**, **Archive** (📥 moves it back to the Inbox), **Bin** (Restore
   or Delete forever), **✉ Mark as unread**, and **Search mail** (subjects,
   people and what's written inside).
+
+## Discord channel posts
+
+Push updates to one channel through your existing Discord bot.
+
+1. Supabase → **Edge Functions → Deploy a new function → Via editor**, name
+   it `discord-post`, paste `supabase/functions/discord-post/index.ts`,
+   Deploy. It uses the `DISCORD_BOT_TOKEN` secret you already have.
+2. In Discord, give the bot **View Channel**, **Send Messages** and
+   **Embed Links** in the channel.
+3. Copy the channel's ID (Discord Settings → Advanced → Developer Mode,
+   then right-click the channel → Copy Channel ID), paste it on the
+   **GM Desk → Discord channel**, Save, and press **Send a test**.
+
+Then:
+- **Instagrat:** a post's ⋯ → **📣 Post to Discord**: the picture, caption,
+  who posted it, its in-story date and time, likes, and a link to the
+  post, with an optional message. Changing a post's time has an
+  "Also post it to Discord" box too.
+- **Story clock:** tick "Announce the new time on Discord" when you change
+  it (with an optional note like "One week later…"), or press Post under
+  Story time on the GM Desk.
+- **Announcements:** title, message, optional picture and link, from the
+  GM Desk.
