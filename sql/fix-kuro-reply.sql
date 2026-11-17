@@ -20,10 +20,12 @@ begin
   if kuro is null or kaori is null then raise exception 'Couldn''t find Kuro or Kaori.'; end if;
 
   -- Kuro's most recent reply in a conversation Kaori is on (from Kuro's own copy).
+  -- Kaori may be on it as the NPC, or as a name typed into From.
   select m.*, t.conv_id into r
     from public.mail_messages m join public.mail_threads t on t.id = m.thread_id
-   where t.recipient_id = kuro and m.author_id = kuro and t.conv_id is not null
-     and exists (select 1 from public.mail_threads g where g.conv_id = t.conv_id and kaori = any(g.npc_ids))
+   where t.recipient_id = kuro and m.from_recipient and t.conv_id is not null
+     and exists (select 1 from public.mail_threads g where g.conv_id = t.conv_id
+                  and (kaori = any(g.npc_ids) or g.gm_name ilike 'kaori%' or g.sender_name ilike 'kaori%'))
    order by m.created_at desc limit 1;
   if r.id is null then raise exception 'No reply from Kuro to a Kaori email was found.'; end if;
 
@@ -33,7 +35,7 @@ begin
   for c in select t.* from public.mail_threads t
             where t.conv_id = r.conv_id and t.recipient_id not in (kuro, gm) loop
     delete from public.mail_messages
-     where thread_id = c.id and author_id = kuro
+     where thread_id = c.id and (author_id = kuro or from_name = r.from_name)
        and coalesce(body, '') = coalesce(r.body, '')
        and abs(extract(epoch from (created_at - r.created_at))) < 10;
     if found then
@@ -58,3 +60,13 @@ begin
 end $$;
 
 select * from fix_report;
+
+-- Who still has Kuro's reply (should be only Kuro and the GM):
+select p.username as mailbox, t.subject,
+       exists (select 1 from public.mail_messages m
+                where m.thread_id = t.id and m.from_name ilike 'kuro%') as has_kuros_reply
+  from public.mail_threads t join public.profiles p on p.id = t.recipient_id
+ where t.conv_id in (select conv_id from public.mail_threads
+                      where recipient_id = (select id from public.profiles where username ilike 'kuro%' limit 1)
+                        and conv_id is not null)
+ order by t.subject, p.username;
