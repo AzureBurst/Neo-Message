@@ -247,8 +247,13 @@ async function openThread(conv) {
     e.preventDefault();
     const body = text.value.trim();
     if (!body) return;
-    await send(conv, as.value, body, null);
-    text.value = ''; grow(); text.focus();
+    // Clear the box first: sending redraws the thread, and the redraw keeps
+    // whatever is still in the box (so a half-typed reply isn't lost).
+    text.value = ''; grow();
+    const ok = await send(conv, as.value, body, null);
+    const box = $('#nsText');
+    if (!ok && box && !box.value) box.value = body;   // put it back if it didn't send
+    box?.focus();
   });
   $('#nsImg').addEventListener('click', () => $('#nsFile').click());
   $('#nsFile').addEventListener('change', async (ev) => {
@@ -256,8 +261,10 @@ async function openThread(conv) {
     const btn = $('#nsImg'); btn.disabled = true; btn.textContent = '…';
     try {
       const url = await uploadFile('attachments', me.id, await shrinkImage(file, 1600, 0.85));
-      await send(conv, as.value, text.value.trim() || null, url);
+      const caption = text.value.trim() || null;
       text.value = ''; grow();
+      const ok = await send(conv, as.value, caption, url);
+      if (!ok && caption && $('#nsText') && !$('#nsText').value) $('#nsText').value = caption;
     } catch (err) { toast(err.message || 'Upload failed.', 'error'); }
     btn.disabled = false; btn.textContent = '📷'; ev.target.value = '';
   });
@@ -305,9 +312,13 @@ async function send(conv, npcId, body, image) {
   const btn = $('#nsSend'); if (btn) btn.disabled = true;
   const { error } = await supa.rpc('npc_send', { npc: npcId, conv, p_body: body, p_image: image });
   if (btn) btn.disabled = false;
-  if (error) return toast(error.message, 'error');
+  if (error) { toast(error.message, 'error'); return false; }
   playSound('sent');
+  // Replying counts as reading: clear this chat's unread count and alerts.
+  await supa.rpc('npc_mark_read', { conv });
+  clearNotificationsFor(conv);
   await refresh({ keepThread: true });
+  return true;
 }
 
 function pickNpcToAdd(conv, inConv) {
