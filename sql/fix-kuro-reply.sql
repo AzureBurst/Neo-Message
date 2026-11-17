@@ -33,7 +33,9 @@ begin
   truncate fix_report;
 
   for c in select t.* from public.mail_threads t
-            where t.conv_id = r.conv_id and t.recipient_id not in (kuro, gm) loop
+            where t.conv_id = r.conv_id and t.recipient_id not in (kuro, gm)
+              and t.recipient_id <> t.owner_admin_id   -- never the sender's own copy (Kaori's)
+              and not public.is_gm_character(t.recipient_id) loop
     delete from public.mail_messages
      where thread_id = c.id and (author_id = kuro or from_name = r.from_name)
        and coalesce(body, '') = coalesce(r.body, '')
