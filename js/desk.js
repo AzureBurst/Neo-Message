@@ -181,6 +181,7 @@ const SETUP = [
     ['Account categories', 'categories.sql', [T('account_categories'), C('profiles.category_id')]],
     ['Student groups', 'student-groups.sql', [CAT('group_a')]],
     ['Number-only characters', 'number-only.sql', [C('profiles.number_only')]],
+    ['“Students can email” switch', 'open-email.sql', [C('profiles.email_open'), F('i_am_student')]],
     ['Uploads can’t be listed', 'storage-no-listing.sql', [POL('neo read own media')]],
   ]],
   ['GM tools', [

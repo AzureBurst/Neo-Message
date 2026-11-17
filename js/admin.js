@@ -431,7 +431,9 @@ function paintUsers() {
         : cats ? categorySelect(cats.filter(c => c.key !== 'gm'), p.category_id, `class="cat-select" data-cat-for="${esc(p.id)}"`)
         : '<span class="pill">player</span>'}
         ${!p.is_admin && 'number_only' in p ? `<label class="num-only" title="Players can only add them by typing their number; they never show up in searches">
-          <input type="checkbox" data-numonly="${esc(p.id)}" ${p.number_only ? 'checked' : ''}> Number only</label>` : ''}</td>
+          <input type="checkbox" data-numonly="${esc(p.id)}" ${p.number_only ? 'checked' : ''}> Number only</label>` : ''}
+        ${!p.is_admin && 'email_open' in p ? `<label class="num-only" title="Every student can find and email them in Neomail, without their number">
+          <input type="checkbox" data-emailopen="${esc(p.id)}" ${p.email_open ? 'checked' : ''}> Students can email</label>` : ''}</td>
       <td class="row-actions">
         ${p.is_admin ? '' : `<button class="icon-btn" data-viewas="${esc(p.id)}" title="See the site as ${esc(p.username)} sees it (read-only)">👁</button>`}
         <button class="icon-btn" data-rename="${esc(p.id)}" title="Rename ${esc(p.username)}">✎</button>
@@ -452,6 +454,13 @@ function paintUsers() {
     const p = people.find(x => x.id === cb.dataset.numonly);
     if (p) p.number_only = cb.checked;
     toast(`${p?.username || 'They'} ${cb.checked ? 'can now only be added by number.' : 'show up in searches again.'}`, 'ok');
+  }));
+  $$('[data-emailopen]').forEach(cb => cb.addEventListener('change', async () => {
+    const { error } = await supa.from('profiles').update({ email_open: cb.checked }).eq('id', cb.dataset.emailopen);
+    if (error) { cb.checked = !cb.checked; return toast(error.message, 'error'); }
+    const p = people.find(x => x.id === cb.dataset.emailopen);
+    if (p) p.email_open = cb.checked;
+    toast(`${cb.checked ? 'Students can now email' : 'Students can no longer email'} ${p?.username || 'them'} without their number.`, 'ok');
   }));
   $$('[data-rename]').forEach(b => b.addEventListener('click', () => startRename(b.dataset.rename)));
   $$('[data-viewas]').forEach(b => b.addEventListener('click', () => viewAs(b.dataset.viewas)));

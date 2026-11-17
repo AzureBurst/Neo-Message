@@ -462,3 +462,11 @@ Then:
 **Replying:** ↩ Reply goes only to whoever sent you the latest email;
 ↩↩ Reply all goes to everyone on it. You can switch between the two
 above the reply box before sending.
+
+## "Students can email" switch
+
+Run `sql/open-email.sql`. Then tick **Students can email** next to anyone
+(Admin → Accounts, or in an NPC's editor in the Studio). Every student can
+find them in the Neomail directory and the To field and email them,
+without their number and without them being a contact. It doesn't let
+students add them in Messages. Untick it to close it again.
